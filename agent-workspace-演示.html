@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Workspace 方案 — 演示</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --slide-bg: #ffffff;
+    --text: #1a1a2e;
+    --text-muted: #57606a;
+    --accent: #0969da;
+    --accent-light: #ddf4ff;
+    --green: #1a7f37;
+    --green-light: #dcffe4;
+    --orange: #d96000;
+    --orange-light: #fff1e5;
+    --red: #cf222e;
+    --purple: #8250df;
+    --purple-light: #f0e8ff;
+    --teal: #0c7b5a;
+    --teal-light: #e6fcf5;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Helvetica, Arial, sans-serif;
+    --mono: "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  /* ─── Navigation ─── */
+  .nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(13, 17, 23, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    height: 48px;
+    gap: 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a {
+    color: rgba(255,255,255,0.6);
+    text-decoration: none;
+    font-size: 0.78em;
+    white-space: nowrap;
+    padding: 4px 10px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+  .nav .spacer { flex: 1; }
+  .nav .counter {
+    color: rgba(255,255,255,0.4);
+    font-size: 0.75em;
+    white-space: nowrap;
+  }
+
+  /* ─── Slide Container ─── */
+  .slides { padding-top: 48px; }
+  .slide {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 48px 10%;
+    position: relative;
+  }
+  .slide-inner {
+    background: var(--slide-bg);
+    border-radius: 16px;
+    padding: 56px 60px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* ─── Slide Content ─── */
+  .slide h1 {
+    font-size: 2.6em;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 12px;
+    line-height: 1.2;
+  }
+  .slide h2 {
+    font-size: 1.8em;
+    font-weight: 700;
+    margin-bottom: 32px;
+    letter-spacing: -0.3px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .slide h2 .num {
+    font-size: 0.7em;
+    background: var(--accent);
+    color: white;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .slide h3 {
+    font-size: 1.3em;
+    font-weight: 600;
+    margin: 28px 0 14px;
+  }
+  .slide h4 {
+    font-size: 1.05em;
+    font-weight: 600;
+    margin: 18px 0 8px;
+    color: var(--text-muted);
+  }
+  .slide p {
+    font-size: 1.1em;
+    margin-bottom: 14px;
+    line-height: 1.7;
+  }
+  .slide ul, .slide ol {
+    font-size: 1.05em;
+    margin: 10px 0 18px 24px;
+    line-height: 1.7;
+  }
+  .slide li { margin-bottom: 6px; }
+
+  /* ─── Code ─── */
+  .slide code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: #f0f2f5;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .slide pre {
+    font-family: var(--mono);
+    font-size: 0.8em;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 20px 24px;
+    border-radius: 10px;
+    overflow-x: auto;
+    margin: 14px 0 20px;
+    line-height: 1.55;
+  }
+
+  /* ─── Tables ─── */
+  .slide table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 20px;
+    font-size: 0.95em;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .slide th, .slide td {
+    border: 1px solid #d0d7de;
+    padding: 10px 16px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .slide th {
+    background: #f6f8fa;
+    font-weight: 600;
+    font-size: 0.82em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .slide tr:nth-child(even) { background: #fafbfc; }
+
+  /* ─── Grid / Cards ─── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; }
+
+  .card {
+    background: #f8f9fa;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    padding: 22px;
+  }
+  .card .label {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .card .value {
+    font-size: 1.15em;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .card .desc {
+    font-size: 0.9em;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* ─── Tags ─── */
+  .tag {
+    display: inline-block;
+    font-size: 0.75em;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .tag-green { background: var(--green-light); color: var(--green); }
+  .tag-blue { background: var(--accent-light); color: var(--accent); }
+  .tag-orange { background: var(--orange-light); color: var(--orange); }
+  .tag-purple { background: var(--purple-light); color: var(--purple); }
+  .tag-red { background: #ffeef0; color: var(--red); }
+  .tag-teal { background: var(--teal-light); color: var(--teal); }
+
+  /* ─── Callout ─── */
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-light);
+    padding: 16px 20px;
+    margin: 16px 0;
+    border-radius: 0 8px 8px 0;
+    font-size: 1em;
+    line-height: 1.6;
+  }
+  .callout-warn { border-left-color: var(--orange); background: var(--orange-light); }
+  .callout-ok { border-left-color: var(--green); background: var(--green-light); }
+
+  /* ─── Flow ─── */
+  .flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 16px 0;
+    font-size: 0.95em;
+  }
+  .flow-step {
+    background: var(--accent-light);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 8px 18px;
+    color: var(--accent);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .flow-arrow { color: #bbb; font-size: 1.2em; margin: 0 4px; }
+
+  /* ─── Arch ─── */
+  .arch { text-align: center; margin: 20px 0; }
+  .arch-box {
+    display: inline-block;
+    border: 2px solid var(--accent);
+    border-radius: 10px;
+    padding: 14px 26px;
+    margin: 5px;
+    background: white;
+    font-size: 0.95em;
+  }
+  .arch-box .title { font-weight: 600; color: var(--accent); font-size: 1.05em; }
+  .arch-box .sub { font-size: 0.82em; color: var(--text-muted); margin-top: 3px; }
+  .arch-arrow { font-size: 1.6em; color: #bbb; margin: 0 4px; }
+  .arch-row { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .arch-v { display: flex; flex-direction: column; align-items: center; }
+  .arch-v .arch-arrow { margin: 4px 0; }
+
+  /* ─── Lifecycle ─── */
+  .lifecycle { display: flex; align-items: center; justify-content: center; gap: 0; flex-wrap: wrap; margin: 20px 0; }
+  .lifecycle-step {
+    border-radius: 50%;
+    width: 50px; height: 50px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 1em;
+    color: white;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+  }
+  .lifecycle-step.s1 { background: var(--accent); }
+  .lifecycle-step.s2 { background: var(--purple); }
+  .lifecycle-step.s3 { background: var(--orange); }
+  .lifecycle-step.s4 { background: var(--green); }
+  .lifecycle-step.s5 { background: var(--teal); }
+  .lifecycle-step.s6 { background: var(--red); }
+  .lifecycle-connector { width: 32px; height: 3px; background: #ddd; border-radius: 2px; }
+
+  .lifecycle-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    padding: 0 12px;
+    margin-bottom: 16px;
+  }
+
+  /* ─── Title / Cover slide ─── */
+  .slide-cover {
+    background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #1a1a2e 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 48px 24px;
+  }
+  .slide-cover h1 {
+    font-size: 3.4em;
+    font-weight: 700;
+    color: white;
+    letter-spacing: -1px;
+    margin-bottom: 16px;
+    line-height: 1.2;
+  }
+  .slide-cover .sub {
+    font-size: 1.3em;
+    color: rgba(255,255,255,0.7);
+    margin-bottom: 32px;
+  }
+  .slide-cover .meta {
+    display: flex;
+    gap: 32px;
+    color: rgba(255,255,255,0.4);
+    font-size: 0.9em;
+  }
+
+  /* ─── End slide ─── */
+  .slide-end {
+    background: linear-gradient(135deg, #0d1117 0%, #1a1a2e 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 48px 24px;
+  }
+  .slide-end h1 {
+    font-size: 3em;
+    color: white;
+    margin-bottom: 16px;
+  }
+  .slide-end p {
+    font-size: 1.2em;
+    color: rgba(255,255,255,0.6);
+  }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 768px) {
+    .slide { padding: 24px 5%; }
+    .slide-inner { padding: 32px 24px; }
+    .slide h1 { font-size: 1.8em; }
+    .slide h2 { font-size: 1.4em; }
+    .slide-cover h1 { font-size: 2em; }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .nav a { font-size: 0.7em; padding: 3px 6px; }
+  }
+
+  @media print {
+    .nav { display: none; }
+    .slides { padding-top: 0; }
+    .slide { min-height: auto; page-break-after: always; padding: 20px 5%; }
+    .slide-inner { box-shadow: none; border: 1px solid #ddd; }
+    .slide-cover, .slide-end { background: #0d1117 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .lifecycle-step { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre { background: #f5f5f5; color: #333; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="nav" id="nav">
+  <a href="#cover">封面</a>
+  <a href="#s1">背景</a>
+  <a href="#s2">架构</a>
+  <a href="#s3">目录管理</a>
+  <a href="#s4">分支策略</a>
+  <a href="#s5">Skill</a>
+  <a href="#s6">角色</a>
+  <a href="#s7">流程</a>
+  <a href="#s8">状态管理</a>
+  <a href="#s9">容器</a>
+  <a href="#s10">多项目</a>
+  <a href="#s11">决策</a>
+  <a href="#s12">规划</a>
+  <span class="spacer"></span>
+  <span class="counter" id="counter">1 / 14</span>
+</nav>
+
+<div class="slides">
+
+  <!-- Cover -->
+  <div class="slide-cover" id="cover">
+    <h1>Agent Workspace<br>组织方案设计</h1>
+    <div class="sub">基于 Git Worktree 的多 Agent 协作开发管理规范</div>
+    <div class="meta">
+      <span>v1.0</span>
+      <span>2026-08-18</span>
+      <span>方案设计</span>
+    </div>
+  </div>
+
+  <!-- Slide 1: 背景 -->
+  <div class="slide" id="s1">
+    <div class="slide-inner">
+      <h2><span class="num">1</span> 背景与目标</h2>
+
+      <h3>我们面临的问题</h3>
+      <div class="grid-2">
+        <div class="card" style="border-left: 4px solid var(--red);">
+          <div class="label">上下文污染</div>
+          <div class="value">单 Agent 模式下，不同任务互相干扰</div>
+          <div class="desc">上下文压缩时丢失关键信息，结果不达预期</div>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--orange);">
+          <div class="label">目录混乱</div>
+          <div class="value">多个开发任务在同一目录并行</div>
+          <div class="desc">文件冲突、耦合严重，难以管理</div>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--purple);">
+          <div class="label">状态管理缺失</div>
+          <div class="value">Agent 输出没有统一持久化机制</div>
+          <div class="desc">重启后状态丢失，无法恢复</div>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--red);">
+          <div class="label">角色边界模糊</div>
+          <div class="value">BA、Dev、QA、Deploy 职责混在一起</div>
+          <div class="desc">流程不可控，质量无法保证</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:28px;">设计目标</h3>
+      <div class="grid-4">
+        <div class="card">
+          <div class="label">目录隔离</div>
+          <div class="value">每个需求独立 worktree</div>
+          <div class="desc">Git worktree 物理隔离</div>
+        </div>
+        <div class="card">
+          <div class="label">上下文隔离</div>
+          <div class="value">子 Agent 独立上下文</div>
+          <div class="desc">消除 context 污染</div>
+        </div>
+        <div class="card">
+          <div class="label">状态持久化</div>
+          <div class="value">Git 仓库 = 唯一状态源</div>
+          <div class="desc">无状态 Runtime</div>
+        </div>
+        <div class="card">
+          <div class="label">流程可控</div>
+          <div class="value">分角色验证门禁</div>
+          <div class="desc">Pre + Post merge</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 2: 架构 -->
+  <div class="slide" id="s2">
+    <div class="slide-inner">
+      <h2><span class="num">2</span> 整体架构</h2>
+
+      <h3>系统分层</h3>
+      <div class="arch">
+        <div class="arch-v">
+          <div class="arch-box" style="border-color:#8250df;">
+            <div class="title">用户交互层</div>
+            <div class="sub">Web 界面 / CLI / API</div>
+          </div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-box" style="border-color:#0969da;">
+            <div class="title">平台管理层</div>
+            <div class="sub">项目管理 · 需求管理 · 容器编排 · NFS</div>
+          </div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-box" style="border-color:#1a7f37;">
+            <div class="title">Agent Runtime 层</div>
+            <div class="sub">Docker 容器 · codewhale · Agent</div>
+          </div>
+          <div class="arch-arrow">↓</div>
+          <div class="arch-box" style="border-color:#d96000;">
+            <div class="title">持久化层</div>
+            <div class="sub">Git 仓库 · NFS 共享存储</div>
+          </div>
+        </div>
+      </div>
+
+      <h3>三大核心原则</h3>
+      <div class="grid-3" style="margin-top:8px;">
+        <div class="card" style="border-top: 3px solid var(--accent);">
+          <div class="label">原则 1</div>
+          <div class="value">一个需求 = 一个容器</div>
+          <div class="desc">容器生命周期 = 需求完整生命周期</div>
+        </div>
+        <div class="card" style="border-top: 3px solid var(--purple);">
+          <div class="label">原则 2</div>
+          <div class="value">一个 Runtime = 子 Agent 池</div>
+          <div class="desc">主 Agent 通过 agent 工具创建子 Agent，同进程零开销</div>
+        </div>
+        <div class="card" style="border-top: 3px solid var(--green);">
+          <div class="label">原则 3</div>
+          <div class="value">Git 即状态</div>
+          <div class="desc">启动 git pull 恢复，关闭前 git push 持久化</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 3: 目录管理 -->
+  <div class="slide" id="s3">
+    <div class="slide-inner">
+      <h2><span class="num">3</span> Workspace 目录管理</h2>
+
+      <h3>目录平面</h3>
+      <pre>
+project-root/
+├── .git/                          # 中央仓库
+├── BA/                            # [demand] 需求管理
+├── code/                          # [develop] CI 只读
+├── feature-REQ-001/               # [feature/REQ-001] 开发
+├── Deploy/                        # [deploy] 部署配置
+└── hotfix-JIRA-123/               # [hotfix/JIRA-123] 紧急修复</pre>
+
+      <table>
+        <tr><th>目录</th><th>分支</th><th>使用者</th><th>权限</th></tr>
+        <tr><td><code>BA/</code></td><td><code>demand</code></td><td>BA Agent</td><td>读写</td></tr>
+        <tr><td><code>code/</code></td><td><code>develop</code></td><td>CI 只读</td><td>只读</td></tr>
+        <tr><td><code>feature-REQ-xxx/</code></td><td><code>feature/REQ-xxx</code></td><td>Dev Agent</td><td>读写</td></tr>
+        <tr><td><code>Deploy/</code></td><td><code>deploy</code></td><td>Deploy Agent</td><td>读写</td></tr>
+        <tr><td><code>hotfix-xxx/</code></td><td><code>hotfix/xxx</code></td><td>Dev Agent</td><td>读写</td></tr>
+      </table>
+
+      <h3>Worktree 回收机制</h3>
+      <table>
+        <tr><th>触发条件</th><th>执行者</th><th>方式</th></tr>
+        <tr><td>PR 合并</td><td>Dev Agent 自清理</td><td><code>git worktree remove</code> + 删除分支</td></tr>
+        <tr><td>需求取消</td><td>BA Agent 强制清理</td><td><code>git worktree remove --force</code></td></tr>
+        <tr><td>定期巡检</td><td>BA Agent 兜底</td><td>扫描所有 worktree 状态</td></tr>
+      </table>
+      <div class="callout-warn callout" style="margin-top:12px;">
+        <strong>安全检查：</strong>删除前确认分支已合并、无未提交变更、无未推送 commit。
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 4: 分支策略 -->
+  <div class="slide" id="s4">
+    <div class="slide-inner">
+      <h2><span class="num">4</span> Git 分支策略</h2>
+
+      <table>
+        <tr><th>分支</th><th>用途</th><th>写入者</th><th>基分支</th></tr>
+        <tr><td><code>develop</code></td><td>主开发，CI 构建</td><td>合并不直接写</td><td>—</td></tr>
+        <tr><td><code>demand</code></td><td>需求管理</td><td>BA Agent</td><td>独立分支</td></tr>
+        <tr><td><code>feature/REQ-xxx</code></td><td>需求开发</td><td>Dev Agent</td><td><code>develop</code></td></tr>
+        <tr><td><code>deploy</code></td><td>部署配置</td><td>Deploy Agent</td><td>独立分支</td></tr>
+        <tr><td><code>main</code></td><td>生产发布</td><td>release 合并</td><td>—</td></tr>
+        <tr><td><code>release/vx.y.z</code></td><td>预发布</td><td>管理员</td><td><code>develop</code></td></tr>
+        <tr><td><code>hotfix/xxx</code></td><td>紧急修复</td><td>Dev Agent</td><td><code>main</code></td></tr>
+      </table>
+
+      <h3>分支关系</h3>
+      <pre>
+develop ← feature/REQ-001   (PR 合并)
+develop ← feature/REQ-002   (PR 合并)
+develop → release/v1.0.0 → main
+                            main → deploy (镜像 tag 信号)
+                            deploy 独立演进，不 merge 回 main</pre>
+
+      <h3>命名规范</h3>
+      <table>
+        <tr><th>类型</th><th>格式</th><th>示例</th></tr>
+        <tr><td>需求编号</td><td><code>REQ-{三位数字}</code></td><td><code>REQ-001</code></td></tr>
+        <tr><td>分支名</td><td><code>feature/REQ-{xxx}</code></td><td><code>feature/REQ-001</code></td></tr>
+        <tr><td>Commit Message</td><td><code>[{区域}] {描述} (关联: {需求ID})</code></td><td><code>[Dev] 实现邮箱登录 (关联: REQ-001)</code></td></tr>
+        <tr><td>镜像 Tag</td><td><code>{GIT_SHA}</code> 或 <code>{GIT_TAG}</code></td><td><code>a1b2c3d</code> 或 <code>v1.0.0</code></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Slide 5: Skill -->
+  <div class="slide" id="s5">
+    <div class="slide-inner">
+      <h2><span class="num">5</span> Skill 体系设计</h2>
+
+      <div class="callout-ok callout">
+        <strong>核心设计：</strong>主 BA Agent 读取 <code>agent-workspace-v2/SKILL.md</code>，按角色截取对应章节，通过 <code>prompt</code> 注入到子 Agent。不需要额外的 skill 发现机制。
+      </div>
+
+      <h3>文件结构</h3>
+      <pre>
+.agents/skills/
+└── agent-workspace-v2/             # 核心 skill（合并版）
+    ├── SKILL.md                    # 完整规范（5 个章节）
+    ├── init/                       # 初始化流程
+    ├── lifecycle/                  # 回收 + 巡检
+    └── templates/                  # 通用模板</pre>
+
+      <h3>SKILL.md 内容映射</h3>
+      <table>
+        <tr><th>章节</th><th>内容</th><th>注入目标</th></tr>
+        <tr><td>第一部分：全局规范</td><td>目录结构、分支策略、命名规范</td><td>BA Agent 自身加载</td></tr>
+        <tr><td>第二部分：BA Agent 工作流</td><td>需求管理、调度、巡检</td><td>BA Agent 自身加载</td></tr>
+        <tr><td>第三部分：Dev Agent 工作流</td><td>开发、自验证、清理</td><td>Dev 子 Agent inject</td></tr>
+        <tr><td>第四部分：QA Agent 工作流</td><td>Pre-merge + Post-merge 验证</td><td>QA 子 Agent inject</td></tr>
+        <tr><td>第五部分：Deploy Agent 工作流</td><td>部署、回滚、环境管理</td><td>Deploy 子 Agent inject</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Slide 6: 角色 -->
+  <div class="slide" id="s6">
+    <div class="slide-inner">
+      <h2><span class="num">6</span> Agent 角色定义</h2>
+
+      <div class="grid-4">
+        <div class="card" style="border-top: 3px solid var(--accent);">
+          <div class="label">BA Agent</div>
+          <div class="value" style="color:var(--accent);">需求管理 + 调度</div>
+          <div class="desc">
+            <span class="tag tag-blue">主 Agent</span><br>
+            与用户讨论需求<br>
+            创建子 Agent 调度<br>
+            Worktree 生命周期管理
+          </div>
+        </div>
+        <div class="card" style="border-top: 3px solid var(--purple);">
+          <div class="label">QA Agent</div>
+          <div class="value" style="color:var(--purple);">测试用例 + 验证</div>
+          <div class="desc">
+            <span class="tag tag-purple">子 Agent</span><br>
+            生成测试用例<br>
+            Pre-merge 代码级验证<br>
+            Post-merge 运行时验证
+          </div>
+        </div>
+        <div class="card" style="border-top: 3px solid var(--green);">
+          <div class="label">Dev Agent</div>
+          <div class="value" style="color:var(--green);">开发 + 自验证</div>
+          <div class="desc">
+            <span class="tag tag-green">子 Agent</span><br>
+            编码实现 + 编写测试<br>
+            自验证 + 自清理
+          </div>
+        </div>
+        <div class="card" style="border-top: 3px solid var(--orange);">
+          <div class="label">Deploy Agent</div>
+          <div class="value" style="color:var(--orange);">部署 + 回滚</div>
+          <div class="desc">
+            <span class="tag tag-orange">子 Agent</span><br>
+            Helm/K8s 配置管理<br>
+            环境差异管理 + 回滚
+          </div>
+        </div>
+      </div>
+
+      <h3>上下文隔离机制</h3>
+      <pre>
+主 BA Agent 上下文（一直在累积）
+  ┌─────────────────────────────────────────────────┐
+  │ 用户讨论需求 → 确认方案 → 调度子 Agent          │
+  └─────────────────────────────────────────────────┘
+
+                  ↓ 创建子 Agent
+
+                  子 Agent 上下文（独立，用完回收）
+                   ┌──────────────────────────────┐
+                   │ 完整 skill 注入 + 独立任务    │
+                   │ 执行 → 返回 → 回收            │
+                   └──────────────────────────────┘
+                   ↑ 不会污染主 Agent</pre>
+    </div>
+  </div>
+
+  <!-- Slide 7: 流程 -->
+  <div class="slide" id="s7">
+    <div class="slide-inner">
+      <h2><span class="num">7</span> 完整协作流程</h2>
+
+      <h3>需求生命周期</h3>
+      <div class="lifecycle">
+        <div class="lifecycle-step s1">1</div>
+        <div class="lifecycle-connector"></div>
+        <div class="lifecycle-step s2">2</div>
+        <div class="lifecycle-connector"></div>
+        <div class="lifecycle-step s3">3</div>
+        <div class="lifecycle-connector"></div>
+        <div class="lifecycle-step s4">4</div>
+        <div class="lifecycle-connector"></div>
+        <div class="lifecycle-step s5">5</div>
+        <div class="lifecycle-connector"></div>
+        <div class="lifecycle-step s6">6</div>
+      </div>
+      <div class="lifecycle-label">
+        <span>讨论需求</span><span>确认方案</span><span>开发+验证</span><span>PR 合并</span><span>部署上线</span><span>释放容器</span>
+      </div>
+
+      <h3>十步流程</h3>
+      <div class="grid-2">
+        <div class="card">
+          <div class="label">Step 1-3</div>
+          <div class="value">创建项目 → 创建需求 → 讨论需求</div>
+          <div class="desc">用户与 BA Agent 多轮对话，确认方案</div>
+        </div>
+        <div class="card">
+          <div class="label">Step 4-6</div>
+          <div class="value">QA 用例 → Dev 开发 → QA Pre-merge</div>
+          <div class="desc">子 Agent 独立上下文，各司其职</div>
+        </div>
+        <div class="card">
+          <div class="label">Step 7-8</div>
+          <div class="value">PR 合并 → QA Post-merge</div>
+          <div class="desc">staging 环境 e2e + 回归测试</div>
+        </div>
+        <div class="card">
+          <div class="label">Step 9-10</div>
+          <div class="value">Deploy 部署 → 完成释放</div>
+          <div class="desc">更新 deploy 分支 → CD → 容器释放</div>
+        </div>
+      </div>
+
+      <h3>验证门禁</h3>
+      <div class="grid-2">
+        <div class="card" style="border-left: 4px solid var(--purple);">
+          <div class="label">门禁 1：Pre-merge</div>
+          <div class="value">QA 验证通过 → 允许合并到 develop</div>
+          <div class="desc">在 feature worktree 中完成代码级验证</div>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--orange);">
+          <div class="label">门禁 2：Post-merge</div>
+          <div class="value">QA 验证通过 → 允许部署到 production</div>
+          <div class="desc">在 staging 环境中完成运行时验证</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 8: 状态管理 -->
+  <div class="slide" id="s8">
+    <div class="slide-inner">
+      <h2><span class="num">8</span> 无状态 Runtime 与状态管理</h2>
+
+      <div class="callout-ok callout">
+        <strong>核心思想：</strong>Git 仓库 = 唯一状态源。容器是无状态的，所有状态通过 Git 持久化。启动时 <code>git pull</code> 恢复，关闭前 <code>git push</code> 保存。
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="label">启动时</div>
+          <div class="value">git pull 恢复</div>
+          <div class="desc">读取需求文档、状态、迭代计划、调度信息</div>
+        </div>
+        <div class="card">
+          <div class="label">运行时</div>
+          <div class="value">实时写入 Git</div>
+          <div class="desc">每次变更立即 commit，崩溃不丢失</div>
+        </div>
+        <div class="card">
+          <div class="label">释放时</div>
+          <div class="value">git push 持久化</div>
+          <div class="desc">所有状态写入仓库，下次启动恢复</div>
+        </div>
+      </div>
+
+      <h3>需求状态流转</h3>
+      <div class="flow">
+        <span class="flow-step">草稿</span><span class="flow-arrow">→</span>
+        <span class="flow-step">已评审</span><span class="flow-arrow">→</span>
+        <span class="flow-step">已就绪</span><span class="flow-arrow">→</span>
+        <span class="flow-step">进行中</span><span class="flow-arrow">→</span>
+        <span class="flow-step">待验证</span><span class="flow-arrow">→</span>
+        <span class="flow-step">已验证</span><span class="flow-arrow">→</span>
+        <span class="flow-step">已完成</span>
+      </div>
+      <div class="flow" style="margin-top:4px;">
+        <span class="flow-step" style="background:var(--orange-light);border-color:var(--orange);color:var(--orange);">进行中</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step" style="background:var(--red-light);border-color:var(--red);color:var(--red);">已取消</span>
+      </div>
+      <div class="flow" style="margin-top:4px;">
+        <span class="flow-step" style="background:var(--orange-light);border-color:var(--orange);color:var(--orange);">待验证</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step" style="background:var(--red-light);border-color:var(--red);color:var(--red);">已退回</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">进行中</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 9: 容器 -->
+  <div class="slide" id="s9">
+    <div class="slide-inner">
+      <h2><span class="num">9</span> 镜像设计与容器生命周期</h2>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="label">Dockerfile</div>
+          <pre style="font-size:0.75em;margin:8px 0 0;">
+FROM ubuntu:22.04
+RUN apt-get install -y git curl openssh-client
+COPY codewhale /usr/local/bin/
+COPY agent-workspace-v2/ /home/codewhale/.codewhale/skills/
+COPY entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]</pre>
+        </div>
+        <div class="card">
+          <div class="label">entrypoint.sh</div>
+          <pre style="font-size:0.75em;margin:8px 0 0;">
+case $ACTION in
+  init)
+    codewhale --skill agent-workspace-v2 \
+      "初始化 workspace" ;;
+  demand)
+    codewhale --interactive \
+      --skill agent-workspace-v2 \
+      --context "BA/demands/$DEMAND_ID/" ;;
+esac
+git add . && git commit -m "[Agent] 提交"
+git push</pre>
+        </div>
+      </div>
+
+      <h3>容器生命周期</h3>
+      <div class="grid-2" style="margin-top:12px;">
+        <div class="card" style="border-left: 4px solid var(--accent);">
+          <div class="label">项目初始化</div>
+          <div class="value">一次性，无状态</div>
+          <div class="desc">启动 init 容器 → 创建分支 + worktree → git push → 释放</div>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--green);">
+          <div class="label">需求开发</div>
+          <div class="value">一个需求 = 一个容器</div>
+          <div class="desc">启动 BA 容器 → 讨论 + 子 Agent 调度 → git push → 释放</div>
+        </div>
+      </div>
+
+      <div class="callout-ok callout" style="margin-top:16px;">
+        <strong>关键设计：</strong>子 Agent 通过 codewhale 的 <code>agent(action="start")</code> 在<strong>同一进程</strong>中创建。共享 workspace，独立上下文窗口。不需要新容器，不需要新进程。
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 10: 多项目 -->
+  <div class="slide" id="s10">
+    <div class="slide-inner">
+      <h2><span class="num">10</span> 多项目承载方案</h2>
+
+      <h3>NFS 目录结构</h3>
+      <pre>
+/nfs/
+├── projects/
+│   ├── project-a/workspace/    # 项目 A
+│   ├── project-b/workspace/    # 项目 B
+│   └── project-c/workspace/    # 项目 C
+│
+└── containers/                 # 容器状态映射</pre>
+
+      <h3>多容器并行</h3>
+      <pre>
+平台 Server
+├── project-a:
+│   ├── 需求 REQ-001 → 容器 abc123 (BA Agent)
+│   └── 需求 REQ-002 → 容器 def456 (BA Agent)
+├── project-b:
+│   └── 需求 REQ-001 → 容器 ghi789 (BA Agent)
+└── project-c: (无活跃需求)
+
+每个容器挂载不同 NFS 路径：
+  abc123: /nfs/projects/project-a/workspace → /workspace
+  def456: /nfs/projects/project-a/workspace → /workspace
+  ghi789: /nfs/projects/project-b/workspace → /workspace
+
+同一项目可并行多个需求容器
+每个需求的 worktree 不同，Git 分支不同，不会冲突</pre>
+
+      <div class="callout-warn callout">
+        <strong>并发安全：</strong>同一项目多容器通过<strong>分支隔离</strong>避免冲突。每个容器只操作自己的 feature 分支。develop 分支操作需串行化。
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 11: 决策 -->
+  <div class="slide" id="s11">
+    <div class="slide-inner">
+      <h2><span class="num">11</span> 关键技术决策</h2>
+
+      <table>
+        <tr><th style="width:28%;">决策项</th><th style="width:22%;">选择</th><th>理由</th></tr>
+        <tr><td>Agent 架构</td><td><span class="tag tag-blue">子 Agent 方案</span></td><td>同一 runtime 内独立上下文，零开销</td></tr>
+        <tr><td>Skill 结构</td><td><span class="tag tag-green">1 核心 + 工作流目录</span></td><td>主 Agent 读取后按角色截取注入</td></tr>
+        <tr><td>Skill 注入</td><td><span class="tag tag-blue">Prompt 注入</span></td><td>读取 SKILL.md 内容，通过 prompt 传入</td></tr>
+        <tr><td>目录隔离</td><td><span class="tag tag-green">Git Worktree</span></td><td>物理隔离，原生支持</td></tr>
+        <tr><td>状态管理</td><td><span class="tag tag-purple">Git 即状态</span></td><td>无状态 Runtime，git pull/push</td></tr>
+        <tr><td>远程架构</td><td><span class="tag tag-orange">Docker 容器</span></td><td>每个需求一个容器，用完释放</td></tr>
+        <tr><td>多项目</td><td><span class="tag tag-teal">NFS 按项目隔离</span></td><td>不同容器挂载不同路径</td></tr>
+        <tr><td>验证模式</td><td><span class="tag tag-blue">分两层验证</span></td><td>Pre-merge + Post-merge</td></tr>
+        <tr><td>镜像 Tag</td><td><span class="tag tag-green">GIT_SHA / GIT_TAG</span></td><td>默认 commit SHA</td></tr>
+        <tr><td>部署分支</td><td><span class="tag tag-orange">独立 deploy 分支</span></td><td>commit 历史 = 审计日志</td></tr>
+        <tr><td>环境管理</td><td><span class="tag tag-purple">目录 + .env 混合</span></td><td>values.yaml 放嵌套，.env 放差异</td></tr>
+        <tr><td>回滚方式</td><td><span class="tag tag-red">git revert 新部署</span></td><td>保持审计历史完整</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Slide 12: 规划 -->
+  <div class="slide" id="s12">
+    <div class="slide-inner">
+      <h2><span class="num">12</span> 后续规划</h2>
+
+      <h3>落地路径</h3>
+      <div class="lifecycle">
+        <div class="lifecycle-step s1">1</div>
+        <div class="lifecycle-connector"></div>
+        <div class="lifecycle-step s2">2</div>
+        <div class="lifecycle-connector"></div>
+        <div class="lifecycle-step s3">3</div>
+        <div class="lifecycle-connector"></div>
+        <div class="lifecycle-step s4">4</div>
+      </div>
+      <div class="lifecycle-label">
+        <span>Skill 完善</span><span>本地验证</span><span>镜像构建</span><span>平台集成</span>
+      </div>
+
+      <table>
+        <tr><th>阶段</th><th>任务</th><th>产出</th></tr>
+        <tr>
+          <td>1. Skill 完善</td>
+          <td>评审 v2 SKILL.md，补充细节，确认模板</td>
+          <td>定稿的 agent-workspace-v2</td>
+        </tr>
+        <tr>
+          <td>2. 本地验证</td>
+          <td>创建测试项目，验证子 Agent 调度流程</td>
+          <td>验证通过的流程脚本</td>
+        </tr>
+        <tr>
+          <td>3. 镜像构建</td>
+          <td>编写 Dockerfile，打包 codewhale + skill</td>
+          <td>可运行的 Docker 镜像</td>
+        </tr>
+        <tr>
+          <td>4. 平台集成</td>
+          <td>API 对接容器编排，用户交互界面</td>
+          <td>完整可用的平台</td>
+        </tr>
+      </table>
+
+      <h3>待讨论问题</h3>
+      <ul>
+        <li>平台 ↔ 容器通信协议：WebSocket？HTTP 轮询？SSE？</li>
+        <li>用户交互方式：Web 聊天界面还是 CLI 终端？</li>
+        <li>codewhale 预编译版本还是从源码构建？</li>
+        <li>Hotfix 是否需要 BA Agent 介入？</li>
+        <li>容器资源限制：CPU / 内存 / GPU 分配策略？</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- End -->
+  <div class="slide-end" id="end">
+    <h1>谢谢</h1>
+    <p>Agent Workspace 组织方案设计 · v1.0</p>
+  </div>
+
+</div>
+
+<script>
+// Update slide counter on scroll
+const slides = document.querySelectorAll('.slide, .slide-cover, .slide-end');
+const navLinks = document.querySelectorAll('.nav a');
+const counter = document.getElementById('counter');
+const total = slides.length;
+
+function updateNav() {
+  let current = 0;
+  const scrollY = window.scrollY + 100;
+  slides.forEach((slide, i) => {
+    const top = slide.offsetTop;
+    const bottom = top + slide.offsetHeight;
+    if (scrollY >= top && scrollY < bottom) current = i;
+  });
+  
+  navLinks.forEach((link, idx) => {
+    link.classList.toggle('active', idx === current);
+  });
+  counter.textContent = `${current + 1} / ${total}`;
+}
+
+window.addEventListener('scroll', updateNav);
+window.addEventListener('resize', updateNav);
+updateNav();
+</script>
+
+</body>
+</html>
