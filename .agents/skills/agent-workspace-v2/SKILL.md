@@ -282,7 +282,7 @@ agent(
 **额外：workspace 巡检**（详见 `lifecycle/worktree-audit.md` 末节）：
 
 - 切到仓库根（workspace/ 工作区）
-- `git ls-files` 必须只有 `README.md`
+- `git ls-files` 必须只有 `README.md` + `.gitignore`（两个文件）
 - 任何额外文件都属违规，记录到 `BA/dispatch/cleanup-log.md` 并清理
 
 ---
