@@ -19,23 +19,50 @@ metadata:
 
 # 第一部分：全局规范
 
+## 核心设计：workspace 根容器 + 物理平铺
+
+整个 workspace 由一个 **`workspace` 分支** 作为根容器。仓库根（clone 默认落点）= `workspace` 分支的 worktree，**只跟踪 `README.md` 一个文件**。
+
+所有其他 worktree（`code/`、`BA/`、`Deploy/`、`feature-REQ-xxx/`、`hotfix-xxx/`）**直接在仓库根平铺**，跟 `README.md` 同级，互为兄弟目录。
+
+**为什么这么设计**：
+
+- 仓库根就是"workspace 容器"，git 默认 clone 落点有合法分支身份
+- 所有 worktree 物理平铺，**没有 worktree 嵌套**、没有中间目录层
+- 视觉最清晰：`ls` 一下看到 `code/ BA/ Deploy/ feature-xxx/ hotfix-xxx/` 全在第一层
+- 解决"平台运行目录锁定 + worktree 嵌套"问题：平台目录 = 仓库根，所有 worktree 在它下面平铺
+
+> **硬约束（必读）**：
+> 1. `workspace` 分支**只跟踪 `README.md`**（`git ls-files` 必须只有这一个文件）
+> 2. `workspace` 分支**禁止业务代码**（src/、tests/、package.json、CI 配置等）
+> 3. **禁止 worktree 嵌套**：所有 worktree 必须在仓库根第一层，**不允许中间目录层**（如 `workspaces/code/`）
+> 4. **`.gitignore` 不进 git**：是本地文件，由各 agent 在自己 worktree 里维护
+>
+> BA Agent 启动时必须做 workspace 巡检，发现违规立即清理（详见 `lifecycle/worktree-audit.md`）。
+
 ## 目录结构
 
 ```
-project-root/
-├── .git/                          # 中央仓库
-├── BA/                            # [worktree] demand 分支 - 需求管理
-├── code/                          # [worktree] develop 分支 - CI 只读
-├── feature-REQ-xxx/               # [worktree] feature/REQ-xxx 分支 - 开发
-├── Deploy/                        # [worktree] deploy 分支 - 部署配置
-├── hotfix-xxx/                    # [worktree] hotfix/xxx 分支 - 紧急修复
-└── .gitignore
+<project-root>/                        # workspace 分支 worktree（仓库根容器）
+├── README.md                            # workspace 分支唯一跟踪文件
+├── .gitignore                           # 本地文件，不提交到 workspace 分支
+├── .git/                                # 仓库元数据
+│
+├── code/                                # [worktree] develop 分支 - CI 主工作区
+├── BA/                                  # [worktree] demand 分支 - 需求管理
+├── Deploy/                              # [worktree] deploy 分支 - 部署配置
+│
+├── feature-REQ-xxx/                     # [worktree] feature/REQ-xxx 分支 - 需求开发
+└── hotfix-xxx/                          # [worktree] hotfix/xxx 分支 - 紧急修复
 ```
+
+**所有 worktree 在仓库根平铺**，没有中间目录层、没有 worktree 嵌套。
 
 ## 分支策略
 
 | 分支 | 用途 | 谁写入 | 基分支 |
 |------|------|--------|--------|
+| `workspace` | **根容器**——仓库根目录的归属分支，只跟踪 README.md | BA Agent（极少） | — |
 | `develop` | 主开发分支，CI 构建 | 合并不直接写 | — |
 | `demand` | 需求管理 | BA Agent | `develop` 或独立 |
 | `feature/REQ-xxx` | 需求开发 | Dev Agent | `develop` |
@@ -44,11 +71,20 @@ project-root/
 | `release/vx.y.z` | 预发布 | 发布管理员 | `develop` |
 | `hotfix/xxx` | 紧急修复 | Dev Agent | `main` |
 
+**workspace 分支的硬约束**：
+
+- ✅ 只跟踪 `README.md`（一个文件）
+- ✅ 更新由 BA Agent 手动 commit，commit message 格式 `[Workspace] {描述}`
+- ❌ 禁止业务代码（src/、tests/、业务配置等）
+- ❌ 禁止接收 PR（任何 feature → workspace 的 PR 都应拒绝）
+- ❌ 禁止与 develop / main 互相合并
+- ⚠️ `.gitignore` 是本地文件，**不进入 workspace 分支**——由各 agent 各自维护
+
 ## 命名规范
 
 - **需求编号**: `REQ-{三位数字}`，如 `REQ-001`
 - **分支名**: `feature/REQ-001`, `hotfix/JIRA-123`
-- **Worktree 目录**: `feature-REQ-001`, `hotfix-JIRA-123`
+- **Worktree 目录**: `feature-REQ-001`, `hotfix-JIRA-123`（在仓库根平铺）
 - **Commit Message**: `[{区域}] {描述} (关联: {需求ID})`
 - **镜像 Tag**: 默认 `{GIT_SHA}`，发布用 `{GIT_TAG}`，特殊可用户指定
 
@@ -56,11 +92,55 @@ project-root/
 
 | Agent | 工作区 |
 |-------|--------|
-| BA Agent | `BA/` 目录 |
+| BA Agent | `BA/` 目录（仓库根平铺） |
 | Dev Agent | `feature-REQ-xxx/` 目录（由 BA Agent 分配） |
 | QA Agent（Pre-merge） | `feature-REQ-xxx/` 目录 |
 | QA Agent（Post-merge） | `code/` 目录 + staging 环境 |
 | Deploy Agent | `Deploy/` 目录 |
+| **Workspace 巡检** | **仓库根（workspace 工作区）**——BA Agent 启动时必做 |
+
+> **路径基准约定**：所有 worktree 操作路径都从仓库根出发。
+> 例：在仓库根跑 `git worktree add feature-REQ-001 -b feature/REQ-001 develop`
+> 例：在 `BA/` worktree 里跑 `git worktree add ../feature-REQ-001 -b feature/REQ-001 develop`（`../` 回到仓库根）
+
+## 初始化
+
+### 新建项目
+
+详见 `init/new-project.md`。核心步骤：
+
+```bash
+mkdir my-project && cd my-project
+git init
+git commit --allow-empty -m "[Init] workspace root"
+git branch -m workspace                # 把默认分支改名为 workspace
+# 写 README.md（用 templates/root-readme.md.tpl）
+git add README.md && git commit -m "[Workspace] 初始化导航"
+# 创建主分支
+git branch develop
+git branch demand
+git branch deploy
+# 在仓库根平铺创建 worktree
+git worktree add code develop
+git worktree add BA demand
+git worktree add Deploy deploy
+# 推送到远程
+git remote add origin <url>
+git push -u origin workspace develop demand deploy
+```
+
+### 已有项目迁移
+
+详见 `init/migrate-project.md`。核心原则：**保历史、不动 commit hash、新建 workspace 分支作为新默认**。
+
+6 步法骨架：
+
+1. **备份**：`git clone --mirror` 兜底
+2. **建 workspace 分支**：`--orphan workspace` + 空 commit + 写 README
+3. **把现有 worktree 移到仓库根平铺**（如果有嵌套则拍平）
+4. **创建 BA / Deploy 分支**（如果还没有）
+5. **改远程默认分支** → workspace；改 CI checkout 策略
+6. **验证**
 
 ---
 
@@ -68,7 +148,9 @@ project-root/
 
 ## 前置依赖
 
-你位于 `BA/` 目录（`demand` 分支的 worktree）。所有变更通过 Git 持久化。
+你位于 `BA/` 目录（`demand` 分支的 worktree），跟 `code/` `Deploy/` 在仓库根平铺。
+所有变更通过 Git 持久化。
+BA Agent 启动时**必须**额外做一次 workspace 巡检（见 `lifecycle/worktree-audit.md` 末节）。
 
 ## 核心职责
 
@@ -78,6 +160,7 @@ project-root/
 4. 状态跟踪：更新需求状态
 5. Worktree 管理：创建/回收 worktree
 6. 验证审批：确认验证结果
+7. **workspace 分支维护**：必要时更新 `workspace/README.md`（新增 worktree 类型、升级规范等）
 
 ## BA/ 目录结构
 
@@ -121,8 +204,8 @@ BA/
 ```
 1. 确认需求状态为"已就绪"
 2. 从 dispatch/rules.md 查找可用的 Dev Agent
-3. 创建 feature worktree：
-   git worktree add feature-REQ-xxx feature/REQ-xxx
+3. 创建 feature worktree（在仓库根跑）：
+   git worktree add feature-REQ-001 -b feature/REQ-001 develop
 4. 在 .feature/manifest.json 中记录分配信息
 5. 更新需求状态为"进行中"
 6. 创建 QA 子 agent 生成测试用例
@@ -166,11 +249,18 @@ agent(
 
 ## 巡检兜底
 
-每次启动时执行一次 worktree 巡检：
+每次启动时执行一次 worktree 巡检（详见 `lifecycle/worktree-audit.md`）：
+
 1. 扫描所有 `feature-*` 和 `hotfix-*` worktree
 2. 检查分支状态
 3. 已合并但未清理的 → 执行清理
 4. 记录到 `BA/dispatch/cleanup-log.md`
+
+**额外：workspace 巡检**（详见 `lifecycle/worktree-audit.md` 末节）：
+
+- 切到仓库根（workspace/ 工作区）
+- `git ls-files` 必须只有 `README.md`
+- 任何额外文件都属违规，记录到 `BA/dispatch/cleanup-log.md` 并清理
 
 ---
 
@@ -179,6 +269,7 @@ agent(
 ## 前置依赖
 
 你位于 `feature-REQ-xxx/` 目录（`feature/REQ-xxx` 分支的 worktree），由 BA Agent 分配。
+所有 worktree 都在仓库根平铺。
 
 ## 核心职责
 
@@ -250,7 +341,7 @@ agent(
 ```
 1. 推送 feature 分支到远程
 2. 创建 PR 到 develop
-3. PR 合并后：
+3. PR 合并后（在仓库根跑）：
    - git worktree remove feature-REQ-xxx
    - git branch -d feature/REQ-xxx
    - git push origin --delete feature/REQ-xxx
@@ -288,7 +379,7 @@ QA Agent 分两个阶段工作：
 ### 验证流程
 
 ```
-1. 进入 feature worktree
+1. 进入 feature worktree（feature-REQ-xxx/）
 2. 读取 BA/demands/REQ-xxx/ 需求文档
 3. 逐条检查需求实现
 4. 检查测试用例覆盖
@@ -391,7 +482,7 @@ CI 的职责：                    Deploy 的职责：
 
 ## 工作区
 
-你位于 `Deploy/` 目录（`deploy` 分支的 worktree）。
+你位于 `Deploy/` 目录（`deploy` 分支的 worktree），跟 `code/` `BA/` 在仓库根平铺。
 
 ## Deploy/ 目录结构
 
@@ -465,6 +556,20 @@ apps/api-gateway/helm/
 ---
 
 # 附录：模板
+
+## 模板文件清单
+
+| 模板 | 用途 | 复制到 |
+|------|------|--------|
+| `templates/root-readme.md.tpl` | workspace 分支 README（导航 + 快速上手） | `<repo-root>/README.md` |
+| `templates/root-gitignore.md.tpl` | workspace 分支 .gitignore 模板（**说明文档，不直接复制**） | 参考生成各 worktree 的 .gitignore |
+| `templates/demand.md.tpl` | 需求描述 | `BA/demands/REQ-xxx/demand.md` |
+| `templates/acceptance.md.tpl` | 验收标准 | `BA/demands/REQ-xxx/acceptance.md` |
+| `templates/verification-report.md.tpl` | 验证报告 | `BA/demands/REQ-xxx/verification-report.md` 或 `feature-REQ-xxx/.feature/verification-report.md` |
+| `templates/sprint-current.md.tpl` | 迭代计划 | `BA/sprint/current.md` |
+
+> **关于 .gitignore**：workspace 分支不跟踪 `.gitignore`。`templates/root-gitignore.md.tpl` 是**说明文档**，
+> 告诉 agent 怎么为各 worktree 生成 `.gitignore`。各 worktree 的 `.gitignore` 由对应 agent 维护，**不进 git**。
 
 ## 需求文档模板 (demand.md)
 
@@ -544,3 +649,22 @@ apps/api-gateway/helm/
 ## 进度
 - 总需求: {总数} | 已完成: {已完成} | 进行中: {进行中} | 待开始: {待开始}
 ```
+
+## workspace README 模板 (root-readme.md)
+
+模板路径 `templates/root-readme.md.tpl`。生成后的 README 应包含：
+
+- 项目一句话说明
+- **目录 ↔ 分支对应表**（核心，worktree 全部在仓库根平铺）
+- 各角色 Agent 入口
+- 快速上手（克隆 → 创建 worktree → 提交 PR 的 5 步）
+
+## workspace .gitignore 说明 (root-gitignore.md.tpl)
+
+模板路径 `templates/root-gitignore.md.tpl`。**这是说明文档，不是直接复制的 .gitignore**。
+内容应说明：
+
+- workspace 分支**不跟踪** `.gitignore`
+- 各 worktree（develop/demand/deploy/feature-*/hotfix-*）的 `.gitignore` 由对应 agent 维护
+- 通用 `.gitignore` 内容模板（OS/IDE/语言/Agent 元数据等）
+- 推荐的 ignore 模式
