@@ -61,19 +61,21 @@ git push origin --delete feature/REQ-xxx
 
 ## workspace 分支回收（BA Agent 巡检）
 
-**触发**：workspace 巡检发现 `git ls-files` 不止 `README.md`。
+**触发**：workspace 巡检发现 `git ls-files` 不止 `.gitignore` + `README.md`。
 
 ```bash
 # 1. 在仓库根（workspace/）执行
 cd <repo-root>
 git ls-files
-# 应只输出：README.md
+# 应只输出两个文件：
+# .gitignore
+# README.md
 # 如果有其他文件：违规
 
 # 2. 分类处理
-#    - 误加的 README/.gitignore → 保留（README）或忽略（.gitignore 不在 .gitignore 范围内）
+#    - 误加的 README/.gitignore → 保留（这两个是白名单内）
 #    - 误加的业务文件 → git rm + commit [Workspace] cleanup
-#    - 故意新增的导航文件（如 docs/）→ 评估：要不要保留？保留要 commit
+#    - 故意新增的导航文件（如 docs/）→ 评估：要不要保留？保留要 commit，但要更新 .gitignore 白名单
 
 # 3. 记录到 BA/dispatch/cleanup-log.md
 # 格式：

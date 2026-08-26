@@ -21,7 +21,7 @@ metadata:
 
 ## 核心设计：workspace 根容器 + 物理平铺
 
-整个 workspace 由一个 **`workspace` 分支** 作为根容器。仓库根（clone 默认落点）= `workspace` 分支的 worktree，**只跟踪 `README.md` 一个文件**。
+整个 workspace 由一个 **`workspace` 分支** 作为根容器。仓库根（clone 默认落点）= `workspace` 分支的 worktree，**只跟踪两个文件**：`README.md` + `.gitignore`。
 
 所有其他 worktree（`code/`、`BA/`、`Deploy/`、`feature-REQ-xxx/`、`hotfix-xxx/`）**直接在仓库根平铺**，跟 `README.md` 同级，互为兄弟目录。
 
@@ -33,10 +33,20 @@ metadata:
 - 解决"平台运行目录锁定 + worktree 嵌套"问题：平台目录 = 仓库根，所有 worktree 在它下面平铺
 
 > **硬约束（必读）**：
-> 1. `workspace` 分支**只跟踪 `README.md`**（`git ls-files` 必须只有这一个文件）
-> 2. `workspace` 分支**禁止业务代码**（src/、tests/、package.json、CI 配置等）
-> 3. **禁止 worktree 嵌套**：所有 worktree 必须在仓库根第一层，**不允许中间目录层**（如 `workspaces/code/`）
-> 4. **`.gitignore` 不进 git**：是本地文件，由各 agent 在自己 worktree 里维护
+> 1. `workspace` 分支**只跟踪 `README.md` + `.gitignore`**（`git ls-files` 必须只有这两个文件）
+> 2. `.gitignore` 使用**白名单机制**（先 `*` 全忽略 + `!*/` 保留目录遍历 + `!.gitignore` `!README.md` 白名单），
+>    即使误操作 `git add .` 也不会污染 workspace 分支（详见 `templates/root-gitignore.tpl`）
+> 3. `workspace` 分支**禁止业务代码**（src/、tests/、package.json、CI 配置等）
+> 4. **禁止 worktree 嵌套**：所有 worktree 必须在仓库根第一层，**不允许中间目录层**（如 `workspaces/code/`）
+> 5. **其他 worktree 各自管各自的 `.gitignore`**：
+>    - `code/.gitignore` 由 develop 分支跟踪
+>    - `BA/.gitignore` 由 demand 分支跟踪（如需要）
+>    - `Deploy/.gitignore` 由 deploy 分支跟踪（如需要）
+>    - `feature-xxx/.gitignore` 由 feature 分支跟踪（如需要）
+>    - workspace 分支**一概不管**其他 worktree 内部的 ignore 规则
+>
+> **关于"无父的独立分支"**：`workspace` / `demand` / `deploy` 这三个分支是互相无父的 orphan 分支，
+> 各自完整地管理自己的 `.gitignore`，互不依赖。这是 git 工作流中典型的"多根分支"模式。
 >
 > BA Agent 启动时必须做 workspace 巡检，发现违规立即清理（详见 `lifecycle/worktree-audit.md`）。
 
@@ -44,25 +54,31 @@ metadata:
 
 ```
 <project-root>/                        # workspace 分支 worktree（仓库根容器）
-├── README.md                            # workspace 分支唯一跟踪文件
-├── .gitignore                           # 本地文件，不提交到 workspace 分支
+├── README.md                            # workspace 分支跟踪：项目导航
+├── .gitignore                           # workspace 分支跟踪：白名单防御机制（详见 templates/root-gitignore.tpl）
 ├── .git/                                # 仓库元数据
 │
 ├── code/                                # [worktree] develop 分支 - CI 主工作区
+│   └── .gitignore                       #   develop 分支跟踪（业务相关 ignore）
 ├── BA/                                  # [worktree] demand 分支 - 需求管理
+│   └── .gitignore                       #   demand 分支跟踪（可选）
 ├── Deploy/                              # [worktree] deploy 分支 - 部署配置
+│   └── .gitignore                       #   deploy 分支跟踪（可选）
 │
 ├── feature-REQ-xxx/                     # [worktree] feature/REQ-xxx 分支 - 需求开发
+│   └── .gitignore                       #   feature 分支跟踪（如需要）
 └── hotfix-xxx/                          # [worktree] hotfix/xxx 分支 - 紧急修复
+    └── .gitignore                       #   hotfix 分支跟踪（如需要）
 ```
 
 **所有 worktree 在仓库根平铺**，没有中间目录层、没有 worktree 嵌套。
+**每个 worktree 内部的 `.gitignore` 由对应工作分支跟踪**（无父的独立分支各自管各自的）。
 
 ## 分支策略
 
 | 分支 | 用途 | 谁写入 | 基分支 |
 |------|------|--------|--------|
-| `workspace` | **根容器**——仓库根目录的归属分支，只跟踪 README.md | BA Agent（极少） | — |
+| `workspace` | **根容器**——仓库根目录的归属分支，只跟踪 README.md + .gitignore | BA Agent（极少） | — |
 | `develop` | 主开发分支，CI 构建 | 合并不直接写 | — |
 | `demand` | 需求管理 | BA Agent | `develop` 或独立 |
 | `feature/REQ-xxx` | 需求开发 | Dev Agent | `develop` |
@@ -73,12 +89,13 @@ metadata:
 
 **workspace 分支的硬约束**：
 
-- ✅ 只跟踪 `README.md`（一个文件）
+- ✅ 只跟踪 `README.md` + `.gitignore`（两个文件）
+- ✅ `.gitignore` 使用白名单机制（`!README.md` + `!.gitignore` + `*` + `!*/`），防御性极强
 - ✅ 更新由 BA Agent 手动 commit，commit message 格式 `[Workspace] {描述}`
 - ❌ 禁止业务代码（src/、tests/、业务配置等）
 - ❌ 禁止接收 PR（任何 feature → workspace 的 PR 都应拒绝）
 - ❌ 禁止与 develop / main 互相合并
-- ⚠️ `.gitignore` 是本地文件，**不进入 workspace 分支**——由各 agent 各自维护
+- ✅ 其他 worktree 的 `.gitignore` **由对应工作分支管理**（workspace 一概不管）
 
 ## 命名规范
 
@@ -114,8 +131,10 @@ mkdir my-project && cd my-project
 git init
 git commit --allow-empty -m "[Init] workspace root"
 git branch -m workspace                # 把默认分支改名为 workspace
-# 写 README.md（用 templates/root-readme.md.tpl）
-git add README.md && git commit -m "[Workspace] 初始化导航"
+# 写 README.md + .gitignore（用 templates/root-readme.md.tpl + templates/root-gitignore.tpl）
+cp <skill-path>/templates/root-readme.md.tpl README.md
+cp <skill-path>/templates/root-gitignore.tpl .gitignore
+git add README.md .gitignore && git commit -m "[Workspace] 初始化导航 + 白名单 .gitignore"
 # 创建主分支
 git branch develop
 git branch demand
@@ -562,14 +581,16 @@ apps/api-gateway/helm/
 | 模板 | 用途 | 复制到 |
 |------|------|--------|
 | `templates/root-readme.md.tpl` | workspace 分支 README（导航 + 快速上手） | `<repo-root>/README.md` |
-| `templates/root-gitignore.md.tpl` | workspace 分支 .gitignore 模板（**说明文档，不直接复制**） | 参考生成各 worktree 的 .gitignore |
+| `templates/root-gitignore.tpl` | workspace 分支 .gitignore（**白名单防御机制**） | `<repo-root>/.gitignore` |
 | `templates/demand.md.tpl` | 需求描述 | `BA/demands/REQ-xxx/demand.md` |
 | `templates/acceptance.md.tpl` | 验收标准 | `BA/demands/REQ-xxx/acceptance.md` |
 | `templates/verification-report.md.tpl` | 验证报告 | `BA/demands/REQ-xxx/verification-report.md` 或 `feature-REQ-xxx/.feature/verification-report.md` |
 | `templates/sprint-current.md.tpl` | 迭代计划 | `BA/sprint/current.md` |
 
-> **关于 .gitignore**：workspace 分支不跟踪 `.gitignore`。`templates/root-gitignore.md.tpl` 是**说明文档**，
-> 告诉 agent 怎么为各 worktree 生成 `.gitignore`。各 worktree 的 `.gitignore` 由对应 agent 维护，**不进 git**。
+> **关于 .gitignore**：
+> - workspace 分支**跟踪** `.gitignore`（用白名单机制只允许 README + .gitignore 自己）
+> - 其他 worktree 的 `.gitignore` 由对应工作分支跟踪（code/、BA/、Deploy/、feature-xxx/、hotfix-xxx/）
+> - `workspace` / `demand` / `deploy` 是无父的独立分支，**各自管理**自己的 `.gitignore`，互不依赖
 
 ## 需求文档模板 (demand.md)
 
@@ -659,12 +680,23 @@ apps/api-gateway/helm/
 - 各角色 Agent 入口
 - 快速上手（克隆 → 创建 worktree → 提交 PR 的 5 步）
 
-## workspace .gitignore 说明 (root-gitignore.md.tpl)
+## workspace .gitignore 模板 (root-gitignore.tpl)
 
-模板路径 `templates/root-gitignore.md.tpl`。**这是说明文档，不是直接复制的 .gitignore**。
-内容应说明：
+模板路径 `templates/root-gitignore.tpl`。**白名单防御机制**：
 
-- workspace 分支**不跟踪** `.gitignore`
-- 各 worktree（develop/demand/deploy/feature-*/hotfix-*）的 `.gitignore` 由对应 agent 维护
-- 通用 `.gitignore` 内容模板（OS/IDE/语言/Agent 元数据等）
-- 推荐的 ignore 模式
+```gitignore
+# 1. 忽略所有
+*
+
+# 2. 不忽略目录（让白名单生效）
+!*/
+
+# 3. 显式白名单：workspace 分支只跟踪这两个文件
+!.gitignore
+!README.md
+```
+
+**效果**：即使误操作 `git add .`，workspace 分支也只会 add 这两个文件。
+
+**其他 worktree 的 `.gitignore`**（如 `code/.gitignore`）由对应工作分支管理，跟 workspace 分支**无关**。
+`workspace` / `demand` / `deploy` 这三个 orphan 分支各自有完整根，各管各的 `.gitignore`，互不依赖。

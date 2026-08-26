@@ -66,7 +66,9 @@ git rev-parse --abbrev-ref HEAD
 
 ```bash
 git ls-files
-# 应只输出：README.md
+# 应只输出两个文件：
+# .gitignore
+# README.md
 # 任何其他文件都是违规
 ```
 
@@ -74,17 +76,26 @@ git ls-files
 
 | 输出 | 判定 | 处理 |
 |------|------|------|
-| 空 | OK | 继续 W3 |
-| 只有 `README.md` | OK | 继续 W3 |
+| 空 | 异常（应有 README.md + .gitignore） | 检查是否漏 commit |
+| 只有 `.gitignore` 和 `README.md` | OK | 继续 W3 |
 | 含 worktree 目录（`code/` `BA/` `Deploy/` 等） | **严重违规** | 立即 `git rm -r --cached <dir>`，commit `[Workspace] cleanup` |
-| 含其他业务文件（src/、tests/、.gitignore 等） | 违规 | 评估后 `git rm` 或移到对应 worktree |
-| 含 `.gitignore` | **设计如此**（不进 git） | OK 跳过 |
+| 含其他业务文件（src/、tests/、package.json 等） | 违规 | 评估后 `git rm` 或移到对应 worktree |
+
+**.gitignore 防御性测试**（推荐每次巡检跑一次）：
+
+```bash
+# 模拟误操作：把所有文件 add
+git add .
+git status --short
+# 应为空（因为 .gitignore 白名单机制已经过滤）
+# 如果有任何文件出现 → 违规，说明 .gitignore 白名单被破坏，立即修复
+```
 
 ### Step W3: 检查仓库根目录结构
 
 ```bash
 ls <repo-root>
-# 应看到：README.md  .git/  code/  BA/  Deploy/  feature-*  hotfix-*
+# 应看到：README.md  .gitignore  .git/  code/  BA/  Deploy/  feature-*  hotfix-*
 # 不应有：workspaces/  src/  tests/  package.json 等
 ```
 
@@ -92,7 +103,7 @@ ls <repo-root>
 
 - `workspaces/` 等中间目录层 → 不应存在，**违反"无中间层"硬约束**
 - 仓库根出现 `src/` `tests/` `package.json` → 业务文件泄漏
-- 仓库根出现 `docs/` 等非 README 目录 → 评估：要在 workspace 分支吗？
+- 仓库根出现 `docs/` 等非 README/.gitignore 文件/目录 → 评估：要在 workspace 分支吗？
 
 ### Step W4: 检查 worktree 完整性
 

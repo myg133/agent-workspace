@@ -77,21 +77,24 @@ Get-ChildItem -Force | Where-Object { $_.Name -ne '.git' -and $_.Name -ne 'code'
 > 如果原项目 worktree 是嵌套结构（如 `code/feature-xxx/`），需要先把嵌套目录拍平：
 > 把 `code/feature-xxx/` 里的内容合并到 `code/` 一层。
 
-### Step 4: 写 workspace 的 README
+### Step 4: 写 workspace 的 README + 白名单 .gitignore
 
 ```bash
 # 用模板
 cp <skill-path>/templates/root-readme.md.tpl README.md
-# 编辑占位
-git add README.md
-git commit -m "[Workspace] 初始化导航"
+cp <skill-path>/templates/root-gitignore.tpl .gitignore
+# 编辑 README.md 顶部占位
+git add README.md .gitignore
+git commit -m "[Workspace] 初始化导航 + 白名单 .gitignore"
 ```
 
 **验证**：
 
 ```bash
 git ls-files
-# 应只输出：README.md
+# 应只输出：
+# .gitignore
+# README.md
 ```
 
 ### Step 5: 把 develop 重新挂到 code/
@@ -194,7 +197,9 @@ git log --oneline -5
 
 cd <repo-root>
 git ls-files
-# 应只输出：README.md
+# 应只输出：
+# .gitignore
+# README.md
 ```
 
 ## 风险提示

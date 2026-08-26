@@ -26,29 +26,37 @@ git ls-files
 # 应输出为空（空 commit 没有任何文件）
 ```
 
-### Step 2: 写 workspace 根文档
+### Step 2: 写 workspace 根文档（README + 白名单 .gitignore）
 
-**只跟踪 `README.md`，不写 `.gitignore`**（`.gitignore` 是本地文件，不进 workspace 分支）。
+**workspace 分支只跟踪两个文件**：`README.md` + `.gitignore`。
+`.gitignore` 使用**白名单防御机制**：先 `*` 全忽略 + `!*/` 保留目录遍历 + 白名单 `!.gitignore` + `!README.md`。
+即使误操作 `git add .`，也只会 add 这两个文件。
 
 ```bash
 # 复制模板
 cp <skill-path>/templates/root-readme.md.tpl README.md
+cp <skill-path>/templates/root-gitignore.tpl .gitignore
 # 编辑 README.md 顶部占位（项目名、一句话说明等）
-
-# 注意：不要把 .gitignore 加入 git
-# .gitignore 由各 agent 后续按需在自己 worktree 里创建
+# .gitignore 一般不用改
 ```
 
 ```bash
-git add README.md
-git commit -m "[Workspace] 初始化导航"
+git add README.md .gitignore
+git commit -m "[Workspace] 初始化导航 + 白名单 .gitignore"
 ```
 
 **验证**：
 
 ```bash
 git ls-files
-# 应只输出：README.md
+# 应只输出：
+# .gitignore
+# README.md
+
+# 防御性测试：即使误操作 git add . 也只 add 这两个文件
+git add .
+git status --short
+# 应为空（没有新文件需要 add，因为 .gitignore 忽略了所有，白名单只放过这两个）
 ```
 
 ### Step 3: 创建 develop / demand / deploy 分支
@@ -116,7 +124,7 @@ git push -u origin workspace develop demand deploy
 ## 验证清单
 
 - [ ] `git branch` 显示 `workspace` 为当前分支
-- [ ] 仓库根 `git ls-files` **只**输出 `README.md`
+- [ ] 仓库根 `git ls-files` **只**输出 `.gitignore` 和 `README.md`
 - [ ] 仓库根有 `code/`、`BA/`、`Deploy/` 三个 worktree 目录
 - [ ] `code/` worktree → `develop` 分支
 - [ ] `BA/` worktree → `demand` 分支

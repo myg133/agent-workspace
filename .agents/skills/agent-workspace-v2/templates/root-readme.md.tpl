@@ -9,14 +9,18 @@
 
 | 路径 | 分支 | 角色 | 说明 |
 |------|------|------|------|
-| `./` | `workspace` | **根容器** | **只跟踪 README.md**（`.gitignore` 不进 git） |
-| `code/` | `develop` | CI 主工作区 | 主开发分支，CI 构建源 |
-| `BA/` | `demand` | BA Agent | 需求管理、迭代计划、Agent 注册 |
-| `Deploy/` | `deploy` | Deploy Agent | helm/k8s/部署配置，不做构建 |
+| `./` | `workspace` | **根容器** | **只跟踪 README.md + .gitignore**（白名单防御） |
+| `code/` | `develop` | CI 主工作区 | 主开发分支，CI 构建源；`.gitignore` 由 develop 跟踪 |
+| `BA/` | `demand` | BA Agent | 需求管理、迭代计划、Agent 注册；`.gitignore` 由 demand 跟踪 |
+| `Deploy/` | `deploy` | Deploy Agent | helm/k8s/部署配置，不做构建；`.gitignore` 由 deploy 跟踪 |
 | `feature-REQ-xxx/` | `feature/REQ-xxx` | Dev Agent | 需求开发，按需创建，合并后清理 |
 | `hotfix-xxx/` | `hotfix/xxx` | Dev Agent | 紧急修复，按需创建 |
 
 **所有 worktree 跟 `README.md` 同级**，在仓库根平铺，没有中间目录层（如 `workspaces/`）。
+
+**关于 `.gitignore`**：
+- 仓库根 `.gitignore` 使用**白名单机制**（只允许 `README.md` 和 `.gitignore` 自己），即使误操作 `git add .` 也不会污染 workspace 分支
+- 其他 worktree 各自的 `.gitignore`（如 `code/.gitignore`）由对应工作分支管理，workspace 一概不管
 
 ## 快速上手
 
@@ -76,11 +80,12 @@ PR 合并后 Dev Agent 自动清理 worktree（详见 `.agents/skills/agent-work
 
 ## 硬规则
 
-- ❌ `workspace` 分支**只跟踪 `README.md`**（`git ls-files` 必须只有这一个）
+- ❌ `workspace` 分支**只跟踪 `README.md` + `.gitignore`**（`git ls-files` 必须只有这两个）
+- ✅ `.gitignore` 使用白名单机制（`!README.md` `!.gitignore` `*` `!*/`），防御性极强
 - ❌ 不向 `workspace` 分支提交 PR
 - ❌ 不在仓库根加中间目录层（禁止 `workspaces/` `agents/` 等中间层放 worktree）
 - ❌ 不做 worktree 二级嵌套（禁止 `feature-xxx/code/`）
-- ✅ 各 worktree 自己的 `.gitignore` 由对应 agent 维护（**不进 workspace 分支**）
+- ✅ 各 worktree 自己的 `.gitignore` 由对应 agent 在对应工作分支维护（workspace 不管）
 - ✅ BA Agent 每次启动时执行 workspace 巡检
 
 ## 详细文档
