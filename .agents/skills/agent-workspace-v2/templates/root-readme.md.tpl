@@ -19,7 +19,10 @@
 **所有 worktree 跟 `README.md` 同级**，在仓库根平铺，没有中间目录层（如 `workspaces/`）。
 
 **关于 `.gitignore`**：
-- 仓库根 `.gitignore` 使用**白名单机制**（只允许 `README.md` 和 `.gitignore` 自己），即使误操作 `git add .` 也不会污染 workspace 分支
+- 仓库根 `.gitignore` 使用**双层防御机制**：
+  - **白名单层**：`!README.md` + `!.gitignore` + `*` + `!*/`
+  - **`/*/` 屏蔽层**：忽略所有第一层子目录（worktree 都在第一层）
+- 即使误操作 `git add .` 也不会污染 workspace 分支，worktree 完全不被影响
 - 其他 worktree 各自的 `.gitignore`（如 `code/.gitignore`）由对应工作分支管理，workspace 一概不管
 
 ## 快速上手
@@ -81,7 +84,7 @@ PR 合并后 Dev Agent 自动清理 worktree（详见 `.agents/skills/agent-work
 ## 硬规则
 
 - ❌ `workspace` 分支**只跟踪 `README.md` + `.gitignore`**（`git ls-files` 必须只有这两个）
-- ✅ `.gitignore` 使用白名单机制（`!README.md` `!.gitignore` `*` `!*/`），防御性极强
+- ✅ `.gitignore` 使用**双层防御**：白名单层 + `/*/` 屏蔽所有第一层子目录
 - ❌ 不向 `workspace` 分支提交 PR
 - ❌ 不在仓库根加中间目录层（禁止 `workspaces/` `agents/` 等中间层放 worktree）
 - ❌ 不做 worktree 二级嵌套（禁止 `feature-xxx/code/`）

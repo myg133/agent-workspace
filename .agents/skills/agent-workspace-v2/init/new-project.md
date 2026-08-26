@@ -26,11 +26,14 @@ git ls-files
 # 应输出为空（空 commit 没有任何文件）
 ```
 
-### Step 2: 写 workspace 根文档（README + 白名单 .gitignore）
+### Step 2: 写 workspace 根文档（README + 双层防御 .gitignore）
 
 **workspace 分支只跟踪两个文件**：`README.md` + `.gitignore`。
-`.gitignore` 使用**白名单防御机制**：先 `*` 全忽略 + `!*/` 保留目录遍历 + 白名单 `!.gitignore` + `!README.md`。
-即使误操作 `git add .`，也只会 add 这两个文件。
+`.gitignore` 使用**双层防御机制**：
+- **白名单层**：`*` 全忽略 + `!*/` 保留目录遍历 + 白名单 `!.gitignore` + `!README.md`
+- **`/*/` 屏蔽层**：忽略所有第一层子目录（worktree 都在第一层，防止 git 遍历 worktree）
+
+即使误操作 `git add .`，也只会 add 这两个文件，worktree 完全不被影响。
 
 ```bash
 # 复制模板
@@ -42,7 +45,7 @@ cp <skill-path>/templates/root-gitignore.tpl .gitignore
 
 ```bash
 git add README.md .gitignore
-git commit -m "[Workspace] 初始化导航 + 白名单 .gitignore"
+git commit -m "[Workspace] 初始化导航 + 双层防御 .gitignore"
 ```
 
 **验证**：
@@ -56,7 +59,9 @@ git ls-files
 # 防御性测试：即使误操作 git add . 也只 add 这两个文件
 git add .
 git status --short
-# 应为空（没有新文件需要 add，因为 .gitignore 忽略了所有，白名单只放过这两个）
+# 应为空（没有新文件需要 add，白名单只放过这两个）
+# 关键：worktree 目录（code/ BA/ Deploy/）也不会显示为 untracked，
+# 因为 /*/ 屏蔽了所有第一层子目录
 ```
 
 ### Step 3: 创建 develop / demand / deploy 分支

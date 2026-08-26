@@ -34,8 +34,12 @@ metadata:
 
 > **硬约束（必读）**：
 > 1. `workspace` 分支**只跟踪 `README.md` + `.gitignore`**（`git ls-files` 必须只有这两个文件）
-> 2. `.gitignore` 使用**白名单机制**（先 `*` 全忽略 + `!*/` 保留目录遍历 + `!.gitignore` `!README.md` 白名单），
->    即使误操作 `git add .` 也不会污染 workspace 分支（详见 `templates/root-gitignore.tpl`）
+> 2. `.gitignore` 使用**双层防御机制**：
+>    - **白名单层**：先 `*` 全忽略 + `!*/` 保留目录遍历 + `!.gitignore` `!README.md` 显式白名单
+>    - **`/*/` 屏蔽层**：忽略所有第一层子目录（worktree 都在第一层）
+>    - 目的：worktree 目录（`code/` `BA/` `Deploy/` 等）是 embedded git repos，内部有 `.git` file，
+>      如果只靠白名单，`!*/` 会让 git 遍历这些目录，可能误 add 或显示 untracked
+>    - `/*/` 从源头阻止任何 worktree 内部文件进入 workspace 分支（详见 `templates/root-gitignore.tpl`）
 > 3. `workspace` 分支**禁止业务代码**（src/、tests/、package.json、CI 配置等）
 > 4. **禁止 worktree 嵌套**：所有 worktree 必须在仓库根第一层，**不允许中间目录层**（如 `workspaces/code/`）
 > 5. **其他 worktree 各自管各自的 `.gitignore`**：
@@ -90,7 +94,7 @@ metadata:
 **workspace 分支的硬约束**：
 
 - ✅ 只跟踪 `README.md` + `.gitignore`（两个文件）
-- ✅ `.gitignore` 使用白名单机制（`!README.md` + `!.gitignore` + `*` + `!*/`），防御性极强
+- ✅ `.gitignore` 使用**双层防御**：白名单（`!README.md` + `!.gitignore` + `*` + `!*/`）+ `/*/` 屏蔽所有第一层子目录
 - ✅ 更新由 BA Agent 手动 commit，commit message 格式 `[Workspace] {描述}`
 - ❌ 禁止业务代码（src/、tests/、业务配置等）
 - ❌ 禁止接收 PR（任何 feature → workspace 的 PR 都应拒绝）
@@ -682,7 +686,7 @@ apps/api-gateway/helm/
 
 ## workspace .gitignore 模板 (root-gitignore.tpl)
 
-模板路径 `templates/root-gitignore.tpl`。**白名单防御机制**：
+模板路径 `templates/root-gitignore.tpl`。**双层防御机制**：
 
 ```gitignore
 # 1. 忽略所有
@@ -694,9 +698,21 @@ apps/api-gateway/helm/
 # 3. 显式白名单：workspace 分支只跟踪这两个文件
 !.gitignore
 !README.md
+
+# 4. 忽略所有第一层子目录（worktree 都在第一层）
+/*/
 ```
 
-**效果**：即使误操作 `git add .`，workspace 分支也只会 add 这两个文件。
+**双层防御的原因**：
+
+- 单层白名单（第 1-3 步）足以阻止 `git add .` 把 `src/` `tests/` 等文件 add 进来
+- 但 worktree 目录（`code/` `BA/` `Deploy/` 等）是 embedded git repos，内部有 `.git` file
+- 如果只用白名单，`!*/` 让 git 遍历这些目录，git 看到 `.git` file 后会：
+  - **不会**把 worktree 内部文件 add 到主 worktree（git 内置保护）
+  - **但会**把 worktree 目录本身显示为 untracked，违反 `git ls-files` 只 2 个文件的硬约束
+- `/*/` 显式忽略所有第一层子目录，从源头阻止 worktree 目录进入 git 视野
+
+**效果**：即使 `git add .` 也只会 add `README.md` 和 `.gitignore`，worktree 完全不被影响。
 
 **其他 worktree 的 `.gitignore`**（如 `code/.gitignore`）由对应工作分支管理，跟 workspace 分支**无关**。
 `workspace` / `demand` / `deploy` 这三个 orphan 分支各自有完整根，各管各的 `.gitignore`，互不依赖。

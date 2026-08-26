@@ -66,13 +66,16 @@ Get-ChildItem -Force | Where-Object { $_.Name -ne '.git' -and $_.Name -ne 'code'
 <repo-root>/
 ├── .git/
 ├── README.md                    # workspace 的 README（待写）
-├── .gitignore                   # 本地文件
+├── .gitignore                   # 双层防御模板
 └── code/                        # develop 原本的所有文件都在这里
     ├── src/
     ├── tests/
     ├── package.json
     └── ...
 ```
+
+> 如果原项目 worktree 是嵌套结构（如 `code/feature-xxx/`），需要先把嵌套目录拍平：
+> 把 `code/feature-xxx/` 里的内容合并到 `code/` 一层。
 
 > 如果原项目 worktree 是嵌套结构（如 `code/feature-xxx/`），需要先把嵌套目录拍平：
 > 把 `code/feature-xxx/` 里的内容合并到 `code/` 一层。

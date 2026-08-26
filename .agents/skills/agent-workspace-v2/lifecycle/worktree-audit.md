@@ -87,8 +87,10 @@ git ls-files
 # 模拟误操作：把所有文件 add
 git add .
 git status --short
-# 应为空（因为 .gitignore 白名单机制已经过滤）
-# 如果有任何文件出现 → 违规，说明 .gitignore 白名单被破坏，立即修复
+# 应为空（白名单只放过 README + .gitignore）
+# 关键：worktree 目录（code/ BA/ Deploy/）也不应显示为 untracked，
+# 因为 /*/ 屏蔽了所有第一层子目录
+# 如果 worktree 目录出现 → 违规，说明 /*/ 屏蔽被破坏，立即修复
 ```
 
 ### Step W3: 检查仓库根目录结构
