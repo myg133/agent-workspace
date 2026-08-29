@@ -61,7 +61,7 @@ git push origin --delete feature/REQ-xxx
 
 ## workspace 分支回收（BA Agent 巡检）
 
-**触发**：workspace 巡检发现 `git ls-files` 不止 `.gitignore` + `README.md`。
+**触发**：workspace 巡检发现 `git ls-files` 不止 `README.md` + `.gitignore`。
 
 ```bash
 # 1. 在仓库根（workspace/）执行

@@ -80,7 +80,7 @@ Get-ChildItem -Force | Where-Object { $_.Name -ne '.git' -and $_.Name -ne 'code'
 > 如果原项目 worktree 是嵌套结构（如 `code/feature-xxx/`），需要先把嵌套目录拍平：
 > 把 `code/feature-xxx/` 里的内容合并到 `code/` 一层。
 
-### Step 4: 写 workspace 的 README + 白名单 .gitignore
+### Step 4: 写 workspace 的 README + 双层防御 .gitignore
 
 ```bash
 # 用模板
@@ -88,7 +88,7 @@ cp <skill-path>/templates/root-readme.md.tpl README.md
 cp <skill-path>/templates/root-gitignore.tpl .gitignore
 # 编辑 README.md 顶部占位
 git add README.md .gitignore
-git commit -m "[Workspace] 初始化导航 + 白名单 .gitignore"
+git commit -m "[Workspace] 初始化导航 + 双层防御 .gitignore"
 ```
 
 **验证**：

@@ -59,7 +59,7 @@ metadata:
 ```
 <project-root>/                        # workspace 分支 worktree（仓库根容器）
 ├── README.md                            # workspace 分支跟踪：项目导航
-├── .gitignore                           # workspace 分支跟踪：白名单防御机制（详见 templates/root-gitignore.tpl）
+├── .gitignore                           # workspace 分支跟踪：白名单防御机制
 ├── .git/                                # 仓库元数据
 │
 ├── code/                                # [worktree] develop 分支 - CI 主工作区

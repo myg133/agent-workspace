@@ -1,6 +1,6 @@
 # workspace 分支 .gitignore —— 白名单防御 + /*/ 子目录屏蔽（双层防御）
 #
-# 设计目标：即使误操作 `git add .`，workspace 分支也只会跟踪这两个文件：
+# 设计目标：即使误操作 `git add .`，workspace 分支也只会跟踪这 2 个元数据文件：
 #   - README.md   （项目导航）
 #   - .gitignore  （本文件自身）
 #
@@ -21,6 +21,9 @@
 #
 # 其他 worktree 各自管各自的 .gitignore（code/.gitignore 由 develop 跟踪，等等），
 # workspace 分支一概不管。
+#
+# 几个关键分支（workspace / demand / deploy）是互相无父的独立分支（orphan），
+# 各自完整地管理自己的 .gitignore，互不依赖。
 
 # 1. 忽略所有
 *
