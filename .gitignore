@@ -1,1 +1,4 @@
 .codewhale/
+
+# 临时备份目录（agent 误操作或文件覆盖时使用）
+.trash/
