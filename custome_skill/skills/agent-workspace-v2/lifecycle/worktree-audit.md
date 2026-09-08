@@ -123,15 +123,22 @@ git worktree list
 # 任何 <repo-root>/xxx/code/ 形式的二级嵌套 → 违规
 ```
 
-### Step W5: 分类处理 + 记录
+### Step W5: 违规处理
 
-| 状态 | 处理 |
-|------|------|
-| 所有检查通过 | 正常 |
-| 跟踪文件违规 | `git rm` + commit + 记录 |
-| 仓库根出现中间目录层 | 删除目录（如果空）或合并内容到现有 worktree + 记录 |
-| worktree 路径违规（有中间层） | `git worktree repair` 或强制清理后重建 |
+发现违规时，按以下分类处理：
+
+| 违规类型 | 处理方法 |
+|---------|---------|
+| 误加的业务文件（src/、tests/、package.json 等） | `git rm -r --cached <file>` + `git commit -m "[Workspace] cleanup"` |
+| worktree 目录出现在 `git ls-files` | `git rm -r --cached <dir>` + `git commit -m "[Workspace] cleanup"` |
+| 仓库根出现中间目录层（如 `workspaces/`） | 删除空目录，或合并内容到现有 worktree |
+| worktree 路径违规（有中间层嵌套） | `git worktree repair` 或强制清理后重建 |
 | workspace 主 worktree 丢失 | **最严重**，立即告警并停止其他工作 |
+
+> **特别注意**：worktree 目录（`code/` `BA/` `Deploy/` 等）**不应**出现在 `git ls-files`（git 通过 `.git/worktrees/` 内部管理）。
+> 如果 `code/` 出现在 `git ls-files`，说明被错误跟踪了，立即 `git rm -r --cached code/`。
+
+### Step W6: 记录结果
 
 记录到 `BA/dispatch/cleanup-log.md`：
 
@@ -141,6 +148,9 @@ git worktree list
 2026-08-20 | workspace-audit | violation-fixed | 移除误加 src/ + commit | ba-agent-01
 2026-08-20 | workspace-audit | violation-fixed | 清理 workspaces/ 中间层 | ba-agent-01
 ```
+
+> **实际删除 worktree 目录和分支**的操作（`git worktree remove`、`git branch -D`），详见 `worktree-cleanup.md`。
+> 本文件只负责**巡检发现**和**跟踪文件清理**，不负责 worktree 移除。
 
 ---
 

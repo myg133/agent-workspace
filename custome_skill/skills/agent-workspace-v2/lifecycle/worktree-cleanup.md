@@ -13,7 +13,7 @@
 | 需求取消 | BA Agent 强制清理 | 立即回收 |
 | 定期巡检 | BA Agent 兜底清理 | 发现已合并但未清理的 |
 | 手动触发 | 用户 | 手动指定 |
-| **workspace 巡检** | **BA Agent** | **发现 workspace 分支有多于 README.md 的文件 → 清理** |
+| **workspace 巡检** | **BA Agent** | **发现违规 → 见 `worktree-audit.md` 末节** |
 
 ## 正常合并后回收（Dev Agent）
 
@@ -59,38 +59,12 @@ git push origin --delete feature/REQ-xxx
 
 异常情况不自动删除，标记为"待处理"。
 
-## workspace 分支回收（BA Agent 巡检）
-
-**触发**：workspace 巡检发现 `git ls-files` 不止 `README.md` + `.gitignore`。
-
-```bash
-# 1. 在仓库根（workspace/）执行
-cd <repo-root>
-git ls-files
-# 应只输出两个文件：
-# .gitignore
-# README.md
-# 如果有其他文件：违规
-
-# 2. 分类处理
-#    - 误加的 README/.gitignore → 保留（这两个是白名单内）
-#    - 误加的业务文件 → git rm + commit [Workspace] cleanup
-#    - 故意新增的导航文件（如 docs/）→ 评估：要不要保留？保留要 commit，但要更新 .gitignore 白名单
-
-# 3. 记录到 BA/dispatch/cleanup-log.md
-# 格式：
-# {日期} | workspace-violation | {原因} | {方式} | {执行者}
-```
-
-**特别注意**：
-
-- worktree 目录（`code/` `BA/` `Deploy/` 等）**不应**出现在 `git ls-files`（git 通过 `.git/worktrees/` 内部管理）
-- 如果 `code/` 出现在 `git ls-files`，说明被错误跟踪了，立即 `git rm -r --cached code/`
-
 ## 回收日志格式
 
 ```
-{日期} | {需求ID 或 workspace-violation} | {原因} | {方式} | {执行者}
+{日期} | {需求ID} | {原因} | {方式} | {执行者}
 2026-08-18 | REQ-001 | 已合并 | 自动清理 | dev-agent-01
-2026-08-20 | workspace-violation | 误提交 src/ | git rm + commit | ba-agent-01
 ```
+
+> **workspace 分支巡检**：发现 `git ls-files` 违规属于巡检范畴，详见 `worktree-audit.md` 末节。
+> 清理日志格式见 `worktree-audit.md` 中的记录规范。

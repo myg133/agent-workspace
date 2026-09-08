@@ -83,10 +83,10 @@ metadata:
 | 分支 | 用途 | 谁写入 | 基分支 |
 |------|------|--------|--------|
 | `workspace` | **根容器**——仓库根目录的归属分支，只跟踪 README.md + .gitignore | BA Agent（极少） | — |
-| `develop` | 主开发分支，CI 构建 | 合并不直接写 | — |
-| `demand` | 需求管理 | BA Agent | `develop` 或独立 |
+| `develop` | 主开发分支，CI 构建 | 合并不直接写 | `main` |
+| `demand` | 需求管理 | BA Agent | —（orphan，与 workspace/deploy 同级） |
 | `feature/REQ-xxx` | 需求开发 | Dev Agent | `develop` |
-| `deploy` | 部署配置 | Deploy Agent / CI | 独立分支，不与 main 合并 |
+| `deploy` | 部署配置 | Deploy Agent / CI | —（orphan，不与 main 合并） |
 | `main` | 生产发布标记 | 仅从 release 合并 | — |
 | `release/vx.y.z` | 预发布 | 发布管理员 | `develop` |
 | `hotfix/xxx` | 紧急修复 | Dev Agent | `main` |
@@ -140,16 +140,37 @@ cp <skill-path>/templates/root-readme.md.tpl README.md
 cp <skill-path>/templates/root-gitignore.tpl .gitignore
 git add README.md .gitignore && git commit -m "[Workspace] 初始化导航 + 白名单 .gitignore"
 # 创建主分支
-git branch develop
-git branch demand
-git branch deploy
+# main 为生产分支（orphan 独立），develop 从 main 派生
+git checkout --orphan main
+git rm -rf . 2>/dev/null || true
+echo "# {项目名称}" > README.md
+git add README.md
+git commit -m "[Init] main branch placeholder"
+# develop 从 main 派生，共享历史
+git checkout -b develop main
+# demand 和 deploy 为 orphan 独立分支（管理与代码隔离）
+git checkout workspace
+git checkout --orphan demand
+git rm -rf . 2>/dev/null || true
+mkdir -p demands backlog sprint decisions dispatch
+echo "# 需求管理分支" > README.md
+git add README.md
+git commit -m "[Init] 初始化需求管理分支"
+git checkout workspace
+git checkout --orphan deploy
+git rm -rf . 2>/dev/null || true
+mkdir -p apps environments releases scripts
+echo "# 部署配置分支" > README.md
+git add README.md
+git commit -m "[Init] 初始化部署分支"
+git checkout workspace
 # 在仓库根平铺创建 worktree
 git worktree add code develop
 git worktree add BA demand
 git worktree add Deploy deploy
 # 推送到远程
 git remote add origin <url>
-git push -u origin workspace develop demand deploy
+git push -u origin workspace main develop demand deploy
 ```
 
 ### 已有项目迁移
@@ -216,10 +237,19 @@ BA/
 
 ## 需求状态流转
 
-```
-草稿 → 已评审 → 已就绪 → 进行中 → 待验证 → 已验证 → 已完成
-                            ↓                ↓
-                         进行中 → 已取消    待验证 → 已退回 → 进行中
+```mermaid
+stateDiagram-v2
+    [*] --> 草稿
+    草稿 --> 已评审
+    已评审 --> 已就绪
+    已就绪 --> 进行中
+    进行中 --> 待验证
+    进行中 --> 已取消
+    待验证 --> 已验证
+    待验证 --> 已退回
+    已退回 --> 进行中
+    已验证 --> 已完成
+    已完成 --> [*]
 ```
 
 ## 分配需求流程
@@ -228,12 +258,33 @@ BA/
 1. 确认需求状态为"已就绪"
 2. 从 dispatch/rules.md 查找可用的 Dev Agent
 3. 创建 feature worktree（在仓库根跑）：
+   cd <repo-root>
    git worktree add feature-REQ-001 -b feature/REQ-001 develop
 4. 在 .feature/manifest.json 中记录分配信息
 5. 更新需求状态为"进行中"
 6. 创建 QA 子 agent 生成测试用例
 7. 创建 Dev 子 agent 进行开发
 ```
+
+## 验证审批流程
+
+Dev 开发完成后，BA Agent 负责状态更新和 QA 调度，Dev 不直接更新状态。
+
+```
+1. Dev Agent 通知 BA 开发完成
+2. BA 更新需求状态为"待验证"
+3. BA 创建 QA 子 agent，依据测试用例进行代码审核
+4. QA 审核完成，报告结果给 BA
+5. BA 根据审核结果更新状态：
+   → 通过：status.md → "已验证"
+   → 不通过：status.md → "已退回"（附退回原因）
+6. 状态为"已验证"后，通知 Dev 创建 PR
+```
+
+**关键规则**：
+- 状态更新**仅由 BA Agent 执行**，Dev 和 QA 不直接修改 status.md
+- Dev 只负责编码和自验证，完成时通知 BA
+- QA 只负责审核和报告，不修改状态
 
 ## 创建子 agent 的方式
 
@@ -348,15 +399,14 @@ agent(
 ### Step 4: 提交验证
 
 ```
-1. 更新 BA/demands/REQ-xxx/status.md → "待验证"
-2. 通知 BA Agent 和 QA Agent
+1. 通知 BA Agent 开发完成，请求 QA 审核
 ```
 
 ### Step 5: 等待验证结果
 
 ```
-通过 → 更新 status → "已验证" → 创建 PR
-不通过 → 更新 status → "已退回" → 修改后重新提交
+通过 → 创建 PR 到 develop
+不通过 → 修改后重新提交验证
 ```
 
 ### Step 6: 创建 PR 与清理
@@ -364,10 +414,11 @@ agent(
 ```
 1. 推送 feature 分支到远程
 2. 创建 PR 到 develop
-3. PR 合并后（在仓库根跑）：
-   - git worktree remove feature-REQ-xxx
-   - git branch -d feature/REQ-xxx
-   - git push origin --delete feature/REQ-xxx
+3. PR 合并后，切到仓库根执行回收：
+   cd <repo-root>
+   git worktree remove feature-REQ-xxx
+   git branch -d feature/REQ-xxx
+   git push origin --delete feature/REQ-xxx
 4. 通知 BA Agent 清理完成
 ```
 

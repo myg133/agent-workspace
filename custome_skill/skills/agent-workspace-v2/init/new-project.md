@@ -64,16 +64,20 @@ git status --short
 # 因为 /*/ 屏蔽了所有第一层子目录
 ```
 
-### Step 3: 创建 develop / demand / deploy 分支
+### Step 3: 创建 main / develop / demand / deploy 分支
 
 ```bash
-# 创建空分支（用 --orphan，干净起点）
-git checkout --orphan develop
+# main 为生产分支（orphan 独立，干净起点）
+git checkout --orphan main
 git rm -rf . 2>/dev/null || true
-echo "# {项目名称} - develop" > README.md
+echo "# {项目名称}" > README.md
 git add README.md
-git commit -m "[Init] develop branch placeholder"
+git commit -m "[Init] main branch placeholder"
 
+# develop 从 main 派生，共享历史
+git checkout -b develop main
+
+# demand 和 deploy 为 orphan 独立分支（管理与代码隔离）
 git checkout workspace
 
 git checkout --orphan demand
@@ -122,7 +126,7 @@ ls <repo-root>
 
 ```bash
 git remote add origin <url>
-git push -u origin workspace develop demand deploy
+git push -u origin workspace main develop demand deploy
 # 远程默认分支应设为 workspace（在 GitHub/GitLab settings 改）
 ```
 
@@ -134,7 +138,7 @@ git push -u origin workspace develop demand deploy
 - [ ] `code/` worktree → `develop` 分支
 - [ ] `BA/` worktree → `demand` 分支
 - [ ] `Deploy/` worktree → `deploy` 分支
-- [ ] `workspace`、`develop`、`demand`、`deploy` 已推送到远程
+- [ ] `workspace`、`main`、`develop`、`demand`、`deploy` 已推送到远程
 - [ ] 远程默认分支 = `workspace`
 
 ## 后续创建 feature worktree
