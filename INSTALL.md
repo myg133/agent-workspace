@@ -7,7 +7,7 @@
 
 - **仓库**：https://github.com/myg133/agent-workspace
 - **类型**：Git skill（多文件 + Git 版本控制）
-- **安装路径**：`.agents/skills/agent-workspace-v2/`
+- **安装路径**：`.agents/skills/agent-workspace/`
 - **文档入口**：`SKILL.md`（必读）
 
 加载这个 skill 后，你能：
@@ -34,13 +34,13 @@
 
 ```bash
 # 把仓库克隆到本地的 .agents/skills/ 目录
-git clone https://github.com/myg133/agent-workspace.git .agents/skills/agent-workspace-v2
+git clone https://github.com/myg133/agent-workspace.git .agents/skills/agent-workspace
 ```
 
 ### 方式 2：浅克隆（节省空间 / 网络）
 
 ```bash
-git clone --depth 1 https://github.com/myg133/agent-workspace.git .agents/skills/agent-workspace-v2
+git clone --depth 1 https://github.com/myg133/agent-workspace.git .agents/skills/agent-workspace
 ```
 
 ### 方式 3：符号链接（开发 / 跨项目共享）
@@ -49,7 +49,7 @@ git clone --depth 1 https://github.com/myg133/agent-workspace.git .agents/skills
 # 在某处完整克隆一份
 git clone https://github.com/myg133/agent-workspace.git ~/projects/agent-workspace
 # 符号链接到当前项目的 skills 目录
-ln -s ~/projects/agent-workspace/.agents/skills/agent-workspace-v2 .agents/skills/agent-workspace-v2
+ln -s ~/projects/agent-workspace/.agents/skills/agent-workspace .agents/skills/agent-workspace
 ```
 
 未来更新：
@@ -64,18 +64,18 @@ git pull
 
 如果只需要读规范不参与本地 worktree 操作（不创建 worktree、不 commit），可以直接通过 URL 读：
 
-- SKILL.md：https://raw.githubusercontent.com/myg133/agent-workspace/main/.agents/skills/agent-workspace-v2/SKILL.md
-- 模板：https://github.com/myg133/agent-workspace/tree/main/.agents/skills/agent-workspace-v2/templates
+- SKILL.md：https://raw.githubusercontent.com/myg133/agent-workspace/main/.agents/skills/agent-workspace/SKILL.md
+- 模板：https://github.com/myg133/agent-workspace/tree/main/.agents/skills/agent-workspace/templates
 
 ## 验证安装
 
 ```bash
 # 1. 关键文件存在
-ls .agents/skills/agent-workspace-v2/SKILL.md
-ls .agents/skills/agent-workspace-v2/INSTALL.md
+ls .agents/skills/agent-workspace/SKILL.md
+ls .agents/skills/agent-workspace/INSTALL.md
 
 # 2. 模板齐全
-ls .agents/skills/agent-workspace-v2/templates/
+ls .agents/skills/agent-workspace/templates/
 # 应看到 6 个 .tpl 文件：
 #   acceptance.md.tpl
 #   demand.md.tpl
@@ -93,7 +93,7 @@ ls .agents/skills/agent-workspace-v2/templates/
 安装后，**每次执行多 Agent 协作任务前**加载 SKILL.md：
 
 ```
-请加载 .agents/skills/agent-workspace-v2/SKILL.md
+请加载 .agents/skills/agent-workspace/SKILL.md
 并按其中"第一部分：全局规范"+"对应角色"工作流执行任务。
 ```
 
@@ -132,5 +132,4 @@ ls .agents/skills/agent-workspace-v2/templates/
 
 ## 版本
 
-- 当前规范：v2（合并版，agent-workspace-v2）
-- 上一版：v1（拆分版，agent-workspace / agent-workspace-ba / -dev / -qa / -deploy，已不推荐）
+- 当前规范：agent-workspace（统一版）

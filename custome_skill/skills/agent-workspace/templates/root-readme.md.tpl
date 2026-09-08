@@ -2,7 +2,7 @@
 
 > {一句话说明项目做什么、给谁用}
 
-本仓库采用 **Agent Workspace 工作流**（参见 `.agents/skills/agent-workspace-v2/`），
+本仓库采用 **Agent Workspace 工作流**（参见 `.agents/skills/agent-workspace/`），
 使用 `workspace` 分支作为根容器，**所有 worktree 在仓库根平铺**（无中间目录层）。
 
 ## 目录 ↔ 分支对应表
@@ -70,7 +70,7 @@ git push -u origin feature/REQ-xxx
 # 在 GitHub/GitLab 创建 PR → develop
 ```
 
-PR 合并后 Dev Agent 自动清理 worktree（详见 `.agents/skills/agent-workspace-v2/lifecycle/worktree-cleanup.md`）。
+PR 合并后 Dev Agent 自动清理 worktree（详见 `.agents/skills/agent-workspace/lifecycle/worktree-cleanup.md`）。
 
 ## 各角色 Agent 入口
 
@@ -79,7 +79,7 @@ PR 合并后 Dev Agent 自动清理 worktree（详见 `.agents/skills/agent-work
 - **QA Agent**（子 agent）→ Pre-merge 进 `feature-REQ-xxx/`，Post-merge 进 `code/` + staging
 - **Deploy Agent**（子 agent）→ 进入 `Deploy/` 目录
 
-新 agent 启动时必须加载 `.agents/skills/agent-workspace-v2/SKILL.md`。
+新 agent 启动时必须加载 `.agents/skills/agent-workspace/SKILL.md`。
 
 ## 硬规则
 
@@ -93,10 +93,10 @@ PR 合并后 Dev Agent 自动清理 worktree（详见 `.agents/skills/agent-work
 
 ## 详细文档
 
-- 工作流规范：`.agents/skills/agent-workspace-v2/SKILL.md`
-- 初始化：`.agents/skills/agent-workspace-v2/init/`
-- 生命周期：`.agents/skills/agent-workspace-v2/lifecycle/`
-- 模板：`.agents/skills/agent-workspace-v2/templates/`
+- 工作流规范：`.agents/skills/agent-workspace/SKILL.md`
+- 初始化：`.agents/skills/agent-workspace/init/`
+- 生命周期：`.agents/skills/agent-workspace/lifecycle/`
+- 模板：`.agents/skills/agent-workspace/templates/`
 - 各角色 README：见对应 worktree 根目录（如 `BA/README.md`）
 
 ## 平台运行目录
