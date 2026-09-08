@@ -97,7 +97,7 @@ PR 合并后 Dev Agent 自动清理 worktree（详见 `skills/agent-workspace/re
 - 初始化：`skills/agent-workspace/references/init/`
 - 生命周期：`skills/agent-workspace/references/lifecycle/`
 - 模板：`skills/agent-workspace/assets/templates/`
-- 各角色 Agent 定义：`skills/agent-workspace/references/`
+- 各角色 Agent 定义：`com.anspire-open.agents/`
 - 各角色 README：见对应 worktree 根目录（如 `BA/README.md`）
 
 > 以上路径均相对于本插件根目录（`plugin.json` 所在目录）。
