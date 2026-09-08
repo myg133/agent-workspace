@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "agent-workspace",
+  "version": "1.0.0",
+  "description": "Git Worktree-based multi-agent collaboration framework. Defines workspace organization, branch strategy, role workflows (BA/Dev/QA/Deploy/Explore), and worktree lifecycle management.",
+  "author": {
+    "name": "myg133"
+  },
+  "repository": "https://github.com/myg133/agent-workspace",
+  "license": "MIT",
+  "keywords": [
+    "agent-workspace",
+    "git-worktree",
+    "multi-agent",
+    "collaboration",
+    "workflow"
+  ]
+}
