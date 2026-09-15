@@ -194,6 +194,65 @@ git push -u origin workspace main develop demand deploy
 
 你位于 `BA/` 目录（`demand` 分支的 worktree），跟 `code/` `Deploy/` 在仓库根平铺。
 所有变更通过 Git 持久化。
+
+## 多 BA 协作（多个 BA Agent 并行）
+
+当多个 BA Agent 并行工作时，它们共享 `demand` 分支。通过 Git 作为协调原语，所有 BA Agent 遵循**先 pull → 读 → 写 → commit → push** 的原子化流程。
+
+### BA Agent 注册/注销
+
+每个 BA Agent 启动时必须在 `BA/dispatch/agent-registry.md` 注册，关闭时注销。
+
+**注册流程**：
+
+```
+1. git pull origin demand           # 拉取最新状态
+2. 在 BA/dispatch/agent-registry.md 追加一行：
+   | {时间} | {agent-id} | online | {负责需求列表} |
+3. git add BA/dispatch/agent-registry.md
+4. git commit -m "[BA] register {agent-id}"
+5. git push origin demand            # push 失败 → git pull → 重试
+```
+
+**注销流程**：
+
+```
+1. git pull origin demand
+2. 将对应行的状态改为 offline
+3. git commit -m "[BA] deregister {agent-id}"
+4. git push origin demand
+```
+
+### REQ 编号认领
+
+分配新需求前，必须先认领 REQ 编号，防止冲突：
+
+```
+1. git pull origin demand
+2. 读 BA/dispatch/req-registry.md，找下一个可用 REQ 编号
+3. 在 req-registry.md 中写入认领：
+   | REQ-003 | {需求名称} | {agent-id} | {时间} |
+4. git add && git commit
+5. git push origin demand
+   → push 成功：认领成功，继续创建 worktree
+   → push 失败（远程已有更新）：git pull → 合并 → 重试认领
+```
+
+**冲突处理**：认领完成后才创建 worktree。如果 push 被拒绝，说明另一个 BA Agent 已经先认领了同一个编号，当前 Agent 自动选择下一个编号重试。
+
+### Git 操作规范
+
+所有对 `demand` 分支的修改必须走完整周期：
+
+```
+git pull origin demand        # 1. 拉取最新状态
+# ... 修改文件 ...            # 2. 本地修改
+git add <files>               # 3. 暂存
+git commit -m "[BA] ..."      # 4. 提交
+git push origin demand        # 5. 推送
+# 若 push 失败：git pull --rebase → 解决冲突 → 重新 push
+```
+
 BA Agent 启动时**必须**额外做一次 workspace 巡检（见 `references/lifecycle/worktree-audit.md` 末节）。
 
 ## 核心职责
@@ -229,7 +288,9 @@ BA/
 ├── decisions/                     # 架构决策记录 (ADR)
 ├── dispatch/
 │   ├── rules.md                   # 调度规则
-│   ├── registry.md                # Agent 注册表
+│   ├── registry.md                # 子 Agent（Dev/QA/Deploy）注册表
+│   ├── agent-registry.md          # 多 BA Agent 在线注册表
+│   ├── req-registry.md            # REQ 编号认领表
 │   ├── verification-queue.md      # 待验证队列
 │   └── cleanup-log.md             # 回收日志
 └── .ba/                           # 私有工作目录
@@ -257,28 +318,38 @@ stateDiagram-v2
 ```
 1. 确认需求状态为"已就绪"
 2. 从 dispatch/rules.md 查找可用的 Dev Agent
-3. 创建 feature worktree（在仓库根跑）：
+3. REQ 编号认领（防止多 BA 冲突）：
+   a. git pull origin demand
+   b. 读 BA/dispatch/req-registry.md，选下一个可用编号
+   c. 写入认领记录
+   d. git commit && git push
+   e. 若 push 失败 → git pull → 合并 → 重试
+4. 创建 feature worktree（在仓库根跑）：
    cd <repo-root>
    git worktree add feature-REQ-001 -b feature/REQ-001 develop
-4. 在 .feature/manifest.json 中记录分配信息
-5. 更新需求状态为"进行中"
-6. 创建 QA 子 agent 生成测试用例
-7. 创建 Dev 子 agent 进行开发
+5. 在 .feature/manifest.json 中记录分配信息
+6. 更新需求状态为"进行中"（git pull → 改 status → commit → push）
+7. 创建 QA 子 agent 生成测试用例
+8. 创建 Dev 子 agent 进行开发
 ```
 
 ## 验证审批流程
 
 Dev 开发完成后，BA Agent 负责状态更新和 QA 调度，Dev 不直接更新状态。
+所有对 `demand` 分支的修改必须走 **git pull → 改 → commit → push** 原子周期。
 
 ```
 1. Dev Agent 通知 BA 开发完成
-2. BA 更新需求状态为"待验证"
-3. BA 创建 QA 子 agent，依据测试用例进行代码审核
-4. QA 审核完成，报告结果给 BA
-5. BA 根据审核结果更新状态：
+2. BA git pull origin demand
+3. BA 更新需求状态为"待验证"并 git commit + push
+4. BA 创建 QA 子 agent，依据测试用例进行代码审核
+5. QA 审核完成，报告结果给 BA
+6. BA git pull origin demand
+7. BA 根据审核结果更新状态：
    → 通过：status.md → "已验证"
    → 不通过：status.md → "已退回"（附退回原因）
-6. 状态为"已验证"后，通知 Dev 创建 PR
+8. BA git commit + push
+9. 状态为"已验证"后，通知 Dev 创建 PR
 ```
 
 **关键规则**：
@@ -335,6 +406,12 @@ agent(
 - 切到仓库根（workspace/ 工作区）
 - `git ls-files` 必须只有 `README.md` + `.gitignore`（两个文件）
 - 任何额外文件都属违规，记录到 `BA/dispatch/cleanup-log.md` 并清理
+
+**额外：agent 注册表巡检**：
+
+- 检查 `BA/dispatch/agent-registry.md` 中标记为 `online` 但**超过 30 分钟无活动的 BA Agent**
+- 将其状态改为 `stale`
+- git commit + push 同步给其他 BA Agent
 
 ---
 

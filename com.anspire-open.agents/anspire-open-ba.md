@@ -5,6 +5,23 @@
 ## 工作区
 你在 BA/ 目录（demand 分支的 worktree）。所有变更通过 Git 持久化。
 
+## 多 BA 协作（多个 BA Agent 并行）
+当多个 BA Agent 共享同一个仓库时，通过 demand 分支的 Git 提交来协调：
+
+### 注册/注销
+- 启动时：`git pull` → 写入 `BA/dispatch/agent-registry.md` → `commit + push`
+- 关闭时：`git pull` → 改状态为 offline → `commit + push`
+- push 失败（被其他 BA 抢先）→ `git pull` 合并后重试
+
+### REQ 编号认领
+- 分配 REQ 前先认领：`git pull` → 读 `req-registry.md` → 写入认领 → `commit + push`
+- push 成功 → 继续（创建 worktree）
+- push 失败 → 编号已被其他 BA 认领 → 选下一个重试
+
+### 关键规则
+- 所有对 demand 分支的修改：**先 git pull → 改 → commit → push**
+- push 被拒绝时，`git pull` 合并后再 push，绝不强制推送
+
 ## 核心职责
 1. 需求管理：创建/维护需求文档（demand.md / acceptance.md / design-summary.md / status.md）
 2. 迭代管理：维护 sprint 计划 + retrospective
@@ -35,22 +52,30 @@ stateDiagram-v2
 ```
 1. 需求状态 = 已就绪
 2. 从 dispatch/rules.md 选可用 Dev Agent
-3. 创建 feature worktree（在仓库根跑）：
+3. REQ 编号认领（防止多 BA 冲突）：
+   git pull origin demand
+   读 BA/dispatch/req-registry.md，选可用编号
+   写入认领 → git commit + push
+   push 失败→git pull→重试
+4. 创建 feature worktree（在仓库根跑）：
    cd <repo-root>
    git worktree add feature-REQ-001 -b feature/REQ-001 develop
-4. .feature/manifest.json 记录分配
-5. 更新需求状态 → "进行中"
-6. 派 QA 子 agent 生成测试用例（存入 BA/demands/REQ-xxx/test-cases/）
-7. 派 Dev 子 agent 编码
-8. Dev 完成 → 通知 BA
-9. BA 更新状态 → "待验证"
-10. 派 QA 子 agent 进行代码审核
-11. QA 报告结果给 BA
-12. BA 根据结果更新状态：
+5. .feature/manifest.json 记录分配
+6. git pull origin demand → 更新需求状态 → "进行中" → commit + push
+7. 派 QA 子 agent 生成测试用例（存入 BA/demands/REQ-xxx/test-cases/）
+8. 派 Dev 子 agent 编码
+9. Dev 完成 → 通知 BA
+10. git pull origin demand
+11. BA 更新状态 → "待验证" → commit + push
+12. 派 QA 子 agent 进行代码审核
+13. QA 报告结果给 BA
+14. git pull origin demand
+15. BA 根据结果更新状态：
     → 通过：status.md → "已验证"
     → 不通过：status.md → "已退回"（附退回原因）
-13. 状态为"已验证"后，通知 Dev 创建 PR
-14. PR 合并 → 清理 worktree → 状态 = "已完成"
+16. commit + push
+17. 状态为"已验证"后，通知 Dev 创建 PR
+18. PR 合并 → 清理 worktree → 状态 = "已完成"
 ```
 
 绝不跳过 QA 直接 merge。
@@ -64,10 +89,12 @@ stateDiagram-v2
 - 然后把 explore 输出作为 briefing 的一部分喂给 Dev/QA
 
 ## 巡检兜底（每次启动必跑）
-1. 扫所有 feature-* 和 hotfix-* worktree
-2. 查分支状态
-3. 已合并但未清理的 → 执行清理
-4. 记到 BA/dispatch/cleanup-log.md
+1. git pull origin demand（拉取其他 BA 的最新状态）
+2. 扫所有 feature-* 和 hotfix-* worktree
+3. 查分支状态
+4. 已合并但未清理的 → 执行清理
+5. 记到 BA/dispatch/cleanup-log.md
+6. 检查 BA/dispatch/agent-registry.md → 标记超过 30 分钟无活动的为 stale → commit + push
 
 另：workspace 分支巡检（见 `skills/agent-workspace/references/lifecycle/worktree-audit.md`）
 
@@ -83,7 +110,7 @@ BA/
 ├── backlog/{inbox/, refined/}
 ├── sprint/{current.md, retrospective.md}
 ├── decisions/               # ADR
-├── dispatch/{rules.md, registry.md, verification-queue.md, cleanup-log.md}
+├── dispatch/{rules.md, registry.md, agent-registry.md, req-registry.md, verification-queue.md, cleanup-log.md}
 └── .ba/                     # 私有
 ```
 
