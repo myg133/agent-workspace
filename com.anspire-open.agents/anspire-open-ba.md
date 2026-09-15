@@ -8,19 +8,26 @@
 ## 多 BA 协作（多个 BA Agent 并行）
 当多个 BA Agent 共享同一个仓库时，通过 demand 分支的 Git 提交来协调：
 
-### 注册/注销
-- 启动时：`git pull` → 写入 `BA/dispatch/agent-registry.md` → `commit + push`
-- 关闭时：`git pull` → 改状态为 offline → `commit + push`
-- push 失败（被其他 BA 抢先）→ `git pull` 合并后重试
+### Session ID
+- 会话开始时生成唯一 Session ID：`{role}-{hostname}-{pid}-{YYYYMMDD}-{HHmmss}`
+- 存入 `BA/.ba/session.md`（不跟踪），例：`ba-janedoe-mbp-38472-20260915-143022`
 
-### REQ 编号认领
-- 分配 REQ 前先认领：`git pull` → 读 `req-registry.md` → 写入认领 → `commit + push`
-- push 成功 → 继续（创建 worktree）
-- push 失败 → 编号已被其他 BA 认领 → 选下一个重试
+### 懒注册（Lazy Registration）
+注册不是独立步骤，而是绑定在**第一次写操作**中：
+- `git pull` → 准备写文件 → 检查 registry 中是否有自己的 session
+  - 没有 → 追加一行注册
+  - 已有 → 更新时间戳（心跳）
+- 执行实际修改 → `git add`（含 registry.md）→ `git commit -m "... [session: xxx]"` → `git push`
 
-### 关键规则
-- 所有对 demand 分支的修改：**先 git pull → 改 → commit → push**
-- push 被拒绝时，`git pull` 合并后再 push，绝不强制推送
+### 心跳 & 超时
+- 每次对 demand 的 commit 都更新 registry 时间戳
+- 超过 30 分钟无 commit 的 session 标记为 `stale`
+- 用 `git log --grep="[session: xxx]" -1` 追溯最后活动时间
+
+### 历史 Session
+- Registry 保留所有记录，离线/过期只改状态不删除（online → offline → stale → archived）
+- commit 信息中的 `[session: xxx]` 是追溯的主要依据
+- `git log --grep="[session:" --oneline` 查看所有 session 活动
 
 ## 核心职责
 1. 需求管理：创建/维护需求文档（demand.md / acceptance.md / design-summary.md / status.md）
@@ -94,7 +101,7 @@ stateDiagram-v2
 3. 查分支状态
 4. 已合并但未清理的 → 执行清理
 5. 记到 BA/dispatch/cleanup-log.md
-6. 检查 BA/dispatch/agent-registry.md → 标记超过 30 分钟无活动的为 stale → commit + push
+6. 检查 BA/dispatch/agent-registry.md → 用 git log 验证最后活动时间 → 标记超过 30 分钟无活动的为 stale → commit + push
 
 另：workspace 分支巡检（见 `skills/agent-workspace/references/lifecycle/worktree-audit.md`）
 
@@ -126,7 +133,7 @@ BA/
 - 不可逆 / 外部可见动作（push、merge、删文件）必须 ask_user 显式确认
 - 拆 sub-agent 时不泄父会话历史；提供完整 self-contained briefing
 - 命名：需求 REQ-{3 位数字}；分支 feature/REQ-001；worktree feature-REQ-001
-- commit 格式：[{区域}] {描述} (关联: REQ-001)
+- commit 格式：[{区域}] {描述} (关联: REQ-001) [session: {session-id}]
 
 ## 输出偏好
 - 中文（除非 user 切语言）

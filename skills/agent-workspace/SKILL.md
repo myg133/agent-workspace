@@ -151,7 +151,9 @@ metadata:
 - **需求编号**: `REQ-{三位数字}`，如 `REQ-001`
 - **分支名**: `feature/REQ-001`, `hotfix/JIRA-123`
 - **Worktree 目录**: `feature-REQ-001`, `hotfix-JIRA-123`（在仓库根平铺）
-- **Commit Message**: `[{区域}] {描述} (关联: {需求ID})`
+- **Commit Message**: `[{区域}] {描述} (关联: {需求ID}) [session: {session-id}]`
+  - 所有对 demand 分支的 commit 必须携带 session ID
+  - 例：`[BA] 更新 REQ-003 状态 (关联: REQ-003) [session: ba-janedoe-mbp-20260915-143022]`
 - **镜像 Tag**: 默认 `{GIT_SHA}`，发布用 `{GIT_TAG}`，特殊可用户指定
 
 ## 工作区定位规则
@@ -244,29 +246,53 @@ git push -u origin workspace main develop demand deploy
 
 当多个 BA Agent 并行工作时，它们共享 `demand` 分支。通过 Git 作为协调原语，所有 BA Agent 遵循**先 pull → 读 → 写 → commit → push** 的原子化流程。
 
-### BA Agent 注册/注销
+### Session 机制
 
-每个 BA Agent 启动时必须在 `BA/dispatch/agent-registry.md` 注册，关闭时注销。
+每个 BA Agent 会话（从启动到关闭）有一个**唯一的 Session ID**，在所有 Git 操作中携带。
 
-**注册流程**：
+**Session ID 格式**：
+
+```
+{role}-{hostname}-{pid}-{YYYYMMDD}-{HHmmss}
+# 例：ba-janedoe-mbp-38472-20260915-143022
+```
+
+Session ID 在会话开始时生成一次，写入本地文件 `BA/.ba/session.md`（不跟踪）：
+
+```markdown
+# Session
+- session_id: ba-janedoe-mbp-38472-20260915-143022
+- started_at: 2026-09-15 14:30:22
+- role: ba
+```
+
+### 懒注册（Lazy Registration）
+
+注册不再作为单独的启动步骤。相反，注册绑定在**第一次写操作**中——BA Agent 对 demand 分支做任何修改时，自动顺带注册：
 
 ```
 1. git pull origin demand           # 拉取最新状态
-2. 在 BA/dispatch/agent-registry.md 追加一行：
-   | {时间} | {agent-id} | online | {负责需求列表} |
-3. git add BA/dispatch/agent-registry.md
-4. git commit -m "[BA] register {agent-id}"
-5. git push origin demand            # push 失败 → git pull → 重试
+2. 读 BA/.ba/session.md，获取当前 session ID
+3. 检查 agent-registry.md 中是否已有自己的 session
+   没有 → 追加一行注册（首次写自动注册）
+   已有 → 更新时间戳（心跳）
+4. 执行实际修改（更新 status、创建需求等）
+5. git add <修改的文件> + BA/dispatch/agent-registry.md
+6. git commit -m "[BA] {描述} [session: {session-id}]"
+7. git push origin demand
+   → push 失败 → git pull → 解决冲突 → 重新 push
 ```
 
-**注销流程**：
+**注销**：Session 结束时，将 `agent-registry.md` 中对应行的状态改为 `offline`，提交并推送。如果 Session 异常终止（未正常注销），其他 BA 通过**心跳超时**判定为 stale。
 
-```
-1. git pull origin demand
-2. 将对应行的状态改为 offline
-3. git commit -m "[BA] deregister {agent-id}"
-4. git push origin demand
-```
+### 心跳 & 超时判定
+
+| 机制 | 说明 |
+|------|------|
+| 心跳 | 每次对 demand 分支的 commit 都会更新 registry 中的时间戳 |
+| 超时 | 超过 30 分钟无 commit 的 session 标记为 `stale` |
+| 判定者 | 任意 BA 在巡检时发现并标记 |
+| 恢复 | `stale` 的 session 可被另一个 BA 接管（手动确认） |
 
 ### REQ 编号认领
 
@@ -276,8 +302,8 @@ git push -u origin workspace main develop demand deploy
 1. git pull origin demand
 2. 读 BA/dispatch/req-registry.md，找下一个可用 REQ 编号
 3. 在 req-registry.md 中写入认领：
-   | REQ-003 | {需求名称} | {agent-id} | {时间} |
-4. git add && git commit
+   | REQ-003 | {需求名称} | {session-id} | {时间} |
+4. git commit -m "[BA] 认领 REQ-003 [session: {session-id}]"
 5. git push origin demand
    → push 成功：认领成功，继续创建 worktree
    → push 失败（远程已有更新）：git pull → 合并 → 重试认领
@@ -285,17 +311,25 @@ git push -u origin workspace main develop demand deploy
 
 **冲突处理**：认领完成后才创建 worktree。如果 push 被拒绝，说明另一个 BA Agent 已经先认领了同一个编号，当前 Agent 自动选择下一个编号重试。
 
+### 历史 Session 管理
+
+- Registry 中保留所有历史记录，不删除
+- 离线或过期的 session 标记为 `offline` 或 `stale`，保留 end_time
+- commit 信息中的 `[session: xxx]` 是追踪的**主要依据**，registry 是辅助摘要
+- 任意 BA 可通过 git log 追溯：`git log --grep="[session:" --oneline`
+
 ### Git 操作规范
 
-所有对 `demand` 分支的修改必须走完整周期：
+所有对 `demand` 分支的修改必须走完整周期，**commit 信息必须携带 session ID**：
 
 ```
 git pull origin demand        # 1. 拉取最新状态
 # ... 修改文件 ...            # 2. 本地修改
+# 确保同时更新 agent-registry.md（心跳）
 git add <files>               # 3. 暂存
-git commit -m "[BA] ..."      # 4. 提交
+git commit -m "[BA] {描述} [session: {session-id}]"   # 4. 提交
 git push origin demand        # 5. 推送
-# 若 push 失败：git pull --rebase → 解决冲突 → 重新 push
+# 若 push 失败：git pull → 解决冲突 → 重新 push
 ```
 
 BA Agent 启动时**必须**额外做一次 workspace 巡检（见 `references/lifecycle/worktree-audit.md` 末节）。
@@ -459,8 +493,9 @@ agent(
 
 **额外：agent 注册表巡检**：
 
-- 检查 `BA/dispatch/agent-registry.md` 中标记为 `online` 但**超过 30 分钟无活动的 BA Agent**
-- 将其状态改为 `stale`
+- 检查 `BA/dispatch/agent-registry.md` 中标记为 `online` 的 session
+- 用 git log 验证最后活动时间：`git log --grep="[session: {session-id}]" --oneline -1`
+- 超过 30 分钟无活动的 session 标记为 `stale`
 - git commit + push 同步给其他 BA Agent
 
 ---
