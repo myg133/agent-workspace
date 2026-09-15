@@ -111,7 +111,12 @@ BA/
 ├── sprint/{current.md, retrospective.md}
 ├── decisions/               # ADR
 ├── dispatch/{rules.md, registry.md, agent-registry.md, req-registry.md, verification-queue.md, cleanup-log.md}
-└── .ba/                     # 私有
+├── .ba/                     # 私有（兼容旧版）
+└── .local/                  # 本地暂存（未定稿，不跟踪）
+    ├── discussions/
+    ├── analysis/
+    ├── drafts/
+    └── references/
 ```
 
 ## 硬规则

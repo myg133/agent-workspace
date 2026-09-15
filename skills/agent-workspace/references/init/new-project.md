@@ -108,6 +108,22 @@ git worktree add BA demand
 git worktree add Deploy deploy
 ```
 
+### Step 4a: 初始化本地暂存目录（可选）
+
+```bash
+# 每个 worktree 创建一个 .local/ 目录用于存放未定稿中间文件
+mkdir -p code/.local
+mkdir -p BA/.local/discussions BA/.local/analysis BA/.local/drafts
+mkdir -p Deploy/.local
+
+# 更新各 worktree 的 .gitignore
+# code/.gitignore, BA/.gitignore, Deploy/.gitignore 各加一行：
+# .local/
+```
+
+这些目录不进 Git，仅用于临时存放草稿、讨论记录、分析报告等。
+定稿后晋升到对应 worktree 的跟踪目录。
+
 **验证**：
 
 ```bash

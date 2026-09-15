@@ -78,6 +78,51 @@ metadata:
 **所有 worktree 在仓库根平铺**，没有中间目录层、没有 worktree 嵌套。
 **每个 worktree 内部的 `.gitignore` 由对应工作分支跟踪**（无父的独立分支各自管各自的）。
 
+## 本地暂存目录（.local/）
+
+每个 worktree 都有一个 `worktree-root/.local/` 目录，用于存放**未定稿的中间文件**——方案讨论、架构分析、探索报告、设计草稿等。这些文件不进 Git。
+
+### 目录结构
+
+```
+<worktree-root>/
+└── .local/
+    ├── discussions/     # 方案讨论 / 架构探讨记录
+    ├── analysis/        # Explore 报告 / 代码分析
+    ├── drafts/          # 未定稿的设计文档
+    └── references/      # 临时参考资料副本
+```
+
+### 规则
+
+- `.local/` 整个目录被对应 worktree 的 `.gitignore` 忽略（**不跟踪**）
+- 所有中间文件先写在 `.local/` 里，不限格式（`.md`、`.drawio`、截图等）
+- 定稿后**晋升**到 Git 跟踪的目录：`cp .local/drafts/x.md demands/REQ-xxx/ → git add → git commit`
+- 晋升后删除 `.local/` 中的对应文件
+- 纯中间产物（讨论记录、临时分析）不需要晋升，直接留存或清理
+
+### 各 worktree 的 .gitignore 示例
+
+```gitignore
+# 忽略本地暂存目录
+.local/
+
+# 业务相关 ignore 规则...
+```
+
+### 晋升流程（草稿 → 正式文档）
+
+```
+1. 在 .local/drafts/ 中编写草稿
+2. 讨论/修改直到定稿
+3. 晋升：
+   cp .local/drafts/plan.md BA/demands/REQ-xxx/design-summary.md
+   git add BA/demands/REQ-xxx/design-summary.md
+   git commit -m "[BA] 添加 REQ-xxx 设计概要"
+   git push
+4. rm .local/drafts/plan.md（晋升后清理草稿）
+```
+
 ## 分支策略
 
 | 分支 | 用途 | 谁写入 | 基分支 |
@@ -293,7 +338,12 @@ BA/
 │   ├── req-registry.md            # REQ 编号认领表
 │   ├── verification-queue.md      # 待验证队列
 │   └── cleanup-log.md             # 回收日志
-└── .ba/                           # 私有工作目录
+├── .ba/                           # 私有工作目录（兼容旧版）
+└── .local/                        # 本地暂存（未定稿中间文件，不跟踪）
+    ├── discussions/
+    ├── analysis/
+    ├── drafts/
+    └── references/
 ```
 
 ## 需求状态流转
@@ -422,6 +472,10 @@ agent(
 你位于 `feature-REQ-xxx/` 目录（`feature/REQ-xxx` 分支的 worktree），由 BA Agent 分配。
 所有 worktree 都在仓库根平铺。
 
+### 本地暂存目录
+
+`feature-REQ-xxx/.local/` 用于存放开发过程中的中间产物（调试笔记、实验代码、架构讨论记录），不跟踪。定稿后晋升到 `src/` 或 `tests/`。
+
 ## 核心职责
 
 1. 读取需求：从 `BA/demands/REQ-xxx/` 读取需求文档
@@ -508,6 +562,11 @@ agent(
 QA Agent 分两个阶段工作：
 - **Pre-merge**：在 `feature-REQ-xxx/` 目录中做代码级验证
 - **Post-merge**：在 `code/` 目录 + staging 环境做运行时验证
+
+### 本地暂存目录
+
+- Pre-merge 阶段：`feature-REQ-xxx/.local/` 存放测试运行日志、截图、临时报告
+- Post-merge 阶段：`code/.local/` 存放 e2e 测试结果、性能数据
 
 ## 核心职责
 
@@ -634,6 +693,10 @@ CI 的职责：                    Deploy 的职责：
 ## 工作区
 
 你位于 `Deploy/` 目录（`deploy` 分支的 worktree），跟 `code/` `BA/` 在仓库根平铺。
+
+### 本地暂存目录
+
+`Deploy/.local/` 用于存放部署计划草稿、环境检查记录、回滚预案等，不跟踪。
 
 ## Deploy/ 目录结构
 
