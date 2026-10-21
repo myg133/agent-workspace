@@ -22,6 +22,11 @@
 - `references/global/platform-notes.md`：Windows（路径、长路径、跨盘符、文件占用、换行）、macOS、WSL。
 - `verify` 在非 workspace 仓库给出明确提示（而不是刷一屏 FAIL）。
 
+### 文档
+
+- 补充「适用范围」：面向中大型项目、多需求并行、需要可追溯的交付；单文件脚本/一次性工具不适用。
+- 明确本仓库（插件源码）自身不套用该规范，`aw.py verify` 在此报"不是 workspace 仓库"属预期。
+
 ### 已验证
 
 - cmd.exe（cp936）下 audit/verify 中文正常。
