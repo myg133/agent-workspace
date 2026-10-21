@@ -83,6 +83,7 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 | `aw.py claim next` | 原子认领（**一个 agent 同时只能持 1 个**） |
 | `aw.py claim doctor` | 查一人多单 / 死会话 / 孤儿 worktree |
 | `aw.py upgrade` | 旧项目升级检查：补什么、清什么、改什么（只读） |
+| `aw.py msg` | BA 间消息：空 commit 走 `bus` 分支，带收件人与 ack |
 
 依赖 Python 3.8+ / git 2.20+，只用标准库。
 

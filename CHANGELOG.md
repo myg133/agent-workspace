@@ -2,6 +2,28 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.5.0] - 2026-10-21
+
+### 新增：BA 间消息（bus 分支）
+
+统一走 git：**零文件的 `bus` 分支 + 空 commit**，commit message 即消息体。
+
+- `aw.py msg send / inbox / list / ack / flush`
+- 用 `git commit-tree` 造空 commit：**不 checkout、不碰工作区**，4 个 BA 并发安全
+- 并发推送：被拒 → fetch → 基于最新 tip 重放 outbox → 重试（不 rebase、不 force）
+- 离线可用：先落 `.aw/outbox/`，联网后自动重试
+- 寻址：`agent_id` / `all` / `role:ba`；inbox 用本机游标只显示增量
+- 契约回执：`msg ack <id> --ok|--reject`，生成 `contract-ack` 消息
+- 输出标记 `→ me` / `→ me(cc)` / `→ <别人>`，避免误读
+
+文档：`references/global/messaging.md`（格式、可见性、故障处理、规模估算）。
+模板：`assets/templates/message.md.tpl`。
+
+### 变更
+
+- SKILL 硬约束新增：消息只走 bus，契约/决策才进 demand。
+- 单条消息约 250B；4 BA × 20 条/天 ≈ 20KB/天，一年约 7MB。
+
 ## [1.4.0] - 2026-10-21
 
 ### 新增：升级检查（只读）

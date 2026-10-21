@@ -82,6 +82,21 @@ aw.py queue sync                   # 从 BA/demands 扫"已就绪"
 > `BA/dispatch/req-registry.md` 和 `agent-registry.md` 现在是**只读快照**，
 > 认领的真相在 `<repo-root>/.aw/claims/`。不要再靠编辑表格来认领。
 
+## 4.1 与其他 BA 沟通
+
+消息只走 `bus` 分支的空 commit，不进 demand：
+
+```bash
+aw.py msg send --to pcB-ba-1 --type contract-change \
+  --contract user-api --version 3 --body "增加 mfaToken" --ref "BA/contracts/user-api/v3.md"
+aw.py msg inbox          # 只显示发给我的增量
+aw.py msg list --all     # 看全队，输出会标 → me / → 别人
+aw.py msg ack <id> --ok  # 契约回执
+```
+
+同步点：**认领前、派单前、合并前、完成时**各读一次 inbox。
+契约正文进 `BA/contracts/`，消息只做通知与回执。
+
 ## 5. 派单（已就绪 → 进行中）
 
 认领成功后，worktree 已在 `<repo-root>/feature-REQ-003`。

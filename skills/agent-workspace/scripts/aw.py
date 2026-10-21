@@ -11,6 +11,7 @@ import datetime as _dt
 import json
 import os
 import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -30,11 +31,12 @@ class GitError(RuntimeError):
     pass
 
 
-def git(*args: str, cwd: Path | str | None = None, check: bool = True) -> subprocess.CompletedProcess:
+def git(*args: str, cwd: Path | str | None = None, check: bool = True,
+        timeout: float | None = None) -> subprocess.CompletedProcess:
     # core.quotepath=false：中文/空格文件名按原样输出，避免 "\346\226\207" 这类转义
     cmd = ["git", "-c", "core.quotepath=false", *args]
     proc = subprocess.run(
-        cmd, cwd=str(cwd) if cwd else None,
+        cmd, cwd=str(cwd) if cwd else None, timeout=timeout,
         capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     if check and proc.returncode != 0:
@@ -673,7 +675,7 @@ def aw_path(root: Path, *parts: str) -> Path:
 
 
 def aw_init(root: Path) -> None:
-    for sub in ("locks", "claims", "sessions", "archive"):
+    for sub in ("locks", "claims", "sessions", "archive", "outbox"):
         aw_path(root, sub).mkdir(parents=True, exist_ok=True)
     queue = aw_path(root, "queue.json")
     if not queue.exists():
@@ -1179,6 +1181,315 @@ def cmd_queue(args) -> int:
     raise GitError("未知 queue 动作: %s" % args.action)
 
 
+# ---------------------------------------------------------------- msg bus
+#
+# 统一消息通道：空的 bus 分支 + 空 commit，消息体就是 commit message。
+# - 不 checkout、不碰工作区：用 commit-tree 直接造 commit
+# - 永不 rebase / force：冲突时基于最新 origin/bus 重放本地队列
+# - 离线可用：先落 .aw/outbox/，flush 时再推
+
+BUS_BRANCH = "bus"
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+MSG_TYPES = ("fyi", "question", "blocker", "handoff", "contract-change", "contract-ack", "decision")
+
+
+def _now_utc() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _msg_id() -> str:
+    return secrets.token_hex(4)
+
+
+def parse_message(text: str) -> dict | None:
+    lines = text.replace("\r\n", "\n").split("\n")
+    if lines and lines[0].startswith("[msg]"):
+        lines = lines[1:]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if not lines or lines[0].strip() != "---":
+        return None
+    try:
+        end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+    except StopIteration:
+        return None
+    meta: dict = {}
+    for line in lines[1:end]:
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key, value = key.strip(), value.strip()
+        if value.startswith("[") and value.endswith("]"):
+            meta[key] = [v.strip() for v in value[1:-1].split(",") if v.strip()]
+        else:
+            meta[key] = value
+    meta["body"] = "\n".join(lines[end + 1:]).strip()
+    return meta
+
+
+def render_message(meta: dict) -> str:
+    to = meta.get("to") or []
+    cc = meta.get("cc") or []
+    subject = (meta.get("subject") or "").strip()
+    head = [
+        "[msg] %s%s -> %s" % (meta.get("type", "fyi"),
+                              (" " + subject) if subject else "",
+                              ", ".join(to) or "-"),
+        "",
+        "---",
+        "id: %s" % meta["id"],
+        "from: %s" % meta["from"],
+        "to: [%s]" % ", ".join(to),
+    ]
+    if cc:
+        head.append("cc: [%s]" % ", ".join(cc))
+    head.append("at: %s" % meta["at"])
+    head.append("type: %s" % meta["type"])
+    for key in ("ref", "contract", "version", "deadline", "thread", "priority", "re", "result"):
+        if meta.get(key):
+            head.append("%s: %s" % (key, meta[key]))
+    head += ["---", meta.get("body", "")]
+    return "\n".join(head) + "\n"
+
+
+def _bus_fetch(root: Path) -> None:
+    git("fetch", "-q", "origin", BUS_BRANCH, cwd=root, check=False, timeout=20)
+
+
+def _bus_tip(root: Path) -> str | None:
+    for ref in ("refs/remotes/origin/%s" % BUS_BRANCH, "refs/heads/%s" % BUS_BRANCH):
+        sha = git("rev-parse", "-q", "--verify", ref, cwd=root, check=False).stdout.strip()
+        if sha:
+            return sha
+    return None
+
+
+def _has_remote(root: Path) -> bool:
+    return bool(git("remote", cwd=root, check=False).stdout.strip())
+
+
+def _commit_message(root: Path, text: str, parent: str | None, at: str) -> str:
+    aw_init(root)
+    tmp = aw_path(root, "outbox", ".tmp-msg")
+    write_text(tmp, text)
+    env = dict(os.environ)
+    if at:
+        env["GIT_AUTHOR_DATE"] = at
+        env["GIT_COMMITTER_DATE"] = at
+    args = ["commit-tree", EMPTY_TREE]
+    if parent:
+        args += ["-p", parent]
+    args += ["-F", str(tmp)]
+    proc = subprocess.run(["git", "-c", "core.quotepath=false", *ensure_identity(root), *args],
+                          cwd=str(root), capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", env=env)
+    tmp.unlink(missing_ok=True)
+    if proc.returncode != 0:
+        raise GitError("commit-tree 失败: %s" % proc.stderr.strip())
+    return proc.stdout.strip()
+
+
+def bus_flush(root: Path, quiet: bool = False) -> str:
+    """把 outbox 里的消息按顺序重放到 bus 上并推送。返回 ok / queued / local。"""
+    outbox = aw_path(root, "outbox")
+    outbox.mkdir(parents=True, exist_ok=True)
+    pending = sorted(p for p in outbox.glob("*.md"))
+    if not pending:
+        return "ok"
+    if not _has_remote(root):
+        base = _bus_tip(root)
+        for path in pending:
+            meta = parse_message(path.read_text(encoding="utf-8")) or {}
+            base = _commit_message(root, path.read_text(encoding="utf-8"), base, meta.get("at", ""))
+            path.unlink(missing_ok=True)
+        git("update-ref", "refs/heads/%s" % BUS_BRANCH, base, cwd=root, check=False)
+        return "local"
+
+    for attempt in range(4):
+        _bus_fetch(root)
+        base = _bus_tip(root)
+        created = base
+        for path in pending:
+            text = path.read_text(encoding="utf-8")
+            meta = parse_message(text) or {}
+            created = _commit_message(root, text, created, meta.get("at", ""))
+        git("update-ref", "refs/heads/%s" % BUS_BRANCH, created, cwd=root, check=False)
+        pushed = git("push", "-q", "origin", "%s:%s" % (BUS_BRANCH, BUS_BRANCH),
+                     cwd=root, check=False, timeout=30)
+        if pushed.returncode == 0:
+            for path in pending:
+                path.unlink(missing_ok=True)
+            return "ok"
+        time.sleep(0.4 * (2 ** attempt))
+    if not quiet:
+        print("推送失败，消息已排队（下次 send/inbox 会自动重试）", file=sys.stderr)
+    return "queued"
+
+
+def _bus_ref(root: Path) -> str | None:
+    for ref in ("refs/remotes/origin/%s" % BUS_BRANCH, "refs/heads/%s" % BUS_BRANCH):
+        if git("rev-parse", "-q", "--verify", ref, cwd=root, check=False).returncode == 0:
+            return ref.replace("refs/remotes/", "").replace("refs/heads/", "")
+    return None
+
+
+def load_bus_messages(root: Path, fetch: bool = True) -> list[dict]:
+    if fetch:
+        _bus_fetch(root)
+    ref = _bus_ref(root)
+    if not ref:
+        return []
+    out = git("log", ref, "--format=%H%x1f%B%x1f", cwd=root, check=False).stdout
+    chunks = out.split("\x1f")
+    messages = []
+    for i in range(0, len(chunks) - 1, 2):
+        sha = chunks[i].strip().splitlines()[-1] if chunks[i].strip() else ""
+        text = chunks[i + 1]
+        meta = parse_message(text)
+        if meta and meta.get("id"):
+            meta["_sha"] = sha
+            messages.append(meta)
+    return messages
+
+
+def _is_mine(meta: dict, ident: dict) -> str | None:
+    to = meta.get("to") or []
+    cc = meta.get("cc") or []
+    tokens = {"all", "role:%s" % ident.get("role", "ba"), ident["agent_id"]}
+    if tokens & set(to):
+        return "to"
+    if tokens & set(cc):
+        return "cc"
+    return None
+
+
+def _fmt_recipient(meta: dict, ident: dict) -> str:
+    kind = _is_mine(meta, ident)
+    if kind == "to":
+        return "me"
+    if kind == "cc":
+        return "me(cc)"
+    to = ", ".join(meta.get("to") or [])
+    return to or "-"
+
+
+def _msg_line(meta: dict, ident: dict, full: bool = False) -> str:
+    who = _fmt_recipient(meta, ident)
+    label = "→ %-12s" % who
+    extra = meta.get("contract", "")
+    if meta.get("version"):
+        extra += "@%s" % meta["version"]
+    line = "%s %-20s %-14s %-18s %s" % (
+        (meta.get("at") or "")[:19], meta.get("from", "?"), label,
+        meta.get("type", "?"), extra)
+    if full:
+        line += "\n    id=%s ref=%s\n    %s" % (
+            meta.get("id"), meta.get("ref", "-"), meta.get("body", "").replace("\n", "\n    "))
+    return line
+
+
+def _read_cursor(root: Path, agent_id: str) -> tuple[str, str]:
+    data = read_json(aw_path(root, "msg-cursor.json"), {})
+    entry = data.get(agent_id, {})
+    return entry.get("at", ""), entry.get("id", "")
+
+
+def _write_cursor(root: Path, agent_id: str, at: str, mid: str) -> None:
+    path = aw_path(root, "msg-cursor.json")
+    data = read_json(path, {})
+    data[agent_id] = {"at": at, "id": mid}
+    write_json(path, data)
+
+
+def cmd_msg(args) -> int:
+    root = repo_root()
+    ident = resolve_identity(root)
+    aw_init(root)
+    action = args.action
+
+    if action == "send":
+        to = [t.strip() for t in (args.to or "").split(",") if t.strip()]
+        cc = [t.strip() for t in (args.cc or "").split(",") if t.strip()]
+        if not to:
+            raise GitError("--to 不能为空（可以是 all / role:ba / agent_id）")
+        if args.type not in MSG_TYPES:
+            raise GitError("type 必须是: %s" % ", ".join(MSG_TYPES))
+        body = (args.body or "").strip()
+        if not body:
+            raise GitError("--body 不能为空")
+        if len(body) > 2000:
+            raise GitError("body 超过 2000 字符，请把正文放进 BA/contracts/ 或 BA/decisions/")
+        meta = {
+            "id": _msg_id(), "from": ident["agent_id"], "to": to, "cc": cc,
+            "at": _now_utc(), "type": args.type, "body": body,
+            "ref": args.ref or "", "contract": args.contract or "",
+            "version": args.version or "", "deadline": args.deadline or "",
+            "thread": args.thread or "", "priority": args.priority or "p2",
+            "subject": args.subject or (args.contract or ""),
+        }
+        text = render_message(meta)
+        path = aw_path(root, "outbox", "%s-%s.md" % (meta["at"].replace(":", "").replace("-", ""), meta["id"]))
+        write_text(path, text)
+        state = bus_flush(root)
+        if state == "ok":
+            print("SENT %s" % meta["id"])
+        elif state == "local":
+            print("SENT_LOCAL %s（仓库没有 remote，消息只在本地 bus 上）" % meta["id"])
+        else:
+            print("QUEUED %s" % meta["id"])
+        return 0 if state == "ok" else (0 if state == "local" else 3)
+
+    if action == "flush":
+        state = bus_flush(root)
+        print("FLUSH %s" % state)
+        return 0 if state == "ok" else 3
+
+    if action in ("inbox", "list"):
+        messages = load_bus_messages(root, fetch=not args.no_fetch)
+        if not args.all:
+            messages = [m for m in messages if _is_mine(m, ident)]
+        if args.sender:
+            messages = [m for m in messages if m.get("from") == args.sender]
+        if args.since:
+            messages = [m for m in messages if (m.get("at") or "") >= args.since]
+        messages.sort(key=lambda m: (m.get("at", ""), m.get("id", "")))
+        if action == "inbox" and not args.all:
+            at, mid = _read_cursor(root, ident["agent_id"])
+            messages = [m for m in messages if (m.get("at", ""), m.get("id", "")) > (at, mid)]
+        show = messages[-args.limit:] if args.limit else messages
+        if not show:
+            print("（无消息）")
+        for meta in show:
+            print(_msg_line(meta, ident, full=args.full))
+        if show and action == "inbox":
+            last = show[-1]
+            _write_cursor(root, ident["agent_id"], last.get("at", ""), last.get("id", ""))
+        return 0
+
+    if action == "ack":
+        target = next((m for m in load_bus_messages(root) if m.get("id") == args.id), None)
+        if not target:
+            print("NOT_FOUND %s" % args.id)
+            return 3
+        ok = args.ok or not args.reject
+        body = args.note or ("同意" if ok else "不同意")
+        meta = {
+            "id": _msg_id(), "from": ident["agent_id"], "to": [target.get("from", "")],
+            "cc": target.get("cc") or [], "at": _now_utc(), "type": "contract-ack",
+            "body": body, "re": target.get("id"), "result": "ok" if ok else "no",
+            "contract": target.get("contract", ""), "version": target.get("version", ""),
+            "subject": "ack %s" % target.get("id"),
+        }
+        text = render_message(meta)
+        path = aw_path(root, "outbox", "%s-%s.md" % (meta["at"].replace(":", "").replace("-", ""), meta["id"]))
+        write_text(path, text)
+        state = bus_flush(root)
+        print("ACK %s -> %s %s" % (meta["id"], target.get("id"), "ok" if ok else "no"))
+        return 0 if state == "ok" else 3
+
+    raise GitError("未知 msg 动作: %s" % action)
+
+
 # ---------------------------------------------------------------- upgrade (只读检查)
 
 REMOVED_REFS = {
@@ -1388,6 +1699,31 @@ def build_parser() -> argparse.ArgumentParser:
     p_claim.add_argument("--remove-worktree", action="store_true")
     p_claim.add_argument("--repair", action="store_true")
     p_claim.set_defaults(func=cmd_claim)
+
+    p_msg = sub.add_parser("msg", help="BA 间消息（空 commit 走 bus 分支）")
+    p_msg.add_argument("action", choices=["send", "inbox", "list", "ack", "flush"])
+    p_msg.add_argument("id", nargs="?", default="")
+    p_msg.add_argument("--to", default="", help="收件人，逗号分隔；支持 all / role:ba / agent_id")
+    p_msg.add_argument("--cc", default="")
+    p_msg.add_argument("--type", default="fyi", choices=list(MSG_TYPES))
+    p_msg.add_argument("--body", default="")
+    p_msg.add_argument("--subject", default="")
+    p_msg.add_argument("--ref", default="")
+    p_msg.add_argument("--contract", default="")
+    p_msg.add_argument("--version", default="")
+    p_msg.add_argument("--deadline", default="")
+    p_msg.add_argument("--thread", default="")
+    p_msg.add_argument("--priority", default="p2")
+    p_msg.add_argument("--all", action="store_true", help="包含不是发给我的消息")
+    p_msg.add_argument("--sender", default="", help="只看某个发送者")
+    p_msg.add_argument("--since", default="", help="只看某个 UTC 时间之后")
+    p_msg.add_argument("--limit", type=int, default=50)
+    p_msg.add_argument("--full", action="store_true")
+    p_msg.add_argument("--no-fetch", action="store_true")
+    p_msg.add_argument("--ok", action="store_true", help="ack 时表示同意（默认）")
+    p_msg.add_argument("--note", default="", help="ack 附言")
+    p_msg.add_argument("--reject", action="store_true", help="ack 时表示不同意")
+    p_msg.set_defaults(func=cmd_msg)
 
     p_up = sub.add_parser("upgrade", help="升级检查（只读，不改任何文件）")
     p_up.add_argument("--json", action="store_true")
