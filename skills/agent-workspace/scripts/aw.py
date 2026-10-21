@@ -29,7 +29,8 @@ class GitError(RuntimeError):
 
 
 def git(*args: str, cwd: Path | str | None = None, check: bool = True) -> subprocess.CompletedProcess:
-    cmd = ["git", *args]
+    # core.quotepath=false：中文/空格文件名按原样输出，避免 "\346\226\207" 这类转义
+    cmd = ["git", "-c", "core.quotepath=false", *args]
     proc = subprocess.run(
         cmd, cwd=str(cwd) if cwd else None,
         capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -45,13 +46,21 @@ def git_out(*args: str, cwd: Path | str | None = None) -> str:
     return git(*args, cwd=cwd).stdout.strip()
 
 
-def _to_path(raw: str) -> Path:
-    """把 git 输出转换成真实路径（Git for Windows 可能返回 /c/... 形式）。"""
+def _to_path(raw: str, base: Path | None = None) -> Path:
+    """把 git 输出转换成真实路径。
+
+    Git for Windows（MSYS 版）在部分场景返回 /c/Users/... 形式；直接用 pathlib 拼会得到
+    C:/c/Users/... 这种坏路径，因此必须先做一次映射。
+    """
+    raw = raw.strip().strip('"')
     if os.name == "nt":
         m = re.match(r"^/([A-Za-z])/(.*)$", raw)
         if m:
             return Path("%s:/%s" % (m.group(1).upper(), m.group(2))).resolve()
-    return Path(raw).resolve()
+    path = Path(raw)
+    if not path.is_absolute():
+        path = (base or Path.cwd()) / path
+    return path.resolve()
 
 
 def repo_root(start: Path | str | None = None) -> Path:
@@ -60,8 +69,8 @@ def repo_root(start: Path | str | None = None) -> Path:
         common = git_out("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=start)
     except GitError:
         common = git_out("rev-parse", "--git-common-dir", cwd=start)
-    common_path = _to_path(common)
-    return common_path.parent
+    base = Path(start) if start else Path.cwd()
+    return _to_path(common, base=base).parent
 
 
 def worktrees(root: Path) -> list[dict]:
@@ -151,9 +160,17 @@ def _check_topology(root: Path, report) -> None:
     if root not in paths:
         report(FAIL, "主 worktree", "未在 git worktree list 中找到 %s" % root)
         return
-    nested = []
+    nested, stale, outside = [], [], []
     for e in entries:
         if e["path"] == root:
+            continue
+        if e.get("prunable") or not e["path"].exists():
+            stale.append(str(e["path"]))
+            continue
+        try:
+            e["path"].relative_to(root)
+        except ValueError:
+            outside.append(str(e["path"]))
             continue
         if e["path"].parent != root:
             nested.append(str(e["path"]))
@@ -161,6 +178,10 @@ def _check_topology(root: Path, report) -> None:
         report(FAIL, "worktree 层级", "存在中间层或嵌套: %s" % ", ".join(nested))
     else:
         report(OK, "worktree 层级", "全部平铺在仓库根下一层")
+    if outside:
+        report(FAIL, "worktree 位置", "记录指向仓库外（仓库被复制/移动过？）: %s" % ", ".join(outside[:3]))
+    if stale:
+        report(WARN, "失效登记", "路径已不存在，执行 git worktree prune: %s" % ", ".join(stale[:3]))
 
     if (root / "workspaces").exists():
         report(FAIL, "中间目录", "存在 workspaces/，违反平铺约束")
@@ -229,8 +250,13 @@ def cmd_verify(args) -> int:
     branch = branch_of(root)
     if branch == "workspace":
         report(OK, "根分支", "workspace")
+    elif not (root / "code").is_dir():
+        report(FAIL, "根分支", "%s 不是 workspace 仓库：先 aw.py init，或在 <repo-root> 执行" % root)
+        for level, check, detail in rows:
+            print("[%s] %-14s %s" % (level, check, detail))
+        return 1
     else:
-        report(FAIL, "根分支", "当前是 %s，应为 workspace" % branch)
+        report(FAIL, "根分支", "当前是 %s，应为 workspace（git checkout workspace）" % branch)
 
     _check_root_files(root, report)
     _check_topology(root, report)
@@ -296,8 +322,12 @@ def _read_registry(root: Path) -> list[dict]:
 def cmd_audit(args) -> int:
     root = repo_root()
     problems = 0
-    print("== workspace 卫生")
     branch = branch_of(root)
+    if branch != "workspace" and not (root / "code").is_dir():
+        print("当前目录不是 workspace 仓库: %s" % root, file=sys.stderr)
+        print("先 aw.py init 初始化，或 cd 到 <repo-root> 再执行。", file=sys.stderr)
+        return 1
+    print("== workspace 卫生")
     files = sorted(p for p in git_out("ls-files", cwd=root).splitlines() if p)
     status = git_out("status", "--porcelain", cwd=root)
     print("  根分支      : %s%s" % (branch, "" if branch == "workspace" else "  <-- 应为 workspace"))
@@ -310,7 +340,10 @@ def cmd_audit(args) -> int:
     rows = []
     for e in worktrees(root):
         rel = "." if e["path"] == root else str(e["path"].relative_to(root))
-        dirty = git("status", "--porcelain", cwd=e["path"], check=False).stdout.strip()
+        try:
+            dirty = git("status", "--porcelain", cwd=e["path"], check=False).stdout.strip()
+        except OSError:
+            dirty = "?"
         rows.append([rel, e["branch"] or "-", "%d" % (len(dirty.splitlines()) if dirty else 0),
                      "prunable" if e.get("prunable") else ""])
     _table(["路径", "分支", "未提交", "备注"], rows)
@@ -321,8 +354,11 @@ def cmd_audit(args) -> int:
         if not e["path"].name.startswith(("feature-", "hotfix-")):
             continue
         br = e["branch"] or ""
-        dirty = git("status", "--porcelain", cwd=e["path"], check=False).stdout.strip()
-        ahead = git("log", "--oneline", "origin/develop..HEAD", cwd=e["path"], check=False).stdout.strip()
+        try:
+            dirty = git("status", "--porcelain", cwd=e["path"], check=False).stdout.strip()
+            ahead = git("log", "--oneline", "origin/develop..HEAD", cwd=e["path"], check=False).stdout.strip()
+        except OSError:
+            dirty, ahead = "?", "?"
         merged = git("branch", "--merged", "develop", "--format=%(refname:short)",
                      cwd=root, check=False).stdout.split()
         cleanup_rows.append([
@@ -554,7 +590,11 @@ def cmd_migrate(args) -> int:
             if rel in ROOT_FILES:
                 continue
             p = root / rel
-            if p.exists():
+            if not p.exists():
+                continue
+            if p.is_dir() and not p.is_symlink():
+                shutil.rmtree(p, ignore_errors=True)   # 子模块（gitlink）
+            else:
                 p.unlink()
         _remove_empty_dirs(root)
 
@@ -646,18 +686,36 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def _init_console() -> None:
+    """让 Windows 控制台按 UTF-8 输出中文（cmd.exe 默认 cp936 会乱码）。"""
+    if os.name == "nt":
+        try:
+            import ctypes
+
+            kernel32 = ctypes.windll.kernel32
+            kernel32.SetConsoleOutputCP(65001)
+            kernel32.SetConsoleCP(65001)
+        except Exception:
+            pass
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
         except Exception:
             pass
+
+
+def main(argv: list[str] | None = None) -> int:
+    _init_console()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
         return args.func(args)
     except GitError as exc:
         print("错误: %s" % exc, file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print("系统错误: %s" % exc, file=sys.stderr)
+        print("提示: 请确认路径存在、未被占用（OneDrive/杀毒软件可能锁文件），且磁盘可写。", file=sys.stderr)
         return 1
 
 

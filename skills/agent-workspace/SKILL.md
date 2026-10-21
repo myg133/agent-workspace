@@ -101,6 +101,9 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 | `aw.py audit` | 只读巡检，输出四段报告 | 0 干净，1 有问题 |
 | `aw.py next-req` | 计算下一个可用 REQ 编号 | 0 |
 
+Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输出、`/c/...` 路径、跨盘符、长路径等细节见
+`references/global/platform-notes.md`。
+
 依赖：Python 3.8+，git 2.20+。脚本只调用 git 命令，不写 .git 内部结构。
 
 ## 提交格式
@@ -131,6 +134,7 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 | `references/global/gitignore.md` | 双层防御原理与验证 |
 | `references/global/state-machine.md` | 状态机、单一写入者、门禁 |
 | `references/global/concurrency.md` | 多 BA：session、懒注册、认领、冲突 |
+| `references/global/platform-notes.md` | Windows / macOS / Linux / WSL 差异 |
 | `references/roles/*.md` | 五个角色的完整工作流 |
 | `references/init/*.md` | 新建 / 迁移 |
 | `references/lifecycle/*.md` | 巡检 / 回收 / 发布 |

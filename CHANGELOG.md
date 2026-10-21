@@ -2,6 +2,33 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.2.1] - 2026-10-21
+
+### 修复（Windows）
+
+- **中文输出乱码**：启动时 `SetConsoleOutputCP(65001)` + stdout/stderr 统一 UTF-8。
+  此前只设了 stdout，`cmd.exe`（cp936）下错误信息是乱码。
+- **中文文件名迁移失败**：所有 git 调用加 `-c core.quotepath=false`。
+  之前 `git ls-tree` 返回 `"\344\270\255..."` 形式的转义路径，导致"删不掉旧文件、搬不走进度"，
+  迁移后根目录残留、`code/` 为空。
+- **路径解析回归**：MSYS 返回的 `/c/...` 被 `pathlib` 判为非绝对路径，拼成 `C:\c\...`。
+  现统一先做盘符映射再判断；顺手修了 `repo_root()` 对相对路径的回退。
+- 子模块（gitlink）在迁移时用 `rmtree` 删除，不再抛 `IsADirectoryError`。
+- `OSError` 统一转成可读提示（占用 / 不可写），不再甩 traceback。
+
+### 新增（Windows 支持）
+
+- `scripts/aw.cmd` 与 `scripts/aw.ps1` 启动器，自动在 `py` / `python` 之间选择。
+- `references/global/platform-notes.md`：Windows（路径、长路径、跨盘符、文件占用、换行）、macOS、WSL。
+- `verify` 在非 workspace 仓库给出明确提示（而不是刷一屏 FAIL）。
+
+### 已验证
+
+- cmd.exe（cp936）下 audit/verify 中文正常。
+- 含中文文件名的仓库迁移：跟踪文件进 `code/`，未跟踪文件保留，`verify` 全绿。
+- 路径含空格 + 中文 + 非 ASCII 项目名的 init / verify / audit。
+- 仓库在 D:、temp 在 C: 的跨盘符迁移。
+
 ## [1.2.0] - 2026-10-21
 
 一次性交付原计划的 1.0.1（热修）+ 1.1.0（补全）+ 1.2.0（重构）。
