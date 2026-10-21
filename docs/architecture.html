@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Workspace 系统架构设计</title>
+<style>
+:root{
+  --bg:#0a0e14; --panel:#111721; --panel2:#161d2a; --line:#243044;
+  --fg:#dce4ef; --fg2:#8b9bb4; --fg3:#5d6b82;
+  --blue:#4a9eff; --green:#3fd68a; --yellow:#f0b849; --red:#ff5c5c;
+  --purple:#a98bff; --cyan:#3ad4d4; --orange:#ff9a4d; --pink:#ff7ba8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  line-height:1.7;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1440px;margin:0 auto;padding:44px 28px 100px}
+
+/* ---------- Header ---------- */
+header{border-bottom:1px solid var(--line);padding-bottom:26px;margin-bottom:44px}
+h1{font-size:32px;font-weight:700;letter-spacing:-.6px;margin-bottom:10px;
+  background:linear-gradient(120deg,#4a9eff,#a98bff 50%,#3ad4d4);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.sub{color:var(--fg2);font-size:14px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:5px;
+  padding:3px 10px;font-size:12px;color:var(--fg2);font-family:ui-monospace,monospace}
+.chip b{color:var(--blue);font-weight:600}
+
+/* ---------- Sections ---------- */
+section{margin-bottom:68px}
+h2{font-size:22px;font-weight:650;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+h2::before{content:'';width:3px;height:21px;border-radius:2px;
+  background:linear-gradient(180deg,var(--blue),var(--purple))}
+.lead{color:var(--fg2);margin-bottom:22px;font-size:13.5px}
+h3{font-size:16px;font-weight:600;margin:30px 0 12px}
+h4{font-size:12.5px;font-weight:600;margin:18px 0 9px;color:var(--fg3);
+  text-transform:uppercase;letter-spacing:1px}
+
+/* ---------- Diagram canvas ---------- */
+.diagram{
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:28px;margin:16px 0;overflow-x:auto;
+}
+.diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}
+.diagram-caption{text-align:center;color:var(--fg3);font-size:12px;
+  margin-top:14px;font-family:ui-monospace,monospace}
+
+/* SVG text defaults */
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}
+svg .t-title{font-size:13px;font-weight:600;fill:#dce4ef}
+svg .t-sub{font-size:10.5px;fill:#8b9bb4}
+svg .t-mono{font-family:ui-monospace,monospace;font-size:10px;fill:#8b9bb4}
+svg .t-lane{font-size:10px;fill:#5d6b82;letter-spacing:1.2px;font-weight:600}
+svg .t-arrow{font-size:10px;fill:#5d6b82}
+svg .box{stroke-width:1.2;rx:7}
+svg .arrow{stroke:#3a4a63;stroke-width:1.4;fill:none}
+svg .arrow-hi{stroke:#4a9eff;stroke-width:1.8;fill:none}
+
+/* ---------- Cards / tables ---------- */
+.grid{display:grid;gap:13px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}
+.card{border:1px solid var(--line);border-radius:9px;padding:16px 18px;background:var(--panel)}
+.card .k{font-size:11px;color:var(--fg3);font-family:ui-monospace,monospace;
+  text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.card .v{font-size:17px;font-weight:650}
+.card .n{font-size:12px;color:var(--fg2);margin-top:5px;font-family:ui-monospace,monospace}
+
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:9px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;padding:10px 13px;background:var(--panel2);
+  border-bottom:2px solid var(--line);font-weight:600;font-size:11.5px;
+  color:var(--fg3);text-transform:uppercase;letter-spacing:.7px;white-space:nowrap}
+.tbl td{padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover{background:rgba(74,158,255,.045)}
+.tbl code{font-family:ui-monospace,monospace;font-size:12px;
+  background:var(--panel2);padding:2px 6px;border-radius:4px;color:var(--cyan)}
+
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;
+  font-weight:600;font-family:ui-monospace,monospace;white-space:nowrap}
+.ok{background:rgba(63,214,138,.13);color:var(--green)}
+.warn{background:rgba(240,184,73,.13);color:var(--yellow)}
+.bad{background:rgba(255,92,92,.13);color:var(--red)}
+.info{background:rgba(74,158,255,.13);color:var(--blue)}
+.purple{background:rgba(169,139,255,.13);color:var(--purple)}
+
+pre.tree{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  padding:18px 22px;overflow-x:auto;font-family:ui-monospace,"Cascadia Code",monospace;
+  font-size:12.5px;line-height:1.8;color:var(--fg2)}
+pre.tree .d{color:var(--blue)}
+pre.tree .b{color:var(--purple)}
+pre.tree .c{color:var(--fg3)}
+pre.tree .h{color:var(--green)}
+pre.tree .w{color:var(--yellow)}
+pre.tree .r{color:var(--red)}
+
+.note{border-left:3px solid var(--blue);background:rgba(74,158,255,.06);
+  border-radius:0 7px 7px 0;padding:12px 16px;margin:14px 0;font-size:13px}
+.note.warn{border-color:var(--yellow);background:rgba(240,184,73,.06)}
+.note.bad{border-color:var(--red);background:rgba(255,92,92,.06)}
+.note b{color:var(--fg)}
+.note code{font-family:ui-monospace,monospace;background:var(--panel2);
+  padding:1px 5px;border-radius:4px;font-size:12px;color:var(--cyan)}
+
+/* ---------- Flow ---------- */
+.flow{display:flex;align-items:stretch;overflow-x:auto;padding:16px 2px;gap:0}
+.step{flex:0 0 auto;min-width:138px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);padding:11px 13px}
+.step .n{font-family:ui-monospace,monospace;font-size:10px;color:var(--fg3);
+  letter-spacing:.8px;margin-bottom:4px}
+.step .t{font-size:13px;font-weight:600;margin-bottom:2px}
+.step .s{font-size:11px;color:var(--fg2);font-family:ui-monospace,monospace;line-height:1.5}
+.arrow{flex:0 0 30px;display:flex;align-items:center;justify-content:center;
+  color:var(--fg3);font-size:15px}
+
+.toc{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  padding:18px 22px;margin-bottom:44px}
+.toc h4{margin:0 0 10px}
+.toc ol{margin-left:19px;columns:2;column-gap:32px}
+.toc li{margin:4px 0;font-size:13px}
+.toc a{color:var(--fg2);text-decoration:none}
+.toc a:hover{color:var(--blue)}
+
+hr{border:none;border-top:1px solid var(--line);margin:52px 0}
+footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);
+  color:var(--fg3);font-size:12px;text-align:center}
+
+@media(max-width:820px){
+  .wrap{padding:26px 14px 64px}
+  h1{font-size:24px}
+  .toc ol{columns:1}
+  .diagram{padding:14px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Agent Workspace 系统架构设计</h1>
+  <p class="sub">多 Agent 协作 × Git Worktree × GitLab CI × ArgoCD × Kubernetes × Traefik</p>
+  <div class="meta">
+    <span class="chip">集群 <b>anspire-k8-admin@anspire-dify</b></span>
+    <span class="chip">K8s <b>v1.33.x</b></span>
+    <span class="chip">ArgoCD 应用 <b>13</b></span>
+    <span class="chip">观测 <b>2026-10-19</b></span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h4>目录</h4>
+  <ol>
+    <li><a href="#s1">系统全景架构</a></li>
+    <li><a href="#s2">分层技术架构</a></li>
+    <li><a href="#s3">Git 与 Worktree 模型</a></li>
+    <li><a href="#s4">Agent 协作架构</a></li>
+    <li><a href="#s5">CI 架构：GitLab</a></li>
+    <li><a href="#s6">CD 架构：ArgoCD</a></li>
+    <li><a href="#s7">K8s 集群拓扑</a></li>
+    <li><a href="#s8">Ingress 自动注册</a></li>
+    <li><a href="#s9">端到端交付流程</a></li>
+    <li><a href="#s10">规范汇总</a></li>
+    <li><a href="#s11">风险与演进</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ -->
+<!-- 1. 系统全景架构                                               -->
+<!-- ============================================================ -->
+<section id="s1">
+<h2>1. 系统全景架构</h2>
+<p class="lead">从开发者本地工作区到生产流量的完整链路，七层贯通。</p>
+
+<div class="diagram">
+<svg viewBox="0 0 1240 720" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ah" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#3a4a63"/>
+    </marker>
+    <marker id="ahb" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#4a9eff"/>
+    </marker>
+    <linearGradient id="gAgent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1d2a3f"/><stop offset="100%" stop-color="#161d2a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- L1 Agent 层 -->
+  <rect x="20" y="20" width="1200" height="118" rx="10" fill="#121a26" stroke="#243044"/>
+  <text x="38" y="42" class="t-lane">L1 · AGENT 协作层</text>
+
+  <rect x="38" y="56" width="148" height="66" rx="7" fill="url(#gAgent)" stroke="#f0b849" class="box"/>
+  <text x="112" y="80" text-anchor="middle" class="t-title">BA Agent</text>
+  <text x="112" y="96" text-anchor="middle" class="t-sub">需求 · 调度 · 状态</text>
+  <text x="112" y="111" text-anchor="middle" class="t-mono">BA/ · demand</text>
+
+  <rect x="198" y="56" width="148" height="66" rx="7" fill="url(#gAgent)" stroke="#3fd68a" class="box"/>
+  <text x="272" y="80" text-anchor="middle" class="t-title">Dev Agent</text>
+  <text x="272" y="96" text-anchor="middle" class="t-sub">编码 · 测试 · PR</text>
+  <text x="272" y="111" text-anchor="middle" class="t-mono">feature-REQ-xxx/</text>
+
+  <rect x="358" y="56" width="148" height="66" rx="7" fill="url(#gAgent)" stroke="#4a9eff" class="box"/>
+  <text x="432" y="80" text-anchor="middle" class="t-title">QA Agent</text>
+  <text x="432" y="96" text-anchor="middle" class="t-sub">审查 · 验证 · 报告</text>
+  <text x="432" y="111" text-anchor="middle" class="t-mono">read-only</text>
+
+  <rect x="518" y="56" width="148" height="66" rx="7" fill="url(#gAgent)" stroke="#ff5c5c" class="box"/>
+  <text x="592" y="80" text-anchor="middle" class="t-title">Deploy Agent</text>
+  <text x="592" y="96" text-anchor="middle" class="t-sub">Kustomize · 发布</text>
+  <text x="592" y="111" text-anchor="middle" class="t-mono">Deploy/ · deploy</text>
+
+  <rect x="678" y="56" width="148" height="66" rx="7" fill="url(#gAgent)" stroke="#a98bff" class="box"/>
+  <text x="752" y="80" text-anchor="middle" class="t-title">Explore Agent</text>
+  <text x="752" y="96" text-anchor="middle" class="t-sub">调研 · 摸底</text>
+  <text x="752" y="111" text-anchor="middle" class="t-mono">read-only</text>
+
+  <rect x="860" y="56" width="340" height="66" rx="7" fill="#0e1620" stroke="#3a4a63" stroke-dasharray="4 3"/>
+  <text x="1030" y="80" text-anchor="middle" class="t-title">Git Worktree 物理隔离</text>
+  <text x="1030" y="97" text-anchor="middle" class="t-sub">仓库根平铺 · 无嵌套 · 各自 .gitignore</text>
+  <text x="1030" y="113" text-anchor="middle" class="t-mono">code/  BA/  Deploy/  feature-REQ-xxx/  hotfix-xxx/</text>
+
+  <!-- 箭头 L1 → L2 -->
+  <line x1="620" y1="138" x2="620" y2="168" class="arrow" marker-end="url(#ah)"/>
+  <text x="632" y="158" class="t-arrow">commit / push</text>
+
+  <!-- L2 Git 层 -->
+  <rect x="20" y="170" width="1200" height="112" rx="10" fill="#121a26" stroke="#243044"/>
+  <text x="38" y="192" class="t-lane">L2 · GIT 分支模型（GitLab）</text>
+
+  <rect x="38" y="204" width="132" height="62" rx="7" fill="#161d2a" stroke="#4a9eff" class="box"/>
+  <text x="104" y="226" text-anchor="middle" class="t-title">workspace</text>
+  <text x="104" y="242" text-anchor="middle" class="t-sub">orphan · 根容器</text>
+  <text x="104" y="257" text-anchor="middle" class="t-mono">2 files only</text>
+
+  <rect x="182" y="204" width="132" height="62" rx="7" fill="#161d2a" stroke="#a98bff" class="box"/>
+  <text x="248" y="226" text-anchor="middle" class="t-title">demand</text>
+  <text x="248" y="242" text-anchor="middle" class="t-sub">orphan · 需求管理</text>
+  <text x="248" y="257" text-anchor="middle" class="t-mono">BA Agent</text>
+
+  <rect x="326" y="204" width="132" height="62" rx="7" fill="#161d2a" stroke="#ff5c5c" class="box"/>
+  <text x="392" y="226" text-anchor="middle" class="t-title">deploy</text>
+  <text x="392" y="242" text-anchor="middle" class="t-sub">orphan · 部署配置</text>
+  <text x="392" y="257" text-anchor="middle" class="t-mono">ArgoCD source</text>
+
+  <rect x="470" y="204" width="132" height="62" rx="7" fill="#161d2a" stroke="#3fd68a" class="box"/>
+  <text x="536" y="226" text-anchor="middle" class="t-title">develop</text>
+  <text x="536" y="242" text-anchor="middle" class="t-sub">主开发 · CI 源</text>
+  <text x="536" y="257" text-anchor="middle" class="t-mono">code/</text>
+
+  <rect x="614" y="204" width="132" height="62" rx="7" fill="#161d2a" stroke="#3ad4d4" class="box"/>
+  <text x="680" y="226" text-anchor="middle" class="t-title">feature/REQ-xxx</text>
+  <text x="680" y="242" text-anchor="middle" class="t-sub">单需求开发</text>
+  <text x="680" y="257" text-anchor="middle" class="t-mono">from develop</text>
+
+  <rect x="758" y="204" width="132" height="62" rx="7" fill="#161d2a" stroke="#f0b849" class="box"/>
+  <text x="824" y="226" text-anchor="middle" class="t-title">main</text>
+  <text x="824" y="242" text-anchor="middle" class="t-sub">orphan · 生产标记</text>
+  <text x="824" y="257" text-anchor="middle" class="t-mono">release</text>
+
+  <rect x="902" y="204" width="132" height="62" rx="7" fill="#161d2a" stroke="#ff9a4d" class="box"/>
+  <text x="968" y="226" text-anchor="middle" class="t-title">hotfix/xxx</text>
+  <text x="968" y="242" text-anchor="middle" class="t-sub">紧急修复</text>
+  <text x="968" y="257" text-anchor="middle" class="t-mono">from main</text>
+
+  <!-- 箭头 L2 → L3 -->
+  <line x1="330" y1="282" x2="330" y2="312" class="arrow" marker-end="url(#ah)"/>
+  <text x="342" y="302" class="t-arrow">trigger</text>
+  <line x1="830" y1="282" x2="830" y2="312" class="arrow" marker-end="url(#ah)"/>
+  <text x="842" y="302" class="t-arrow">watch deploy</text>
+
+  <!-- L3 CI + CD 并行 -->
+  <rect x="20" y="314" width="600" height="150" rx="10" fill="#121a26" stroke="#243044"/>
+  <text x="38" y="336" class="t-lane">L3 · CI — GitLab Runner</text>
+  <rect x="38" y="348" width="118" height="48" rx="6" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="97" y="368" text-anchor="middle" class="t-title">build</text>
+  <text x="97" y="384" text-anchor="middle" class="t-mono">compile</text>
+  <rect x="168" y="348" width="118" height="48" rx="6" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="227" y="368" text-anchor="middle" class="t-title">test</text>
+  <text x="227" y="384" text-anchor="middle" class="t-mono">unit + integration</text>
+  <rect x="298" y="348" width="118" height="48" rx="6" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="357" y="368" text-anchor="middle" class="t-title">docker build</text>
+  <text x="357" y="384" text-anchor="middle" class="t-mono">DinD</text>
+  <rect x="428" y="348" width="172" height="48" rx="6" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="514" y="368" text-anchor="middle" class="t-title">push to ACR</text>
+  <text x="514" y="384" text-anchor="middle" class="t-mono">uat-YYYYMMDD-N</text>
+
+  <line x1="156" y1="372" x2="166" y2="372" class="arrow" marker-end="url(#ah)"/>
+  <line x1="286" y1="372" x2="296" y2="372" class="arrow" marker-end="url(#ah)"/>
+  <line x1="416" y1="372" x2="426" y2="372" class="arrow" marker-end="url(#ah)"/>
+
+  <rect x="38" y="408" width="562" height="42" rx="6" fill="#0e1620" stroke="#3a4a63" stroke-dasharray="4 3"/>
+  <text x="319" y="426" text-anchor="middle" class="t-sub">Kubernetes Executor · concurrent=4 · 1C/4Gi→4C/8Gi · MinIO S3 cache</text>
+  <text x="319" y="442" text-anchor="middle" class="t-mono">privileged + docker.sock · tags: k8s,qa,shared</text>
+
+  <rect x="640" y="314" width="580" height="150" rx="10" fill="#121a26" stroke="#243044"/>
+  <text x="658" y="336" class="t-lane">L4 · CD — ArgoCD</text>
+  <rect x="658" y="348" width="150" height="48" rx="6" fill="#161d2a" stroke="#a98bff"/>
+  <text x="733" y="368" text-anchor="middle" class="t-title">Bootstrap App</text>
+  <text x="733" y="384" text-anchor="middle" class="t-mono">argocd/ · App-of-Apps</text>
+  <rect x="828" y="348" width="170" height="48" rx="6" fill="#161d2a" stroke="#a98bff"/>
+  <text x="913" y="368" text-anchor="middle" class="t-title">业务 Application</text>
+  <text x="913" y="384" text-anchor="middle" class="t-mono">8 个 · overlays/uat</text>
+  <rect x="1018" y="348" width="182" height="48" rx="6" fill="#161d2a" stroke="#a98bff"/>
+  <text x="1109" y="368" text-anchor="middle" class="t-title">Kustomize 渲染</text>
+  <text x="1109" y="384" text-anchor="middle" class="t-mono">selfHeal · retry ×5</text>
+
+  <line x1="810" y1="372" x2="826" y2="372" class="arrow" marker-end="url(#ah)"/>
+  <line x1="1000" y1="372" x2="1016" y2="372" class="arrow" marker-end="url(#ah)"/>
+
+  <rect x="658" y="408" width="542" height="42" rx="6" fill="#0e1620" stroke="#3a4a63" stroke-dasharray="4 3"/>
+  <text x="929" y="426" text-anchor="middle" class="t-sub">prune: false · selfHeal: true · ApplyOutOfSyncOnly · Replace</text>
+  <text x="929" y="442" text-anchor="middle" class="t-mono">ApplicationSet controller · dex · notifications</text>
+
+  <!-- L3 → L4 箭头 -->
+  <line x1="330" y1="464" x2="330" y2="492" class="arrow" marker-end="url(#ah)"/>
+  <text x="342" y="483" class="t-arrow">image tag</text>
+  <line x1="830" y1="464" x2="830" y2="492" class="arrow" marker-end="url(#ah)"/>
+  <text x="842" y="483" class="t-arrow">apply</text>
+
+  <!-- L5 K8s -->
+  <rect x="20" y="494" width="1200" height="112" rx="10" fill="#121a26" stroke="#243044"/>
+  <text x="38" y="516" class="t-lane">L5 · KUBERNETES 运行时（v1.33.x）</text>
+
+  <rect x="38" y="528" width="200" height="62" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="138" y="550" text-anchor="middle" class="t-title">anspire-open-man</text>
+  <text x="138" y="566" text-anchor="middle" class="t-mono">aisearch-api · open-admin</text>
+  <text x="138" y="581" text-anchor="middle" class="t-mono">open-operate</text>
+
+  <rect x="250" y="528" width="200" height="62" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="350" y="550" text-anchor="middle" class="t-title">anspire-fde-uat</text>
+  <text x="350" y="566" text-anchor="middle" class="t-mono">fde-backend</text>
+  <text x="350" y="581" text-anchor="middle" class="t-mono">fde-frontend</text>
+
+  <rect x="462" y="528" width="200" height="62" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="562" y="550" text-anchor="middle" class="t-title">anspire-gateway-uat</text>
+  <text x="562" y="566" text-anchor="middle" class="t-mono">llm-gateway</text>
+  <text x="562" y="581" text-anchor="middle" class="t-mono">llm-gateway-worker</text>
+
+  <rect x="674" y="528" width="200" height="62" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="774" y="550" text-anchor="middle" class="t-title">anspire-aisearch</text>
+  <text x="774" y="566" text-anchor="middle" class="t-mono">aisearch-global-api</text>
+
+  <rect x="886" y="528" width="200" height="62" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="986" y="550" text-anchor="middle" class="t-title">wb365-bridge-uat</text>
+  <text x="986" y="566" text-anchor="middle" class="t-mono">anspire-wb365-bridge</text>
+
+  <!-- L5 → L6 -->
+  <line x1="620" y1="606" x2="620" y2="634" class="arrow" marker-end="url(#ah)"/>
+  <text x="632" y="625" class="t-arrow">Service</text>
+
+  <!-- L6 Ingress -->
+  <rect x="20" y="636" width="1200" height="66" rx="10" fill="#121a26" stroke="#243044"/>
+  <text x="38" y="658" class="t-lane">L6 · INGRESS — Traefik v3.2 (DaemonSet)</text>
+  <rect x="38" y="666" width="256" height="28" rx="5" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="166" y="685" text-anchor="middle" class="t-mono">NodePort 80:80 / 443:443</text>
+  <rect x="306" y="666" width="256" height="28" rx="5" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="434" y="685" text-anchor="middle" class="t-mono">IngressClass: traefik</text>
+  <rect x="574" y="666" width="300" height="28" rx="5" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="724" y="685" text-anchor="middle" class="t-mono">TLS: wildcard-local-anspire-cn</text>
+  <rect x="886" y="666" width="316" height="28" rx="5" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="1044" y="685" text-anchor="middle" class="t-mono">auto-discover · no restart</text>
+
+  <!-- 右侧外部用户 -->
+  <rect x="1060" y="20" width="160" height="0" fill="none"/>
+</svg>
+<p class="diagram-caption">图 1 · 系统全景：Agent → Git → CI → 制品 → CD → K8s → Ingress</p>
+</div>
+
+<div class="note">
+<b>ArgoCD 托管范围：</b>13 个 Application，其中 <b>5 个 bootstrap</b>（位于 <code>argocd</code> 命名空间）
++ <b>8 个业务应用</b>。本文档仅覆盖该范围内的交付链路。
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 2. 分层技术架构                                               -->
+<!-- ============================================================ -->
+<section id="s2">
+<h2>2. 分层技术架构</h2>
+<p class="lead">七层职责边界与技术选型。</p>
+
+<div class="diagram">
+<svg viewBox="0 0 1100 560" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a2" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#3a4a63"/>
+    </marker>
+  </defs>
+
+  <!-- 左：层栈 -->
+  <g>
+    <rect x="30" y="30" width="520" height="66" rx="8" fill="#1a2433" stroke="#ff7ba8"/>
+    <text x="48" y="54" class="t-title">L7 · 用户 / 外部流量</text>
+    <text x="48" y="72" class="t-sub">*.local.anspire.cn → Traefik NodePort 80/443</text>
+    <text x="48" y="88" class="t-mono">HTTPS 强制重定向 · 通配证书</text>
+
+    <rect x="30" y="106" width="520" height="66" rx="8" fill="#1a2433" stroke="#3fd68a"/>
+    <text x="48" y="130" class="t-title">L6 · K8s 运行时</text>
+    <text x="48" y="148" class="t-sub">业务命名空间 · Deployment / StatefulSet</text>
+    <text x="48" y="164" class="t-mono">anspire-open-man · fde-uat · gateway-uat · aisearch · wb365</text>
+
+    <rect x="30" y="182" width="520" height="66" rx="8" fill="#1a2433" stroke="#a98bff"/>
+    <text x="48" y="206" class="t-title">L5 · CD — ArgoCD</text>
+    <text x="48" y="224" class="t-sub">App-of-Apps · Kustomize 渲染 · 自动同步</text>
+    <text x="48" y="240" class="t-mono">selfHeal · retry ×5 · prune=false</text>
+
+    <rect x="30" y="258" width="520" height="66" rx="8" fill="#1a2433" stroke="#ff9a4d"/>
+    <text x="48" y="282" class="t-title">L4 · 制品 — ACR</text>
+    <text x="48" y="300" class="t-sub">aigccontainer.azurecr.cn/&lt;service&gt;</text>
+    <text x="48" y="316" class="t-mono">tag: uat-YYYYMMDD-N</text>
+
+    <rect x="30" y="334" width="520" height="66" rx="8" fill="#1a2433" stroke="#3ad4d4"/>
+    <text x="48" y="358" class="t-title">L3 · CI — GitLab Runner</text>
+    <text x="48" y="376" class="t-sub">build → test → docker build → push</text>
+    <text x="48" y="392" class="t-mono">Kubernetes executor · concurrent 4</text>
+
+    <rect x="30" y="410" width="520" height="66" rx="8" fill="#1a2433" stroke="#4a9eff"/>
+    <text x="48" y="434" class="t-title">L2 · Git — GitLab 分支模型</text>
+    <text x="48" y="452" class="t-sub">workspace / demand / develop / deploy / feature / hotfix</text>
+    <text x="48" y="468" class="t-mono">3 个 orphan 分支 · 各自 .gitignore</text>
+
+    <rect x="30" y="486" width="520" height="56" rx="8" fill="#1a2433" stroke="#f0b849"/>
+    <text x="48" y="510" class="t-title">L1 · Agent 协作层</text>
+    <text x="48" y="528" class="t-sub">BA · Dev · QA · Deploy · Explore</text>
+  </g>
+
+  <!-- 箭头 -->
+  <line x1="295" y1="96" x2="295" y2="104" class="arrow" marker-end="url(#a2)"/>
+  <line x1="295" y1="172" x2="295" y2="180" class="arrow" marker-end="url(#a2)"/>
+  <line x1="295" y1="248" x2="295" y2="256" class="arrow" marker-end="url(#a2)"/>
+  <line x1="295" y1="324" x2="295" y2="332" class="arrow" marker-end="url(#a2)"/>
+  <line x1="295" y1="400" x2="295" y2="408" class="arrow" marker-end="url(#a2)"/>
+  <line x1="295" y1="476" x2="295" y2="484" class="arrow" marker-end="url(#a2)"/>
+
+  <!-- 右：技术栈卡片 -->
+  <rect x="590" y="30" width="480" height="512" rx="10" fill="#111721" stroke="#243044"/>
+  <text x="610" y="54" class="t-lane">技术栈选型</text>
+
+  <text x="610" y="86" class="t-title">基础设施</text>
+  <text x="610" y="106" class="t-mono">Kubernetes v1.33.x</text>
+  <text x="610" y="122" class="t-mono">Flannel CNI · containerd / docker runtime</text>
+
+  <line x1="610" y1="154" x2="1050" y2="154" stroke="#243044"/>
+
+  <text x="610" y="178" class="t-title">CI / CD</text>
+  <text x="610" y="198" class="t-mono">GitLab CE · gitlab.anchnet.com</text>
+  <text x="610" y="214" class="t-mono">GitLab Runner (K8s executor)</text>
+  <text x="610" y="230" class="t-mono">ArgoCD (App-of-Apps) · Kustomize</text>
+
+  <line x1="610" y1="246" x2="1050" y2="246" stroke="#243044"/>
+
+  <text x="610" y="270" class="t-title">制品与网关</text>
+  <text x="610" y="290" class="t-mono">ACR: aigccontainer.azurecr.cn</text>
+  <text x="610" y="306" class="t-mono">Traefik v3.2 (DaemonSet, IngressClass)</text>
+
+  <line x1="610" y1="322" x2="1050" y2="322" stroke="#243044"/>
+
+  <text x="610" y="346" class="t-title">依赖服务</text>
+  <text x="610" y="366" class="t-mono">ACR 镜像仓库 · MinIO S3（CI 缓存）</text>
+  <text x="610" y="382" class="t-mono">Traefik v3.2（Ingress）</text>
+
+  <line x1="610" y1="414" x2="1050" y2="414" stroke="#243044"/>
+
+  <text x="610" y="438" class="t-title">Agent 规范层</text>
+  <text x="610" y="458" class="t-mono">Agent Plugins v1.0.0 (plugin.json)</text>
+  <text x="610" y="474" class="t-mono">Agent Skills spec (SKILL.md)</text>
+  <text x="610" y="490" class="t-mono">Client extension: com.anspire-open.agents/</text>
+  <text x="610" y="506" class="t-mono">Git Worktree isolation</text>
+</svg>
+<p class="diagram-caption">图 2 · 分层技术架构与选型</p>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 3. Git 与 Worktree                                            -->
+<!-- ============================================================ -->
+<section id="s3">
+<h2>3. Git 与 Worktree 模型</h2>
+<p class="lead">所有 worktree 在仓库根物理平铺，无中间目录层、无嵌套。</p>
+
+<div class="diagram">
+<svg viewBox="0 0 1160 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a3" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#3a4a63"/>
+    </marker>
+  </defs>
+
+  <!-- 仓库根 -->
+  <rect x="30" y="30" width="330" height="340" rx="9" fill="#111721" stroke="#4a9eff"/>
+  <text x="195" y="54" text-anchor="middle" class="t-title">仓库根 &lt;repo-root&gt;/</text>
+  <text x="195" y="72" text-anchor="middle" class="t-mono">workspace 分支 worktree</text>
+
+  <rect x="50" y="88" width="290" height="34" rx="5" fill="#161d2a" stroke="#243044"/>
+  <text x="195" y="110" text-anchor="middle" class="t-mono">README.md · .gitignore</text>
+
+  <rect x="50" y="130" width="290" height="30" rx="5" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="195" y="150" text-anchor="middle" class="t-mono">code/  ← develop</text>
+
+  <rect x="50" y="168" width="290" height="30" rx="5" fill="#161d2a" stroke="#a98bff"/>
+  <text x="195" y="188" text-anchor="middle" class="t-mono">BA/  ← demand</text>
+
+  <rect x="50" y="206" width="290" height="30" rx="5" fill="#161d2a" stroke="#ff5c5c"/>
+  <text x="195" y="226" text-anchor="middle" class="t-mono">Deploy/  ← deploy</text>
+
+  <rect x="50" y="244" width="290" height="30" rx="5" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="195" y="264" text-anchor="middle" class="t-mono">feature-REQ-001/  ← feature/REQ-001</text>
+
+  <rect x="50" y="282" width="290" height="30" rx="5" fill="#161d2a" stroke="#f0b849"/>
+  <text x="195" y="302" text-anchor="middle" class="t-mono">hotfix-xxx/  ← hotfix/xxx</text>
+
+  <rect x="50" y="320" width="290" height="32" rx="5" fill="#0e1620" stroke="#3a4a63" stroke-dasharray="4 3"/>
+  <text x="195" y="341" text-anchor="middle" class="t-mono">.local/  未定稿中间文件（不跟踪）</text>
+
+  <!-- 箭头 -->
+  <line x1="366" y1="200" x2="410" y2="200" class="arrow" marker-end="url(#a3)"/>
+  <text x="388" y="192" text-anchor="middle" class="t-arrow">git</text>
+
+  <!-- 分支关系 -->
+  <rect x="420" y="30" width="710" height="340" rx="9" fill="#111721" stroke="#243044"/>
+  <text x="440" y="54" class="t-lane">分支拓扑</text>
+
+  <!-- orphan 组 -->
+  <rect x="440" y="70" width="670" height="96" rx="7" fill="#0e1620" stroke="#3a4a63" stroke-dasharray="4 3"/>
+  <text x="454" y="90" class="t-mono">orphan 组（互无父节点）</text>
+
+  <rect x="454" y="102" width="140" height="48" rx="6" fill="#161d2a" stroke="#4a9eff"/>
+  <text x="524" y="122" text-anchor="middle" class="t-title">workspace</text>
+  <text x="524" y="140" text-anchor="middle" class="t-mono">2 files</text>
+
+  <rect x="608" y="102" width="140" height="48" rx="6" fill="#161d2a" stroke="#a98bff"/>
+  <text x="678" y="122" text-anchor="middle" class="t-title">demand</text>
+  <text x="678" y="140" text-anchor="middle" class="t-mono">BA 需求管理</text>
+
+  <rect x="762" y="102" width="140" height="48" rx="6" fill="#161d2a" stroke="#ff5c5c"/>
+  <text x="832" y="122" text-anchor="middle" class="t-title">deploy</text>
+  <text x="832" y="140" text-anchor="middle" class="t-mono">部署配置</text>
+
+  <rect x="916" y="102" width="180" height="48" rx="6" fill="#161d2a" stroke="#f0b849"/>
+  <text x="1006" y="122" text-anchor="middle" class="t-title">main</text>
+  <text x="1006" y="140" text-anchor="middle" class="t-mono">生产发布标记</text>
+
+  <!-- 主干链 -->
+  <rect x="440" y="186" width="180" height="48" rx="6" fill="#161d2a" stroke="#f0b849"/>
+  <text x="530" y="206" text-anchor="middle" class="t-title">main</text>
+  <text x="530" y="224" text-anchor="middle" class="t-mono">生产</text>
+
+  <line x1="622" y1="210" x2="654" y2="210" class="arrow" marker-end="url(#a3)"/>
+
+  <rect x="656" y="186" width="180" height="48" rx="6" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="746" y="206" text-anchor="middle" class="t-title">develop</text>
+  <text x="746" y="224" text-anchor="middle" class="t-mono">主开发 · CI 源</text>
+
+  <line x1="838" y1="210" x2="870" y2="210" class="arrow" marker-end="url(#a3)"/>
+
+  <rect x="872" y="186" width="224" height="48" rx="6" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="984" y="206" text-anchor="middle" class="t-title">feature/REQ-xxx</text>
+  <text x="984" y="224" text-anchor="middle" class="t-mono">单需求开发 → PR</text>
+
+  <!-- 回合并 -->
+  <path d="M 984 236 L 984 258 L 746 258 L 746 238" class="arrow" marker-end="url(#a3)"/>
+  <text x="865" y="275" text-anchor="middle" class="t-arrow">PR merge</text>
+
+  <!-- hotfix -->
+  <rect x="440" y="288" width="180" height="48" rx="6" fill="#161d2a" stroke="#ff9a4d"/>
+  <text x="530" y="308" text-anchor="middle" class="t-title">hotfix/xxx</text>
+  <text x="530" y="326" text-anchor="middle" class="t-mono">from main</text>
+
+  <path d="M 622 312 L 700 312 L 700 240" class="arrow" marker-end="url(#a3)"/>
+  <text x="712" y="300" class="t-arrow">→ develop</text>
+</svg>
+<p class="diagram-caption">图 3 · Worktree 平铺布局与分支拓扑</p>
+</div>
+
+<h3>.gitignore 双层防御</h3>
+<pre class="tree">*              <span class="c"># 全忽略</span>
+!*/            <span class="c"># 保留目录遍历</span>
+!.gitignore
+!README.md
+<span class="h">/*/</span>            <span class="c"># 屏蔽所有第一层子目录（worktree 都在第一层）</span></pre>
+
+<div class="note">
+即使误操作 <code>git add .</code>，workspace 分支也只会跟踪 2 个文件，worktree 完全不被污染。
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 4. Agent 协作架构                                             -->
+<!-- ============================================================ -->
+<section id="s4">
+<h2>4. Agent 协作架构</h2>
+<p class="lead">五角色分工与需求状态流转。</p>
+
+<div class="diagram">
+<svg viewBox="0 0 1160 470" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a4" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#3a4a63"/>
+    </marker>
+    <marker id="a4g" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#3fd68a"/>
+    </marker>
+    <marker id="a4r" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#ff5c5c"/>
+    </marker>
+  </defs>
+
+  <!-- 状态机 -->
+  <text x="30" y="34" class="t-lane">需求状态机</text>
+
+  <!-- 主链 -->
+  <rect x="30" y="52" width="108" height="42" rx="21" fill="#161d2a" stroke="#5d6b82"/>
+  <text x="84" y="78" text-anchor="middle" class="t-title">草稿</text>
+
+  <rect x="174" y="52" width="108" height="42" rx="21" fill="#161d2a" stroke="#5d6b82"/>
+  <text x="228" y="78" text-anchor="middle" class="t-title">已评审</text>
+
+  <rect x="318" y="52" width="108" height="42" rx="21" fill="#161d2a" stroke="#4a9eff"/>
+  <text x="372" y="78" text-anchor="middle" class="t-title">已就绪</text>
+
+  <rect x="462" y="52" width="108" height="42" rx="21" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="516" y="78" text-anchor="middle" class="t-title">进行中</text>
+
+  <rect x="606" y="52" width="108" height="42" rx="21" fill="#161d2a" stroke="#f0b849"/>
+  <text x="660" y="78" text-anchor="middle" class="t-title">待验证</text>
+
+  <rect x="750" y="52" width="108" height="42" rx="21" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="804" y="78" text-anchor="middle" class="t-title">已验证</text>
+
+  <rect x="894" y="52" width="108" height="42" rx="21" fill="#161d2a" stroke="#4a9eff"/>
+  <text x="948" y="78" text-anchor="middle" class="t-title">已完成</text>
+
+  <!-- 主链箭头 -->
+  <line x1="140" y1="73" x2="172" y2="73" class="arrow" marker-end="url(#a4)"/>
+  <line x1="284" y1="73" x2="316" y2="73" class="arrow" marker-end="url(#a4)"/>
+  <line x1="428" y1="73" x2="460" y2="73" class="arrow" marker-end="url(#a4)"/>
+  <line x1="572" y1="73" x2="604" y2="73" class="arrow" marker-end="url(#a4)"/>
+  <line x1="716" y1="73" x2="748" y2="73" class="arrow" marker-end="url(#a4)"/>
+  <line x1="860" y1="73" x2="892" y2="73" class="arrow" marker-end="url(#a4)"/>
+
+  <!-- 异常态节点 -->
+  <rect x="462" y="118" width="108" height="34" rx="17" fill="#161d2a" stroke="#ff5c5c"/>
+  <text x="516" y="140" text-anchor="middle" class="t-title" fill="#ff5c5c">已取消</text>
+
+  <rect x="606" y="118" width="108" height="34" rx="17" fill="#161d2a" stroke="#ff5c5c"/>
+  <text x="660" y="140" text-anchor="middle" class="t-title" fill="#ff5c5c">已退回</text>
+
+  <!-- 进行中 → 已取消 -->
+  <line x1="516" y1="94" x2="516" y2="116" class="arrow" stroke="#ff5c5c" marker-end="url(#a4r)"/>
+
+  <!-- 待验证 → 已退回 -->
+  <line x1="660" y1="94" x2="660" y2="116" class="arrow" stroke="#ff5c5c" marker-end="url(#a4r)"/>
+
+  <!-- 已退回 → 进行中（从底部绕行，不穿过其他节点） -->
+  <path d="M 660 152 L 660 180 L 440 180 L 440 73 L 460 73"
+        class="arrow" stroke="#ff5c5c" marker-end="url(#a4r)"/>
+  <text x="588" y="196" text-anchor="middle" class="t-arrow" fill="#ff5c5c">退回后重新开发</text>
+
+  <!-- 角色职责 -->
+  <line x1="30" y1="206" x2="1130" y2="206" stroke="#243044"/>
+
+  <text x="30" y="234" class="t-lane">角色职责与工作区</text>
+
+  <rect x="30" y="250" width="210" height="196" rx="8" fill="#161d2a" stroke="#f0b849"/>
+  <text x="135" y="276" text-anchor="middle" class="t-title">BA Agent</text>
+  <text x="135" y="296" text-anchor="middle" class="t-sub">工作区 BA/ · demand 分支</text>
+  <text x="46" y="322" class="t-mono">· 需求文档 / 验收标准</text>
+  <text x="46" y="340" class="t-mono">· 状态机唯一更新者</text>
+  <text x="46" y="358" class="t-mono">· REQ 编号认领</text>
+  <text x="46" y="376" class="t-mono">· Worktree 生命周期</text>
+  <text x="46" y="394" class="t-mono">· 派单 QA / Dev</text>
+  <text x="46" y="412" class="t-mono">· 巡检兜底</text>
+  <text x="46" y="434" class="t-mono" fill="#f0b849">· 多实例：session + 懒注册</text>
+
+  <rect x="254" y="250" width="210" height="196" rx="8" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="359" y="276" text-anchor="middle" class="t-title">Dev Agent</text>
+  <text x="359" y="296" text-anchor="middle" class="t-sub">feature-REQ-xxx/</text>
+  <text x="270" y="322" class="t-mono">· 读取需求文档</text>
+  <text x="270" y="340" class="t-mono">· TDD 编码</text>
+  <text x="270" y="358" class="t-mono">· 单元 / 集成测试</text>
+  <text x="270" y="376" class="t-mono">· 追溯性矩阵</text>
+  <text x="270" y="394" class="t-mono">· 自验证报告</text>
+  <text x="270" y="412" class="t-mono">· 创建 PR</text>
+  <text x="270" y="434" class="t-mono" fill="#3fd68a">· 合并后自清理 worktree</text>
+
+  <rect x="478" y="250" width="210" height="196" rx="8" fill="#161d2a" stroke="#4a9eff"/>
+  <text x="583" y="276" text-anchor="middle" class="t-title">QA Agent</text>
+  <text x="583" y="296" text-anchor="middle" class="t-sub">feature worktree（只读）</text>
+  <text x="494" y="322" class="t-mono">· 从 AC 生成测试用例</text>
+  <text x="494" y="340" class="t-mono">· 需求追溯性审查</text>
+  <text x="494" y="358" class="t-mono">· 代码审查清单</text>
+  <text x="494" y="370" class="t-mono">· 运行测试</text>
+  <text x="494" y="388" class="t-mono">· Post-merge e2e</text>
+  <text x="494" y="406" class="t-mono">· 生成验证报告</text>
+  <text x="494" y="428" class="t-mono" fill="#4a9eff">· 只报告 BA，不改状态</text>
+
+  <rect x="702" y="250" width="210" height="196" rx="8" fill="#161d2a" stroke="#ff5c5c"/>
+  <text x="807" y="276" text-anchor="middle" class="t-title">Deploy Agent</text>
+  <text x="807" y="296" text-anchor="middle" class="t-sub">Deploy/ · deploy 分支</text>
+  <text x="718" y="322" class="t-mono">· 维护 Kustomize overlay</text>
+  <text x="718" y="340" class="t-mono">· 更新镜像 tag</text>
+  <text x="718" y="358" class="t-mono">· 管理 Ingress</text>
+  <text x="718" y="376" class="t-mono">· 环境配置</text>
+  <text x="718" y="394" class="t-mono">· healthcheck</text>
+  <text x="718" y="412" class="t-mono">· 回滚（git revert）</text>
+  <text x="718" y="434" class="t-mono" fill="#ff5c5c">· 只做配置，不做构建</text>
+
+  <rect x="926" y="250" width="204" height="196" rx="8" fill="#161d2a" stroke="#a98bff"/>
+  <text x="1028" y="276" text-anchor="middle" class="t-title">Explore Agent</text>
+  <text x="1028" y="296" text-anchor="middle" class="t-sub">任意目录（只读）</text>
+  <text x="942" y="322" class="t-mono">· 代码库调研</text>
+  <text x="942" y="340" class="t-mono">· 调用链追踪</text>
+  <text x="942" y="358" class="t-mono">· 风险识别</text>
+  <text x="942" y="376" class="t-mono">· 改动成本估算</text>
+  <text x="942" y="394" class="t-mono">· path:line 级证据</text>
+  <text x="942" y="412" class="t-mono">· BA 派单前摸底</text>
+  <text x="942" y="434" class="t-mono" fill="#a98bff">· 不写文件</text>
+</svg>
+<p class="diagram-caption">图 4 · 需求状态机与五角色职责边界</p>
+</div>
+
+<h3>多 BA 并发协作（懒注册）</h3>
+<div class="diagram">
+<svg viewBox="0 0 1120 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a5" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#3a4a63"/>
+    </marker>
+    <marker id="a5b" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#4a9eff"/>
+    </marker>
+  </defs>
+
+  <rect x="30" y="26" width="200" height="52" rx="7" fill="#161d2a" stroke="#f0b849"/>
+  <text x="130" y="48" text-anchor="middle" class="t-title">BA Agent A</text>
+  <text x="130" y="66" text-anchor="middle" class="t-mono">session: ba-hostA-...</text>
+
+  <rect x="30" y="96" width="200" height="52" rx="7" fill="#161d2a" stroke="#f0b849"/>
+  <text x="130" y="118" text-anchor="middle" class="t-title">BA Agent B</text>
+  <text x="130" y="136" text-anchor="middle" class="t-mono">session: ba-hostB-...</text>
+
+  <rect x="30" y="166" width="200" height="52" rx="7" fill="#161d2a" stroke="#f0b849"/>
+  <text x="130" y="188" text-anchor="middle" class="t-title">BA Agent C</text>
+  <text x="130" y="206" text-anchor="middle" class="t-mono">session: ba-hostC-...</text>
+
+  <!-- 中央 registry -->
+  <rect x="380" y="60" width="300" height="150" rx="9" fill="#111721" stroke="#4a9eff"/>
+  <text x="530" y="84" text-anchor="middle" class="t-title">demand 分支（Git 协调）</text>
+
+  <rect x="400" y="96" width="260" height="38" rx="5" fill="#161d2a" stroke="#243044"/>
+  <text x="530" y="112" text-anchor="middle" class="t-mono">agent-registry.md</text>
+  <text x="530" y="126" text-anchor="middle" class="t-mono">online / stale / offline</text>
+
+  <rect x="400" y="142" width="260" height="38" rx="5" fill="#161d2a" stroke="#243044"/>
+  <text x="530" y="158" text-anchor="middle" class="t-mono">req-registry.md</text>
+  <text x="530" y="172" text-anchor="middle" class="t-mono">REQ 编号认领表</text>
+
+  <line x1="232" y1="52" x2="376" y2="100" class="arrow" marker-end="url(#a5)"/>
+  <line x1="232" y1="122" x2="376" y2="126" class="arrow" marker-end="url(#a5)"/>
+  <line x1="232" y1="192" x2="376" y2="160" class="arrow" marker-end="url(#a5)"/>
+
+  <!-- 右侧流程 -->
+  <rect x="760" y="60" width="330" height="200" rx="9" fill="#111721" stroke="#243044"/>
+  <text x="780" y="84" class="t-lane">懒注册流程</text>
+  <text x="780" y="108" class="t-mono">1. git pull origin demand</text>
+  <text x="780" y="130" class="t-mono">2. 读 .ba/session.md</text>
+  <text x="780" y="152" class="t-mono">3. 检查 registry 是否有本 session</text>
+  <text x="780" y="174" class="t-mono" fill="#3fd68a">   ├ 无 → 自动注册 + 心跳</text>
+  <text x="780" y="196" class="t-mono" fill="#3fd68a">   └ 有 → 更新时间戳</text>
+  <text x="780" y="218" class="t-mono">4. 执行实际修改</text>
+  <text x="780" y="240" class="t-mono">5. commit + push（带 session）</text>
+
+  <line x1="682" y1="135" x2="756" y2="135" class="arrow-hi" marker-end="url(#a5b)"/>
+
+  <text x="530" y="240" text-anchor="middle" class="t-sub">注册绑定在首次写操作中，无法跳过</text>
+</svg>
+<p class="diagram-caption">图 5 · 多 BA 实例通过 Git 提交协调（懒注册 + REQ 认领）</p>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 5. CI                                                         -->
+<!-- ============================================================ -->
+<section id="s5">
+<h2>5. CI 架构：GitLab</h2>
+<p class="lead">Runner 以 Kubernetes Executor 部署，每个 Job 起一个 Pod。</p>
+
+<div class="diagram">
+<svg viewBox="0 0 1160 340" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a6" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#3a4a63"/>
+    </marker>
+  </defs>
+
+  <!-- GitLab -->
+  <rect x="30" y="40" width="180" height="70" rx="8" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="120" y="66" text-anchor="middle" class="t-title">GitLab</text>
+  <text x="120" y="84" text-anchor="middle" class="t-mono">gitlab.anchnet.com</text>
+  <text x="120" y="100" text-anchor="middle" class="t-mono">MR / Pipeline</text>
+
+  <line x1="212" y1="75" x2="252" y2="75" class="arrow" marker-end="url(#a6)"/>
+  <text x="232" y="66" text-anchor="middle" class="t-arrow">job</text>
+
+  <!-- Runner -->
+  <rect x="254" y="40" width="190" height="70" rx="8" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="349" y="66" text-anchor="middle" class="t-title">GitLab Runner</text>
+  <text x="349" y="84" text-anchor="middle" class="t-mono">namespace: gitlab-runner</text>
+  <text x="349" y="100" text-anchor="middle" class="t-mono">concurrent = 4</text>
+
+  <line x1="446" y1="75" x2="486" y2="75" class="arrow" marker-end="url(#a6)"/>
+  <text x="466" y="66" text-anchor="middle" class="t-arrow">spawn</text>
+
+  <!-- Pod -->
+  <rect x="488" y="40" width="200" height="70" rx="8" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="588" y="66" text-anchor="middle" class="t-title">Job Pod</text>
+  <text x="588" y="84" text-anchor="middle" class="t-mono">alpine:3.12</text>
+  <text x="588" y="100" text-anchor="middle" class="t-mono">1C/4Gi → 4C/8Gi</text>
+
+  <!-- Pipeline 阶段 -->
+  <text x="30" y="152" class="t-lane">流水线阶段</text>
+
+  <rect x="30" y="168" width="176" height="54" rx="7" fill="#161d2a" stroke="#243044"/>
+  <text x="118" y="190" text-anchor="middle" class="t-title">build</text>
+  <text x="118" y="208" text-anchor="middle" class="t-mono">编译 · lint</text>
+
+  <line x1="208" y1="195" x2="240" y2="195" class="arrow" marker-end="url(#a6)"/>
+
+  <rect x="242" y="168" width="176" height="54" rx="7" fill="#161d2a" stroke="#243044"/>
+  <text x="330" y="190" text-anchor="middle" class="t-title">test</text>
+  <text x="330" y="208" text-anchor="middle" class="t-mono">单元 + 集成</text>
+
+  <line x1="420" y1="195" x2="452" y2="195" class="arrow" marker-end="url(#a6)"/>
+
+  <rect x="454" y="168" width="176" height="54" rx="7" fill="#161d2a" stroke="#243044"/>
+  <text x="542" y="190" text-anchor="middle" class="t-title">docker build</text>
+  <text x="542" y="208" text-anchor="middle" class="t-mono">DinD</text>
+
+  <line x1="632" y1="195" x2="664" y2="195" class="arrow" marker-end="url(#a6)"/>
+
+  <rect x="666" y="168" width="200" height="54" rx="7" fill="#161d2a" stroke="#ff9a4d"/>
+  <text x="766" y="190" text-anchor="middle" class="t-title">push ACR</text>
+  <text x="766" y="208" text-anchor="middle" class="t-mono">uat-YYYYMMDD-N</text>
+
+  <line x1="868" y1="195" x2="900" y2="195" class="arrow" marker-end="url(#a6)"/>
+
+  <rect x="902" y="168" width="228" height="54" rx="7" fill="#161d2a" stroke="#a98bff"/>
+  <text x="1016" y="190" text-anchor="middle" class="t-title">更新 deploy 分支</text>
+  <text x="1016" y="208" text-anchor="middle" class="t-mono">kustomization images</text>
+
+  <!-- 缓存 -->
+  <text x="30" y="262" class="t-lane">依赖服务</text>
+  <rect x="30" y="278" width="280" height="46" rx="7" fill="#0e1620" stroke="#3a4a63" stroke-dasharray="4 3"/>
+  <text x="170" y="298" text-anchor="middle" class="t-mono">MinIO S3 · gitlab-runner-cache</text>
+  <text x="170" y="314" text-anchor="middle" class="t-mono">minio-service.middlewave.svc:9000</text>
+
+  <rect x="330" y="278" width="280" height="46" rx="7" fill="#0e1620" stroke="#3a4a63" stroke-dasharray="4 3"/>
+  <text x="470" y="298" text-anchor="middle" class="t-mono">ACR: aigccontainer.azurecr.cn</text>
+  <text x="470" y="314" text-anchor="middle" class="t-mono">pull secret: azurecr-pull</text>
+
+  <rect x="630" y="278" width="280" height="46" rx="7" fill="#0e1620" stroke="#3a4a63" stroke-dasharray="4 3"/>
+  <text x="770" y="298" text-anchor="middle" class="t-mono">docker.sock (hostPath)</text>
+  <text x="770" y="314" text-anchor="middle" class="t-mono">privileged = true</text>
+</svg>
+<p class="diagram-caption">图 6 · GitLab CI 流水线与 Runner 架构</p>
+</div>
+
+<div class="note warn">
+<b>deploy 分支不参与构建。</b>CI 只负责「产出镜像」，CD 只负责「消费镜像 tag」。
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 6. CD                                                         -->
+<!-- ============================================================ -->
+<section id="s6">
+<h2>6. CD 架构：ArgoCD</h2>
+<p class="lead">App-of-Apps 两层结构：bootstrap 负责发现，业务 Application 负责部署。</p>
+
+<div class="diagram">
+<svg viewBox="0 0 1160 420" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a7" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#3a4a63"/>
+    </marker>
+    <marker id="a7p" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#a98bff"/>
+    </marker>
+  </defs>
+
+  <!-- 左：Git -->
+  <rect x="30" y="40" width="240" height="120" rx="9" fill="#111721" stroke="#4a9eff"/>
+  <text x="150" y="64" text-anchor="middle" class="t-title">deploy 分支</text>
+  <text x="150" y="84" text-anchor="middle" class="t-mono">argocd/</text>
+  <text x="150" y="100" text-anchor="middle" class="t-mono">├ namespace.yaml</text>
+  <text x="150" y="116" text-anchor="middle" class="t-mono">├ applications/*.yaml</text>
+  <text x="150" y="132" text-anchor="middle" class="t-mono">└ bootstrap/</text>
+  <text x="150" y="150" text-anchor="middle" class="t-mono">apps/&lt;svc&gt;/kustomize/</text>
+
+  <line x1="272" y1="100" x2="316" y2="100" class="arrow" marker-end="url(#a7)"/>
+
+  <!-- Bootstrap -->
+  <rect x="318" y="40" width="230" height="120" rx="9" fill="#161d2a" stroke="#a98bff"/>
+  <text x="433" y="64" text-anchor="middle" class="t-title">Bootstrap Application</text>
+  <text x="433" y="84" text-anchor="middle" class="t-mono">5 个（每仓库一个）</text>
+  <text x="433" y="104" text-anchor="middle" class="t-mono">path: argocd</text>
+  <text x="433" y="120" text-anchor="middle" class="t-mono">recurse: true</text>
+  <text x="433" y="136" text-anchor="middle" class="t-mono">include: {namespace, applications/*}</text>
+  <text x="433" y="152" text-anchor="middle" class="t-mono">exclude: bootstrap/*</text>
+
+  <line x1="550" y1="100" x2="594" y2="100" class="arrow" marker-end="url(#a7)"/>
+  <text x="572" y="90" text-anchor="middle" class="t-arrow">发现</text>
+
+  <!-- 业务 Application -->
+  <rect x="596" y="40" width="240" height="120" rx="9" fill="#161d2a" stroke="#a98bff"/>
+  <text x="716" y="64" text-anchor="middle" class="t-title">业务 Application</text>
+  <text x="716" y="84" text-anchor="middle" class="t-mono">8 个</text>
+  <text x="716" y="104" text-anchor="middle" class="t-mono">path: overlays/uat</text>
+  <text x="716" y="120" text-anchor="middle" class="t-mono">selfHeal: true</text>
+  <text x="716" y="136" text-anchor="middle" class="t-mono">prune: false</text>
+  <text x="716" y="152" text-anchor="middle" class="t-mono">retry: 5 × backoff</text>
+
+  <line x1="838" y1="100" x2="882" y2="100" class="arrow" marker-end="url(#a7)"/>
+
+  <!-- Kustomize -->
+  <rect x="884" y="40" width="246" height="120" rx="9" fill="#161d2a" stroke="#a98bff"/>
+  <text x="1007" y="64" text-anchor="middle" class="t-title">Kustomize 渲染</text>
+  <text x="1007" y="84" text-anchor="middle" class="t-mono">base + overlay</text>
+  <text x="1007" y="104" text-anchor="middle" class="t-mono">images: 替换 tag</text>
+  <text x="1007" y="120" text-anchor="middle" class="t-mono">patches: replicas/env</text>
+  <text x="1007" y="136" text-anchor="middle" class="t-mono">ApplyOutOfSyncOnly</text>
+  <text x="1007" y="152" text-anchor="middle" class="t-mono">Replace: true</text>
+
+  <!-- 下行到 K8s -->
+  <line x1="716" y1="162" x2="716" y2="204" class="arrow-hi" marker-end="url(#a7p)"/>
+  <text x="728" y="190" class="t-arrow" fill="#a98bff">apply</text>
+
+  <rect x="30" y="206" width="1100" height="188" rx="9" fill="#111721" stroke="#243044"/>
+  <text x="48" y="230" class="t-lane">ArgoCD 托管范围（8 个业务 Application）</text>
+
+  <rect x="48" y="246" width="250" height="60" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="173" y="266" text-anchor="middle" class="t-title">anspire-open-man</text>
+  <text x="173" y="282" text-anchor="middle" class="t-mono">aisearch-api</text>
+  <text x="173" y="297" text-anchor="middle" class="t-mono">anspire-open-admin · operate</text>
+
+  <rect x="312" y="246" width="250" height="60" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="437" y="266" text-anchor="middle" class="t-title">anspire-fde-uat</text>
+  <text x="437" y="282" text-anchor="middle" class="t-mono">anspire-fde-backend</text>
+  <text x="437" y="297" text-anchor="middle" class="t-mono">anspire-fde-frontend</text>
+
+  <rect x="576" y="246" width="250" height="60" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="701" y="266" text-anchor="middle" class="t-title">anspire-gateway-uat</text>
+  <text x="701" y="282" text-anchor="middle" class="t-mono">anspire-llm-gateway</text>
+  <text x="701" y="297" text-anchor="middle" class="t-mono">llm-gateway-worker</text>
+
+  <rect x="840" y="246" width="272" height="60" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="976" y="266" text-anchor="middle" class="t-title">anspire-aisearch / wb365</text>
+  <text x="976" y="282" text-anchor="middle" class="t-mono">aisearch-global-api</text>
+  <text x="976" y="297" text-anchor="middle" class="t-mono">anspire-wb365-bridge</text>
+
+  <rect x="48" y="320" width="1064" height="58" rx="7" fill="#0e1620" stroke="#3a4a63" stroke-dasharray="4 3"/>
+  <text x="580" y="342" text-anchor="middle" class="t-sub">同步策略</text>
+  <text x="580" y="362" text-anchor="middle" class="t-mono">prune: false · selfHeal: true · ApplyOutOfSyncOnly · Replace</text>
+</svg>
+<p class="diagram-caption">图 7 · ArgoCD App-of-Apps 架构</p>
+</div>
+
+<h3>实测 Application 清单</h3>
+<div class="scroll"><table class="tbl">
+<thead><tr><th>Application</th><th>类型</th><th>仓库</th><th>路径</th><th>命名空间</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td><code>anspire-open-man-bootstrap</code></td><td><span class="pill purple">bootstrap</span></td><td>anspire_atomic_power_backend</td><td><code>argocd</code></td><td>argocd</td><td><span class="pill bad">OutOfSync</span></td></tr>
+<tr><td><code>anspire-aisearch-bootstrap</code></td><td><span class="pill purple">bootstrap</span></td><td>anspire-open-global-backend</td><td><code>argocd</code></td><td>argocd</td><td><span class="pill ok">Synced</span></td></tr>
+<tr><td><code>anspire-fde-bootstrap</code></td><td><span class="pill purple">bootstrap</span></td><td>anspire-fde-hub</td><td><code>argocd</code></td><td>argocd</td><td><span class="pill ok">Synced</span></td></tr>
+<tr><td><code>anspire-llm-gateway-bootstrap</code></td><td><span class="pill purple">bootstrap</span></td><td>anspire-llm-gateway</td><td><code>argocd</code></td><td>argocd</td><td><span class="pill ok">Synced</span></td></tr>
+<tr><td><code>anspire-wb365-bridge-bootstrap</code></td><td><span class="pill purple">bootstrap</span></td><td>wb365-bridge</td><td><code>argocd</code></td><td>argocd</td><td><span class="pill ok">Synced</span></td></tr>
+<tr><td><code>aisearch-api-uat</code></td><td><span class="pill ok">业务</span></td><td>anspire_atomic_power_backend</td><td><code>apps/aisearch-api/kustomize/overlays/uat</code></td><td>anspire-open-man</td><td><span class="pill ok">Synced</span></td></tr>
+<tr><td><code>anspire-open-admin-uat</code></td><td><span class="pill ok">业务</span></td><td>anspire-admin-frontend</td><td><code>apps/anspire-open-admin/kustomize/overlays/uat</code></td><td>anspire-open-man</td><td><span class="pill bad">OutOfSync</span></td></tr>
+<tr><td><code>anspire-open-operate-uat</code></td><td><span class="pill ok">业务</span></td><td>anspire-operate-frontend</td><td><code>apps/anspire-open-operate/kustomize/overlays/uat</code></td><td>anspire-open-man</td><td><span class="pill ok">Synced</span></td></tr>
+<tr><td><code>aisearch-global-api-uat</code></td><td><span class="pill ok">业务</span></td><td>anspire-open-global-backend</td><td><code>apps/aisearch-global-api/kustomize/overlays/uat</code></td><td>anspire-aisearch</td><td><span class="pill ok">Synced</span></td></tr>
+<tr><td><code>anspire-fde-backend-uat</code></td><td><span class="pill ok">业务</span></td><td>anspire-fde-hub</td><td><code>apps/anspire-fde-backend/kustomize/overlays/uat</code></td><td>anspire-fde-uat</td><td><span class="pill ok">Synced</span></td></tr>
+<tr><td><code>anspire-fde-frontend-uat</code></td><td><span class="pill ok">业务</span></td><td>anspire-fde-hub</td><td><code>apps/anspire-fde-frontend/kustomize/overlays/uat</code></td><td>anspire-fde-uat</td><td><span class="pill ok">Synced</span></td></tr>
+<tr><td><code>anspire-llm-gateway-uat</code></td><td><span class="pill ok">业务</span></td><td>anspire-llm-gateway</td><td><code>apps/gateway/overlays/uat</code></td><td>anspire-gateway-uat</td><td><span class="pill ok">Synced</span></td></tr>
+<tr><td><code>anspire-wb365-bridge-uat</code></td><td><span class="pill ok">业务</span></td><td>wb365-bridge</td><td><code>apps/anspire-wb365-bridge/kustomize/overlays/uat</code></td><td>anspire-wb365-bridge-uat</td><td><span class="pill bad">OutOfSync</span></td></tr>
+</tbody></table></div>
+
+<h3>deploy 分支目录规范</h3>
+<pre class="tree"><span class="w">Deploy/</span>                                <span class="c">← deploy 分支 worktree</span>
+├── argocd/
+│   ├── namespace.yaml
+│   ├── applications/                  <span class="c">← bootstrap 扫描此目录</span>
+│   │   ├── aisearch-api.yaml
+│   │   └── ...
+│   └── bootstrap/                     <span class="c">← exclude，避免自引用</span>
+│
+└── apps/
+    ├── aisearch-api/
+    │   └── kustomize/
+    │       ├── base/
+    │       │   ├── kustomization.yaml
+    │       │   ├── deployment.yaml
+    │       │   ├── service.yaml
+    │       │   └── ingress.yaml
+    │       └── overlays/
+    │           └── uat/
+    │               ├── kustomization.yaml   <span class="h">← 镜像 tag 在此更新</span>
+    │               ├── patch-replicas.yaml
+    │               └── patch-env.yaml
+    └── ...</pre>
+</section>
+
+<!-- ============================================================ -->
+<!-- 7. K8s 拓扑                                                   -->
+<!-- ============================================================ -->
+<section id="s7">
+<h2>7. K8s 集群拓扑</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 1160 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a8" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#3a4a63"/>
+    </marker>
+  </defs>
+
+  <!-- 集群框 -->
+  <rect x="30" y="30" width="1100" height="256" rx="10" fill="#0e1620" stroke="#243044" stroke-dasharray="5 4"/>
+  <text x="48" y="54" class="t-lane">KUBERNETES CLUSTER · anspire-dify</text>
+
+  <!-- 命名空间分层 -->
+  <text x="48" y="88" class="t-lane">命名空间分层</text>
+
+  <rect x="48" y="104" width="1064" height="58" rx="7" fill="#161d2a" stroke="#5d6b82"/>
+  <text x="66" y="126" class="t-title">系统层</text>
+  <text x="66" y="148" class="t-mono" fill="#8b9bb4">kube-system · kube-public · kube-node-lease · kube-flannel · default</text>
+
+  <rect x="48" y="176" width="1064" height="58" rx="7" fill="#161d2a" stroke="#a98bff"/>
+  <text x="66" y="198" class="t-title">基础设施层</text>
+  <text x="66" y="220" class="t-mono" fill="#8b9bb4">argocd（CD 控制面）· gitlab-runner（CI Runner）</text>
+
+  <rect x="48" y="248" width="1064" height="58" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="66" y="270" class="t-title">业务层 · ArgoCD 托管</text>
+  <text x="66" y="292" class="t-mono" fill="#8b9bb4">anspire-open-man · anspire-fde-uat · anspire-gateway-uat · anspire-aisearch · anspire-wb365-bridge-uat</text>
+</svg>
+<p class="diagram-caption">图 8 · 命名空间分层</p>
+</div>
+
+<div class="grid g4" style="margin-top:16px">
+  <div class="card"><div class="k">Kubernetes</div><div class="v">v1.33.x</div><div class="n">托管集群</div></div>
+  <div class="card"><div class="k">CNI</div><div class="v">Flannel</div><div class="n">Overlay 网络</div></div>
+  <div class="card"><div class="k">Ingress</div><div class="v">Traefik v3.2</div><div class="n">DaemonSet</div></div>
+  <div class="card"><div class="k">CD</div><div class="v">ArgoCD</div><div class="n">App-of-Apps</div></div>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 8. Ingress                                                    -->
+<!-- ============================================================ -->
+<section id="s8">
+<h2>8. Ingress 自动注册</h2>
+<p class="lead">Git 声明 → ArgoCD 同步 → K8s Ingress → Traefik 自动发现，全程无需手工注册。</p>
+
+<div class="diagram">
+<svg viewBox="0 0 1160 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a9" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#4a9eff"/>
+    </marker>
+  </defs>
+
+  <!-- 注册链路 -->
+  <text x="30" y="34" class="t-lane">自动注册链路</text>
+
+  <rect x="30" y="50" width="180" height="72" rx="8" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="120" y="74" text-anchor="middle" class="t-title">Dev Agent</text>
+  <text x="120" y="92" text-anchor="middle" class="t-mono">编写 ingress.yaml</text>
+  <text x="120" y="108" text-anchor="middle" class="t-mono">commit to deploy</text>
+
+  <line x1="212" y1="86" x2="252" y2="86" class="arrow" marker-end="url(#a9)"/>
+
+  <rect x="254" y="50" width="180" height="72" rx="8" fill="#161d2a" stroke="#4a9eff"/>
+  <text x="344" y="74" text-anchor="middle" class="t-title">GitLab</text>
+  <text x="344" y="92" text-anchor="middle" class="t-mono">deploy 分支</text>
+  <text x="344" y="108" text-anchor="middle" class="t-mono">webhook / poll</text>
+
+  <line x1="436" y1="86" x2="476" y2="86" class="arrow" marker-end="url(#a9)"/>
+
+  <rect x="478" y="50" width="180" height="72" rx="8" fill="#161d2a" stroke="#a98bff"/>
+  <text x="568" y="74" text-anchor="middle" class="t-title">ArgoCD</text>
+  <text x="568" y="92" text-anchor="middle" class="t-mono">Kustomize 渲染</text>
+  <text x="568" y="108" text-anchor="middle" class="t-mono">Apply Ingress</text>
+
+  <line x1="660" y1="86" x2="700" y2="86" class="arrow" marker-end="url(#a9)"/>
+
+  <rect x="702" y="50" width="180" height="72" rx="8" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="792" y="74" text-anchor="middle" class="t-title">K8s API</text>
+  <text x="792" y="92" text-anchor="middle" class="t-mono">Ingress 资源</text>
+  <text x="792" y="108" text-anchor="middle" class="t-mono">变更事件</text>
+
+  <line x1="884" y1="86" x2="924" y2="86" class="arrow" marker-end="url(#a9)"/>
+
+  <rect x="926" y="50" width="204" height="72" rx="8" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="1028" y="74" text-anchor="middle" class="t-title">Traefik</text>
+  <text x="1028" y="92" text-anchor="middle" class="t-mono">Watch → 生成路由</text>
+  <text x="1028" y="108" text-anchor="middle" class="t-mono">无需重启</text>
+
+  <!-- 请求路径 -->
+  <line x1="30" y1="160" x2="1130" y2="160" stroke="#243044"/>
+  <text x="30" y="188" class="t-lane">请求路径</text>
+
+  <rect x="30" y="204" width="160" height="60" rx="8" fill="#161d2a" stroke="#ff7ba8"/>
+  <text x="110" y="228" text-anchor="middle" class="t-title">外部用户</text>
+  <text x="110" y="246" text-anchor="middle" class="t-mono">HTTPS</text>
+
+  <line x1="192" y1="234" x2="232" y2="234" class="arrow" marker-end="url(#a9)"/>
+
+  <rect x="234" y="204" width="230" height="60" rx="8" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="349" y="228" text-anchor="middle" class="t-title">Traefik :443</text>
+  <text x="349" y="246" text-anchor="middle" class="t-mono">TLS 终止 · 通配证书</text>
+
+  <line x1="466" y1="234" x2="506" y2="234" class="arrow" marker-end="url(#a9)"/>
+
+  <rect x="508" y="204" width="230" height="60" rx="8" fill="#161d2a" stroke="#4a9eff"/>
+  <text x="623" y="228" text-anchor="middle" class="t-title">Ingress 规则匹配</text>
+  <text x="623" y="246" text-anchor="middle" class="t-mono">host + path prefix</text>
+
+  <line x1="740" y1="234" x2="780" y2="234" class="arrow" marker-end="url(#a9)"/>
+
+  <rect x="782" y="204" width="180" height="60" rx="8" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="872" y="228" text-anchor="middle" class="t-title">Service</text>
+  <text x="872" y="246" text-anchor="middle" class="t-mono">ClusterIP</text>
+
+  <line x1="964" y1="234" x2="1004" y2="234" class="arrow" marker-end="url(#a9)"/>
+
+  <rect x="1006" y="204" width="124" height="60" rx="8" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="1068" y="228" text-anchor="middle" class="t-title">Pod</text>
+  <text x="1068" y="246" text-anchor="middle" class="t-mono">10.201.x</text>
+
+  <!-- 域名规范 -->
+  <line x1="30" y1="294" x2="1130" y2="294" stroke="#243044"/>
+  <text x="30" y="320" class="t-lane">域名命名规范</text>
+
+  <text x="30" y="344" class="t-mono">api-&lt;service&gt;-&lt;env&gt;.local.anspire.cn</text>
+  <text x="330" y="344" class="t-mono" fill="#5d6b82">后端 API · 例 api-fde-uat</text>
+
+  <text x="30" y="366" class="t-mono">&lt;service&gt;-&lt;env&gt;.local.anspire.cn</text>
+  <text x="330" y="366" class="t-mono" fill="#5d6b82">前端 Web · 例 fde-uat</text>
+
+  <text x="640" y="344" class="t-mono">&lt;tool&gt;.local.anspire.cn</text>
+  <text x="880" y="344" class="t-mono" fill="#5d6b82">平台工具</text>
+
+  <text x="640" y="366" class="t-mono">&lt;project&gt;-&lt;env&gt;.local.anspire.cn</text>
+  <text x="880" y="366" class="t-mono" fill="#5d6b82">业务独立</text>
+</svg>
+<p class="diagram-caption">图 9 · Ingress 自动注册链路与请求路径</p>
+</div>
+
+<h3>当前已注册路由（8 条）</h3>
+<div class="scroll"><table class="tbl">
+<thead><tr><th>命名空间</th><th>Ingress</th><th>Host</th><th>TLS</th></tr></thead>
+<tbody>
+<tr><td>anspire-open-man</td><td>aisearch-api</td><td><code>api-aisearch-api-uat.local.anspire.cn</code></td><td><span class="pill warn">✗</span></td></tr>
+<tr><td>anspire-open-man</td><td>anspire-open-admin</td><td><code>open-admin-uat.local.anspire.cn</code></td><td><span class="pill ok">✓</span></td></tr>
+<tr><td>anspire-open-man</td><td>anspire-open-operate</td><td><code>open-opt.local.anspire.cn</code></td><td><span class="pill ok">✓</span></td></tr>
+<tr><td>anspire-aisearch</td><td>aisearch-global-api</td><td><code>api-aisearch-global-api-uat.local.anspire.cn</code></td><td><span class="pill warn">✗</span></td></tr>
+<tr><td>anspire-fde-uat</td><td>anspire-fde-backend</td><td><code>api-fde-uat.local.anspire.cn</code></td><td><span class="pill ok">✓</span></td></tr>
+<tr><td>anspire-fde-uat</td><td>anspire-fde-frontend</td><td><code>fde-uat.local.anspire.cn</code></td><td><span class="pill ok">✓</span></td></tr>
+<tr><td>anspire-gateway-uat</td><td>gateway-ingress</td><td><code>gateway-uat.local.anspire.cn</code></td><td><span class="pill ok">✓</span></td></tr>
+<tr><td>anspire-wb365-bridge-uat</td><td>anspire-wb365-bridge</td><td><code>api-wb365-uat.local.anspire.cn</code></td><td><span class="pill ok">✓</span></td></tr>
+</tbody></table></div>
+
+<div class="note warn">
+两条 HTTP-only 路由（<code>aisearch-api</code>、<code>aisearch-global-api</code>）未配置 TLS。
+补齐 <code>tls</code> 段即可，无需改动 Traefik。
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 9. 端到端流程                                                 -->
+<!-- ============================================================ -->
+<section id="s9">
+<h2>9. 端到端交付流程</h2>
+<p class="lead">从需求提出到生产发布的七阶段完整链路。</p>
+
+<div class="diagram">
+<svg viewBox="0 0 1180 760" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a10" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#4a9eff"/>
+    </marker>
+    <marker id="a10r" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,1 L8,4.5 L0,8 Z" fill="#ff5c5c"/>
+    </marker>
+  </defs>
+
+  <!-- Stage 1 -->
+  <rect x="30" y="30" width="160" height="28" rx="5" fill="#1a2433"/>
+  <text x="110" y="49" text-anchor="middle" class="t-mono" fill="#f0b849">① 需求 — BA Agent</text>
+
+  <rect x="30" y="68" width="200" height="56" rx="7" fill="#161d2a" stroke="#f0b849"/>
+  <text x="130" y="90" text-anchor="middle" class="t-title">用户提出需求</text>
+  <text x="130" y="108" text-anchor="middle" class="t-mono">backlog/inbox</text>
+
+  <line x1="232" y1="96" x2="272" y2="96" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="274" y="68" width="220" height="56" rx="7" fill="#161d2a" stroke="#f0b849"/>
+  <text x="384" y="90" text-anchor="middle" class="t-title">创建需求文档</text>
+  <text x="384" y="108" text-anchor="middle" class="t-mono">demand.md · acceptance.md</text>
+
+  <line x1="496" y1="96" x2="536" y2="96" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="538" y="68" width="220" height="56" rx="7" fill="#161d2a" stroke="#f0b849"/>
+  <text x="648" y="90" text-anchor="middle" class="t-title">状态流转</text>
+  <text x="648" y="108" text-anchor="middle" class="t-mono">草稿 → 已评审 → 已就绪</text>
+
+  <line x1="760" y1="96" x2="800" y2="96" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="802" y="68" width="200" height="56" rx="7" fill="#161d2a" stroke="#f0b849"/>
+  <text x="902" y="90" text-anchor="middle" class="t-title">认领 REQ 编号</text>
+  <text x="902" y="108" text-anchor="middle" class="t-mono">req-registry.md</text>
+
+  <line x1="1004" y1="96" x2="1044" y2="96" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="1046" y="68" width="120" height="56" rx="7" fill="#161d2a" stroke="#f0b849"/>
+  <text x="1106" y="90" text-anchor="middle" class="t-title">创建 worktree</text>
+  <text x="1106" y="108" text-anchor="middle" class="t-mono">feature-REQ</text>
+
+  <!-- Stage 2 -->
+  <rect x="30" y="158" width="160" height="28" rx="5" fill="#1a2433"/>
+  <text x="110" y="177" text-anchor="middle" class="t-mono" fill="#3fd68a">② 开发 — Dev Agent</text>
+
+  <rect x="30" y="196" width="230" height="56" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="145" y="218" text-anchor="middle" class="t-title">读取需求 + 测试用例</text>
+  <text x="145" y="236" text-anchor="middle" class="t-mono">BA/demands/REQ-xxx/</text>
+
+  <line x1="262" y1="224" x2="302" y2="224" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="304" y="196" width="230" height="56" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="419" y="218" text-anchor="middle" class="t-title">TDD 编码 + 测试</text>
+  <text x="419" y="236" text-anchor="middle" class="t-mono">src/ · tests/</text>
+
+  <line x1="536" y1="224" x2="576" y2="224" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="578" y="196" width="230" height="56" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="693" y="218" text-anchor="middle" class="t-title">自验证</text>
+  <text x="693" y="236" text-anchor="middle" class="t-mono">追溯性 · 测试 · Lint</text>
+
+  <line x1="810" y1="224" x2="850" y2="224" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="852" y="196" width="314" height="56" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="1009" y="218" text-anchor="middle" class="t-title">通知 BA（不直接改状态）</text>
+  <text x="1009" y="236" text-anchor="middle" class="t-mono">.feature/verification-report.md</text>
+
+  <!-- Stage 3 -->
+  <rect x="30" y="286" width="160" height="28" rx="5" fill="#1a2433"/>
+  <text x="110" y="305" text-anchor="middle" class="t-mono" fill="#4a9eff">③ 验证 — QA Agent</text>
+
+  <rect x="30" y="324" width="240" height="56" rx="7" fill="#161d2a" stroke="#4a9eff"/>
+  <text x="150" y="346" text-anchor="middle" class="t-title">BA 置「待验证」</text>
+  <text x="150" y="364" text-anchor="middle" class="t-mono">git pull → commit → push</text>
+
+  <line x1="272" y1="352" x2="312" y2="352" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="314" y="324" width="260" height="56" rx="7" fill="#161d2a" stroke="#4a9eff"/>
+  <text x="444" y="346" text-anchor="middle" class="t-title">QA 代码审查 + 跑测试</text>
+  <text x="444" y="364" text-anchor="middle" class="t-mono">追溯性核对 · 审查清单</text>
+
+  <line x1="576" y1="352" x2="616" y2="352" class="arrow" marker-end="url(#a10)"/>
+
+  <!-- 判定菱形 -->
+  <path d="M 690 320 L 750 352 L 690 384 L 630 352 Z" fill="#161d2a" stroke="#f0b849"/>
+  <text x="690" y="357" text-anchor="middle" class="t-title">通过?</text>
+
+  <!-- 通过 -->
+  <line x1="752" y1="352" x2="800" y2="352" class="arrow" marker-end="url(#a10)"/>
+  <rect x="802" y="324" width="180" height="56" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="892" y="346" text-anchor="middle" class="t-title">BA 置「已验证」</text>
+  <text x="892" y="364" text-anchor="middle" class="t-mono">通知 Dev 创建 PR</text>
+
+  <!-- 不通过 -->
+  <path d="M 690 386 L 690 412 L 444 412 L 444 384" class="arrow" stroke="#ff5c5c" marker-end="url(#a10r)"/>
+  <text x="567" y="428" text-anchor="middle" class="t-arrow" fill="#ff5c5c">已退回 → 重新开发</text>
+
+  <!-- Stage 4 -->
+  <rect x="30" y="446" width="160" height="28" rx="5" fill="#1a2433"/>
+  <text x="110" y="465" text-anchor="middle" class="t-mono" fill="#3ad4d4">④ 集成 — CI</text>
+
+  <rect x="30" y="484" width="200" height="56" rx="7" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="130" y="506" text-anchor="middle" class="t-title">PR → develop</text>
+  <text x="130" y="524" text-anchor="middle" class="t-mono">MR 创建</text>
+
+  <line x1="232" y1="512" x2="272" y2="512" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="274" y="484" width="180" height="56" rx="7" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="364" y="506" text-anchor="middle" class="t-title">Runner 构建</text>
+  <text x="364" y="524" text-anchor="middle" class="t-mono">build + test</text>
+
+  <line x1="456" y1="512" x2="496" y2="512" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="498" y="484" width="200" height="56" rx="7" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="598" y="506" text-anchor="middle" class="t-title">docker build</text>
+  <text x="598" y="524" text-anchor="middle" class="t-mono">DinD</text>
+
+  <line x1="700" y1="512" x2="740" y2="512" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="742" y="484" width="200" height="56" rx="7" fill="#161d2a" stroke="#ff9a4d"/>
+  <text x="842" y="506" text-anchor="middle" class="t-title">push ACR</text>
+  <text x="842" y="524" text-anchor="middle" class="t-mono">uat-YYYYMMDD-N</text>
+
+  <line x1="944" y1="512" x2="984" y2="512" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="986" y="484" width="180" height="56" rx="7" fill="#161d2a" stroke="#a98bff"/>
+  <text x="1076" y="506" text-anchor="middle" class="t-title">更新 deploy</text>
+  <text x="1076" y="524" text-anchor="middle" class="t-mono">镜像 tag</text>
+
+  <!-- Stage 5 -->
+  <rect x="30" y="572" width="160" height="28" rx="5" fill="#1a2433"/>
+  <text x="110" y="591" text-anchor="middle" class="t-mono" fill="#a98bff">⑤ 部署 — CD</text>
+
+  <rect x="30" y="610" width="210" height="56" rx="7" fill="#161d2a" stroke="#a98bff"/>
+  <text x="135" y="632" text-anchor="middle" class="t-title">ArgoCD 检测变更</text>
+  <text x="135" y="650" text-anchor="middle" class="t-mono">deploy 分支 watch</text>
+
+  <line x1="242" y1="638" x2="282" y2="638" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="284" y="610" width="200" height="56" rx="7" fill="#161d2a" stroke="#a98bff"/>
+  <text x="384" y="632" text-anchor="middle" class="t-title">Kustomize 渲染</text>
+  <text x="384" y="650" text-anchor="middle" class="t-mono">overlay</text>
+
+  <line x1="486" y1="638" x2="526" y2="638" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="528" y="610" width="200" height="56" rx="7" fill="#161d2a" stroke="#a98bff"/>
+  <text x="628" y="632" text-anchor="middle" class="t-title">Apply K8s</text>
+  <text x="628" y="650" text-anchor="middle" class="t-mono">Deployment 滚动更新</text>
+
+  <line x1="730" y1="638" x2="770" y2="638" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="772" y="610" width="200" height="56" rx="7" fill="#161d2a" stroke="#3ad4d4"/>
+  <text x="872" y="632" text-anchor="middle" class="t-title">Ingress 注册</text>
+  <text x="872" y="650" text-anchor="middle" class="t-mono">Traefik 自动发现</text>
+
+  <line x1="974" y1="638" x2="1014" y2="638" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="1016" y="610" width="150" height="56" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="1091" y="632" text-anchor="middle" class="t-title">e2e 验证</text>
+  <text x="1091" y="650" text-anchor="middle" class="t-mono">staging</text>
+
+  <!-- Stage 6/7 -->
+  <rect x="30" y="698" width="240" height="46" rx="7" fill="#161d2a" stroke="#3fd68a"/>
+  <text x="150" y="718" text-anchor="middle" class="t-title">BA 置「已完成」</text>
+  <text x="150" y="736" text-anchor="middle" class="t-mono">Dev 清理 worktree</text>
+
+  <line x1="272" y1="721" x2="312" y2="721" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="314" y="698" width="280" height="46" rx="7" fill="#161d2a" stroke="#ff5c5c"/>
+  <text x="454" y="718" text-anchor="middle" class="t-title">Deploy Agent 更新 production</text>
+  <text x="454" y="736" text-anchor="middle" class="t-mono">镜像 tag → ArgoCD 同步</text>
+
+  <line x1="596" y1="721" x2="636" y2="721" class="arrow" marker-end="url(#a10)"/>
+
+  <rect x="638" y="698" width="240" height="46" rx="7" fill="#161d2a" stroke="#ff5c5c"/>
+  <text x="758" y="718" text-anchor="middle" class="t-title">healthcheck</text>
+  <text x="758" y="736" text-anchor="middle" class="t-mono">记录 releases/</text>
+</svg>
+<p class="diagram-caption">图 10 · 七阶段端到端交付流程</p>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 11. 规范                                                      -->
+<!-- ============================================================ -->
+<section id="s10">
+<h2>10. 规范汇总</h2>
+<div class="scroll"><table class="tbl">
+<thead><tr><th>维度</th><th>规范</th><th>实例</th></tr></thead>
+<tbody>
+<tr><td>需求编号</td><td><code>REQ-{三位数字}</code></td><td><code>REQ-001</code></td></tr>
+<tr><td>分支</td><td><code>feature/REQ-xxx</code></td><td><code>feature/REQ-001</code></td></tr>
+<tr><td>Worktree</td><td><code>feature-REQ-xxx</code></td><td><code>feature-REQ-001</code></td></tr>
+<tr><td>命名空间</td><td><code>&lt;project&gt;-&lt;env&gt;</code></td><td><code>anspire-fde-uat</code></td></tr>
+<tr><td>镜像 tag</td><td><code>{env}-YYYYMMDD-N</code></td><td><code>uat-20261016-80</code></td></tr>
+<tr><td>域名</td><td><code>&lt;type&gt;-&lt;svc&gt;-&lt;env&gt;.local.anspire.cn</code></td><td><code>api-fde-uat.local.anspire.cn</code></td></tr>
+<tr><td>Commit</td><td><code>[{区域}] {描述} (关联: REQ-xxx) [session: xxx]</code></td><td><code>[BA] 更新状态 (关联: REQ-003) [session: ba-…]</code></td></tr>
+<tr><td>K8s 标签</td><td><code>app.kubernetes.io/{name,instance,component,part-of}</code></td><td>—</td></tr>
+<tr><td>Ingress</td><td><code>ingressClassName: traefik</code> + 通配证书</td><td><code>wildcard-local-anspire-cn</code></td></tr>
+</tbody></table></div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 12. 风险与演进                                                -->
+<!-- ============================================================ -->
+<section id="s11">
+<h2>11. 风险与演进</h2>
+
+<h3>观测到的风险点</h3>
+<div class="scroll"><table class="tbl">
+<thead><tr><th>风险</th><th>证据</th><th>影响</th><th>建议</th></tr></thead>
+<tbody>
+<tr><td>3 个 Application OutOfSync</td><td><code>anspire-open-admin-uat</code>、<code>anspire-open-man-bootstrap</code>、<code>anspire-wb365-bridge-uat</code></td><td>配置漂移</td><td>排查手动改动；开 prune 前确认无残留</td></tr>
+<tr><td><code>prune: false</code> 全局</td><td>所有 Application syncPolicy</td><td>删除资源后集群残留累积</td><td>非关键资源改 <code>prune: true</code></td></tr>
+<tr><td>2 条 Ingress 未配 TLS</td><td><code>aisearch-api</code>、<code>aisearch-global-api</code></td><td>HTTP 明文流量</td><td>补齐 <code>tls</code> 段</td></tr>
+<tr><td>Runner <code>privileged</code> + docker.sock</td><td><code>gitlab-runner-config</code> ConfigMap</td><td>容器逃逸风险</td><td>迁移 Kaniko / rootless BuildKit</td></tr>
+<tr><td>Runner 缓存凭据明文</td><td>MinIO <code>AccessKey=admin</code> 硬编码</td><td>凭据泄露</td><td>改用 Secret 引用</td></tr>
+<tr><td>中间件无资源限制</td><td>MySQL/Postgres/Qdrant 未显式设 limit</td><td>单 Pod 可能耗尽集群资源</td><td>补充 requests/limits</td></tr>
+<tr><td>单副本业务</td><td>ArgoCD 托管应用多为 <code>replicas=1</code></td><td>无高可用</td><td>关键服务提升副本 + PDB</td></tr>
+<tr><td>资源未隔离</td><td>中间件与业务同集群混部</td><td>资源争抢</td><td>nodeAffinity / taint 隔离</td></tr>
+</tbody></table></div>
+
+<h3>演进建议</h3>
+<div class="grid g2">
+  <div class="card">
+    <div class="k">01 · ApplicationSet</div>
+    <div class="v" style="font-size:14px;margin:4px 0">自动发现 Application</div>
+    <div class="n" style="font-family:inherit">用 Git Generator 自动发现 <code>argocd/applications/*.yaml</code>，消除手写 bootstrap。</div>
+  </div>
+  <div class="card">
+    <div class="k">02 · 环境目录</div>
+    <div class="v" style="font-size:14px;margin:4px 0">deploy 分支拆环境</div>
+    <div class="n" style="font-family:inherit"><code>overlays/uat</code> 之外补齐 <code>overlays/production</code>，隔离发布路径。</div>
+  </div>
+  <div class="card">
+    <div class="k">03 · 镜像 tag</div>
+    <div class="v" style="font-size:14px;margin:4px 0">改为 commit SHA 短码</div>
+    <div class="n" style="font-family:inherit"><code>uat-20261016-80</code> 无法定位 commit，建议 <code>uat-20261016-a1b2c3d</code>。</div>
+  </div>
+  <div class="card">
+    <div class="k">04 · Ingress</div>
+    <div class="v" style="font-size:14px;margin:4px 0">模板化</div>
+    <div class="n" style="font-family:inherit">Kustomize <code>components/</code> 抽出通用 Ingress 模板，统一 TLS 与注解。</div>
+  </div>
+  <div class="card">
+    <div class="k">05 · Runner</div>
+    <div class="v" style="font-size:14px;margin:4px 0">安全加固</div>
+    <div class="n" style="font-family:inherit">迁移 Kaniko 或 rootless BuildKit，移除 privileged 与 docker.sock 依赖。</div>
+  </div>
+  <div class="card">
+    <div class="k">06 · 可观测性</div>
+    <div class="v" style="font-size:14px;margin:4px 0">补齐监控</div>
+    <div class="n" style="font-family:inherit">Traefik metrics（9100）接入 Prometheus + Grafana；Langfuse 用于 LLM 链路追踪。</div>
+  </div>
+</div>
+</section>
+
+<hr>
+
+<footer>
+  Agent Workspace 系统架构设计 · 基于实际集群观测 · 2026-10-19<br>
+  <span style="font-size:11.5px">
+    ArgoCD 托管 13 个 Application（5 bootstrap + 8 业务）· 19 条 Ingress 路由
+  </span>
+</footer>
+
+</div>
+</body>
+</html>

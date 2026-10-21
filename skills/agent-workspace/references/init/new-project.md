@@ -1,173 +1,149 @@
-# 新项目初始化流程
+# 新项目初始化
 
-> 本流程使用 **`workspace` 分支**作为仓库根容器，所有 worktree **在仓库根平铺**（无中间目录层）。
-> 不再使用"仓库根 = develop worktree"或"worktree 嵌套"的老设计。
+目标：一个只有 README 的裸仓库 → 可派单的 workspace（`code/` `BA/` `Deploy/` 就位，分支齐全）。
 
-## 流程
+## 方式 A：一条命令（推荐）
 
-### Step 1: 创建 Git 仓库与 workspace 分支
+```bash
+python <skill-path>/scripts/aw.py init my-project \
+  --name "My Project" \
+  --remote git@github.com:org/my-project.git
+```
+
+脚本做的事（幂等，可重复执行）：
+
+| 步骤 | 动作 |
+|------|------|
+| 1 | `git init` + 建立 `workspace` orphan 分支 + 2 个文件 + 首次 commit |
+| 2 | 建立 `main` / `develop` / `demand` / `deploy` 分支 |
+| 3 | 用 `git worktree add` 建 `code/` `BA/` `Deploy/` |
+| 4 | 从模板落 `BA/` 的 bootstrap 文件（README、registry、rules）与 `.local/` |
+| 5 | 配 `origin`（如给了 `--remote`）并设置本地 `push.default` |
+| 6 | 自检：`git ls-files` 必须恰好 2 行 |
+
+执行完跑一次：
+
+```bash
+cd my-project && python <skill-path>/scripts/aw.py verify
+```
+
+## 方式 B：手工（无 Python 环境时）
+
+> **铁律**：`git checkout --orphan` 之后**用 `git reset` 清 index，绝不用 `git rm -rf .`**。
+> 后者会把工作区文件一起删掉（实测：目录只剩 `.git`）。
+
+### Step 1 仓库 + workspace 分支
 
 ```bash
 mkdir my-project && cd my-project
 git init
-# 立即创建第一个空 commit，让 workspace 分支有合法根
 git commit --allow-empty -m "[Init] workspace root"
-# 把默认分支改名为 workspace
 git branch -m workspace
 ```
 
-**验证**：
+### Step 2 根容器（只 2 个文件）
 
 ```bash
-git branch
-# 输出：* workspace
-
-git ls-files
-# 应输出为空（空 commit 没有任何文件）
-```
-
-### Step 2: 写 workspace 根文档（README + 双层防御 .gitignore）
-
-**workspace 分支只跟踪两个文件**：`README.md` + `.gitignore`。
-`.gitignore` 使用**双层防御机制**：
-- **白名单层**：`*` 全忽略 + `!*/` 保留目录遍历 + 白名单 `!.gitignore` + `!README.md`
-- **`/*/` 屏蔽层**：忽略所有第一层子目录（worktree 都在第一层，防止 git 遍历 worktree）
-
-即使误操作 `git add .`，也只会 add 这两个文件，worktree 完全不被影响。
-
-```bash
-# 复制模板
-cp <skill-path>/templates/root-readme.md.tpl README.md
-cp <skill-path>/templates/root-gitignore.tpl .gitignore
-# 编辑 README.md 顶部占位（项目名、一句话说明等）
-# .gitignore 一般不用改
-```
-
-```bash
+cp <skill-path>/assets/templates/root-readme.md.tpl README.md
+cp <skill-path>/assets/templates/root-gitignore.tpl .gitignore
+# 编辑 README.md 顶部占位
 git add README.md .gitignore
 git commit -m "[Workspace] 初始化导航 + 双层防御 .gitignore"
 ```
 
-**验证**：
+验证：`git ls-files` 只有 `.gitignore`、`README.md` 两行。
+
+### Step 3 main / develop / demand / deploy
 
 ```bash
-git ls-files
-# 应只输出：
-# .gitignore
-# README.md
-
-# 防御性测试：即使误操作 git add . 也只 add 这两个文件
-git add .
-git status --short
-# 应为空（没有新文件需要 add，白名单只放过这两个）
-# 关键：worktree 目录（code/ BA/ Deploy/）也不会显示为 untracked，
-# 因为 /*/ 屏蔽了所有第一层子目录
-```
-
-### Step 3: 创建 main / develop / demand / deploy 分支
-
-```bash
-# main 为生产分支（orphan 独立，干净起点）
+# main：生产发布标记（orphan，干净起点）
 git checkout --orphan main
-git rm -rf . 2>/dev/null || true
-echo "# {项目名称}" > README.md
+git reset                       # 只清 index，文件留在磁盘
+printf '# %s\n' "My Project" > README.md
 git add README.md
 git commit -m "[Init] main branch placeholder"
 
-# develop 从 main 派生，共享历史
+# develop：从 main 派生
 git checkout -b develop main
 
-# demand 和 deploy 为 orphan 独立分支（管理与代码隔离）
+# demand：需求管理（orphan）
 git checkout workspace
-
 git checkout --orphan demand
-git rm -rf . 2>/dev/null || true
+git reset
 mkdir -p demands backlog sprint decisions dispatch
-echo "# 需求管理分支" > README.md
+printf '# 需求管理\n' > README.md
 git add README.md
-git commit -m "[Init] 初始化需求管理分支"
+git commit -m "[Init] 需求管理分支"
 
+# deploy：部署配置（orphan）
 git checkout workspace
-
 git checkout --orphan deploy
-git rm -rf . 2>/dev/null || true
+git reset
 mkdir -p apps environments releases scripts
-echo "# 部署配置分支" > README.md
+printf '# 部署配置\n' > README.md
 git add README.md
-git commit -m "[Init] 初始化部署分支"
+git commit -m "[Init] 部署分支"
 
 git checkout workspace
 ```
 
-### Step 4: 在仓库根平铺创建 worktree
+### Step 4 平铺 worktree
 
 ```bash
-# 当前在 workspace/，worktree 直接在仓库根平铺
 git worktree add code develop
 git worktree add BA demand
 git worktree add Deploy deploy
-```
-
-### Step 4a: 初始化本地暂存目录（可选）
-
-```bash
-# 每个 worktree 创建一个 .local/ 目录用于存放未定稿中间文件
-mkdir -p code/.local
-mkdir -p BA/.local/discussions BA/.local/analysis BA/.local/drafts
-mkdir -p Deploy/.local
-
-# 更新各 worktree 的 .gitignore
-# code/.gitignore, BA/.gitignore, Deploy/.gitignore 各加一行：
-# .local/
-```
-
-这些目录不进 Git，仅用于临时存放草稿、讨论记录、分析报告等。
-定稿后晋升到对应 worktree 的跟踪目录。
-
-**验证**：
-
-```bash
 git worktree list
-# 应输出（路径可能因 OS 不同）：
-# <repo-root>      workspace  [<repo-root>]
-# <repo-root>/code       develop    [<repo-root>/code]
-# <repo-root>/BA         demand     [<repo-root>/BA]
-# <repo-root>/Deploy     deploy     [<repo-root>/Deploy]
-
-ls <repo-root>
-# 应看到：README.md  .git/  code/  BA/  Deploy/
 ```
 
-### Step 5: 推送到远程
+### Step 5 bootstrap 文件（否则 BA 启动就缺文件）
+
+空目录 git 不跟踪。`BA/` 必须落真实文件：
+
+```bash
+cp <skill-path>/assets/templates/ba-readme.md.tpl        BA/README.md
+cp <skill-path>/assets/templates/agent-registry.md.tpl   BA/dispatch/agent-registry.md
+cp <skill-path>/assets/templates/req-registry.md.tpl     BA/dispatch/req-registry.md
+cp <skill-path>/assets/templates/dispatch-rules.md.tpl   BA/dispatch/rules.md
+cp <skill-path>/assets/templates/cleanup-log.md.tpl      BA/dispatch/cleanup-log.md
+cp <skill-path>/assets/templates/deploy-readme.md.tpl    Deploy/README.md
+```
+
+在各 worktree 写入 `.local/` 与 `.gitignore`：
+
+```bash
+for d in code BA Deploy; do
+  mkdir -p "$d/.local"/{discussions,analysis,drafts,references}
+  grep -qxF '.local/' "$d/.gitignore" 2>/dev/null || echo '.local/' >> "$d/.gitignore"
+done
+```
+
+按分支分别提交（三个 worktree 各自 commit）。
+
+### Step 6 远程
 
 ```bash
 git remote add origin <url>
 git push -u origin workspace main develop demand deploy
-# 远程默认分支应设为 workspace（在 GitHub/GitLab settings 改）
+# 在 GitHub/GitLab 把默认分支设为 workspace
 ```
 
 ## 验证清单
 
-- [ ] `git branch` 显示 `workspace` 为当前分支
-- [ ] 仓库根 `git ls-files` **只**输出 `.gitignore` 和 `README.md`
-- [ ] 仓库根有 `code/`、`BA/`、`Deploy/` 三个 worktree 目录
-- [ ] `code/` worktree → `develop` 分支
-- [ ] `BA/` worktree → `demand` 分支
-- [ ] `Deploy/` worktree → `deploy` 分支
-- [ ] `workspace`、`main`、`develop`、`demand`、`deploy` 已推送到远程
-- [ ] 远程默认分支 = `workspace`
+- [ ] `git ls-files`（在根）恰好 `.gitignore` + `README.md`
+- [ ] `git worktree list` 四个条目，路径都在根下一层
+- [ ] `code/`→develop，`BA/`→demand，`Deploy/`→deploy
+- [ ] `BA/dispatch/` 下 4 个文件真的存在（不是空目录）
+- [ ] `git add -A --dry-run` 在根不产生新条目
+- [ ] `python <skill-path>/scripts/aw.py verify` 全绿
+- [ ] 五个分支已推送，远程默认分支 = workspace
 
-## 后续创建 feature worktree
-
-需求来了，从仓库根或从 `BA/`、`code/` 出发：
+## 后续：接需求
 
 ```bash
-# 方式 1：在仓库根跑
+# 在仓库根（推荐）
 git worktree add feature-REQ-001 -b feature/REQ-001 develop
 
-# 方式 2：在 BA/ 里跑（用 ../ 回到仓库根，再下钻）
-cd BA
-git worktree add ../feature-REQ-001 -b feature/REQ-001 develop
+# 或在 BA/ 里（../ 回到仓库根）
+cd BA && git worktree add ../feature-REQ-001 -b feature/REQ-001 develop
 ```
-
-新 worktree 跟 `code/` `BA/` 在仓库根平铺，**没有中间目录层**。

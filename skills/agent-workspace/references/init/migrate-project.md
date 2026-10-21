@@ -1,227 +1,135 @@
-# 已有项目迁移流程
+# 已有项目迁移
 
-> 把一个**已有 git 仓库**（有 commit、tag、可能已发布）原地转成 `workspace` 工作流。
-> **核心原则：保历史、不动 commit hash、新建 workspace 分支作为新默认**。
-> 禁止使用 `git filter-branch` / `git rebase -i` 改写历史。
+把一个**已经在用**的 git 仓库原地转成 workspace 工作流。
 
-## 适用场景
+**核心原则**：保历史、不动 commit hash、不新增业务分支的提交。
+**禁止**：`git filter-branch`、`git rebase -i` 改写历史。
 
-- 已有 `develop`（或 `master`/`main`）分支和代码
-- 可能有 tag、release、别人 fork
-- 想要物理平铺的 worktree 结构（`code/`、`BA/`、`Deploy/` 都在仓库根）
-- 现状可能是：仓库根 = 主 worktree（一般是 develop），worktree 嵌套在仓库根内
-
-## 流程
-
-### Step 0: 备份
+## 0. 前置条件（不满足不要开始）
 
 ```bash
-# 完整镜像备份（含所有引用对象）
-git clone --mirror <url> backup.git
-
-# 验证备份可独立使用
-cd backup.git && git fsck && cd ..
+git status --porcelain --untracked-files=no     # 必须为空（先 commit 或 stash）
+git worktree list                                # 只应有 1 个条目（主 worktree）
+git clone --mirror . ../backup-$(date +%s).git   # 兜底备份，必须做
 ```
 
-### Step 1: 确认当前分支结构
+> 有未提交的**已跟踪**改动时强行迁移 = 这些改动会被 develop 的已提交版本覆盖。先 commit。
+
+## 1. 记录现状
 
 ```bash
-git branch -a
-# 记录主开发分支名称（develop / master / main）
-git worktree list
-# 记录现有 worktree 状态
+MAIN=$(git rev-parse --abbrev-ref HEAD)   # 通常是 develop / main / master
+git ls-tree -r --name-only "$MAIN" > /tmp/tracked.txt      # 会被 develop 管住的文件
+git ls-files --others --exclude-standard > /tmp/untracked.txt  # 本地独有文件
 ```
 
-### Step 2: 创建 workspace 分支
+## 2. 建 workspace 根容器（不动工作区）
 
 ```bash
-# 在仓库根跑
 git checkout --orphan workspace
-git rm -rf . 2>/dev/null || true
-git commit --allow-empty --allow-empty-message -m "[Init] workspace root"
+git reset                                  # 只清 index；文件全部留在磁盘
 ```
 
-> `--orphan` 切到新分支，但工作区文件还在。`git rm -rf .` 仅清跟踪，不删工作区文件。
-> 接下来需要把工作区文件搬到 `code/` 子目录（因为原本属于 develop 分支）。
+此时 `git status` 会显示所有文件为 untracked —— 正常。
 
-### Step 3: 把当前工作区文件搬到 code/
+## 3. 写 2 个根文件并提交
 
 ```bash
-# 此时在 workspace/ 工作区，文件还没动
-# 但我们要建一个 code/ 子目录，把 develop 的工作文件全放进去
-
-mkdir code
-# 用 shell 把所有非 .git / workspace 自身文件移到 code/
-# PowerShell（Windows）：
-Get-ChildItem -Force | Where-Object { $_.Name -ne '.git' -and $_.Name -ne 'code' } | Move-Item -Destination .\code\
-
-# Bash（Linux/macOS）：
-# shopt -s dotglob
-# mv !(code|.git) code/   # 需要 extglob
-```
-
-**关键**：搬完后的目录结构：
-
-```
-<repo-root>/
-├── .git/
-├── README.md                    # workspace 的 README（待写）
-├── .gitignore                   # 双层防御模板
-└── code/                        # develop 原本的所有文件都在这里
-    ├── src/
-    ├── tests/
-    ├── package.json
-    └── ...
-```
-
-> 如果原项目 worktree 是嵌套结构（如 `code/feature-xxx/`），需要先把嵌套目录拍平：
-> 把 `code/feature-xxx/` 里的内容合并到 `code/` 一层。
-
-> 如果原项目 worktree 是嵌套结构（如 `code/feature-xxx/`），需要先把嵌套目录拍平：
-> 把 `code/feature-xxx/` 里的内容合并到 `code/` 一层。
-
-### Step 4: 写 workspace 的 README + 双层防御 .gitignore
-
-```bash
-# 用模板
-cp <skill-path>/templates/root-readme.md.tpl README.md
-cp <skill-path>/templates/root-gitignore.tpl .gitignore
-# 编辑 README.md 顶部占位
+cp <skill-path>/assets/templates/root-gitignore.tpl .gitignore
+cp <skill-path>/assets/templates/root-readme.md.tpl README.md     # 再改占位
 git add README.md .gitignore
-git commit -m "[Workspace] 初始化导航 + 双层防御 .gitignore"
+git commit -m "[Workspace] 迁移：初始化根容器"
 ```
 
-**验证**：
+## 4. 把根目录腾空（关键步骤）
 
 ```bash
-git ls-files
-# 应只输出：
-# .gitignore
-# README.md
+# 4.1 本地未跟踪文件挪到仓库外（.env、node_modules、本地配置 …）
+mkdir -p ../aside
+tar -cf - -T /tmp/untracked.txt | tar -xf - -C ../aside
+
+# 4.2 develop 已跟踪的文件从根上删掉（README/.gitignore 除外，它们是根容器的）
+grep -v -x -e README.md -e .gitignore /tmp/tracked.txt | xargs -r rm -f
+
+# 4.3 清理空目录
+find . -mindepth 1 -type d -empty -not -path './.git*' -delete
 ```
 
-### Step 5: 把 develop 重新挂到 code/
+现在根目录只剩 `.git` `.gitignore` `README.md`。
+
+## 5. 把 develop 挂到 code/
 
 ```bash
-# 现在 code/ 在工作区，但 git 还没把它识别为 develop 分支
-# 需要把 code/ 的文件 commit 到 develop 分支
-# 切换分支会改变工作区——用 stash 保存
-
-git stash -u  # 保存所有未跟踪内容（含 code/ 目录）
-git checkout develop
-git stash pop  # code/ 回到工作区
-git add code/
-git commit -m "[Migrate] 迁移到 workspace 工作流 (关联: 基础设施)"
-
-# 现在可以正常用 worktree
-git checkout workspace
-git worktree add code develop
+git worktree add code "$MAIN"     # 因为 code/ 不存在，一定成功
+tar -cf - -C ../aside . | tar -xf - -C code/   # 本地文件放回 code/
+rm -rf ../aside
 ```
 
-> **Step 5 是迁移中最 tricky 的**。备选方案：如果接受一个"迁移 commit"，直接走上面流程；
-> 如果完全不想加 commit，可以用 `git read-tree` 等更底层命令，但操作复杂，**不推荐**。
+`code/` 里现在有 develop 的**全部已跟踪文件** + 你的本地文件。
 
-### Step 6: 创建 BA / Deploy 分支并登记 worktree
+## 6. 建 demand / deploy 分支与 worktree
 
 ```bash
 git checkout --orphan demand
-git rm -rf . 2>/dev/null || true
+git reset
 mkdir -p demands backlog sprint decisions dispatch
-echo "# 需求管理" > README.md
-git add README.md
-git commit -m "[Init] 需求管理分支"
+printf '# 需求管理\n' > README.md
+git add README.md && git commit -m "[Init] 需求管理分支"
 
 git checkout workspace
-
 git checkout --orphan deploy
-git rm -rf . 2>/dev/null || true
+git reset
 mkdir -p apps environments releases scripts
-echo "# 部署配置" > README.md
-git add README.md
-git commit -m "[Init] 部署分支"
+printf '# 部署配置\n' > README.md
+git add README.md && git commit -m "[Init] 部署分支"
 
 git checkout workspace
-
 git worktree add BA demand
 git worktree add Deploy deploy
 ```
 
-### Step 7: 改远程默认分支
+再按 `new-project.md` 的 Step 5 落 bootstrap 文件。
 
-**在 GitHub / GitLab settings 操作**（不是 git 命令）：
+## 7. 远程默认分支与 CI
 
-1. 进入仓库 Settings → Branches
-2. Default branch: 选择 `workspace`
-3. 确认切换
-
-### Step 8: 改 CI / CD 工作流
-
-CI 配置文件一般在 `code/` 目录下（develop 分支）。需要确认：
+1. GitHub/GitLab → Settings → Branches → Default branch 改为 `workspace`。
+2. CI 脚本里显式 checkout `develop`（不要依赖默认分支）：
 
 ```yaml
-# code/.github/workflows/ci.yml
-on:
-  push:
-    branches: [develop, main]   # 不再需要 workspace
-  pull_request:
-    branches: [develop, main]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    # CI 在 GitHub Actions 上 checkout develop 分支
-    # 工作目录是 develop 分支的根（即 code/ worktree 的内容）
-    # 所以脚本里的路径仍是 src/ tests/，不需要改
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: develop
-      - run: pnpm install
-      - run: pnpm test
+- uses: actions/checkout@v4
+  with:
+    ref: develop
 ```
 
-### Step 9: 验证
+3. 通知所有协作者重新 clone（旧 clone 里没有 worktree 拓扑）。
+
+## 8. 验证
 
 ```bash
-git worktree list
-# <repo-root>      workspace  [<repo-root>]
-# <repo-root>/code       develop    [<repo-root>/code]
-# <repo-root>/BA         demand     [<repo-root>/BA]
-# <repo-root>/Deploy     deploy     [<repo-root>/Deploy]
+git ls-files                     # 恰好 .gitignore + README.md
+git worktree list                # 根 + code + BA + Deploy
+ls code | head                   # 原项目文件都在
+git -C code status --porcelain   # 只有你自己的本地未跟踪文件
+python <skill-path>/scripts/aw.py verify
+```
 
-ls <repo-root>
-# README.md  .git/  code/  BA/  Deploy/   （无 .gitignore，因为不跟踪）
+## 9. 回滚
 
-cd <repo-root>/code
-ls
-# 应看到原项目的所有文件：src/ tests/ package.json ...
-git log --oneline -5
-# 应看到原 develop 分支历史 + 可能的 [Migrate] commit
-
+```bash
 cd <repo-root>
-git ls-files
-# 应只输出：
-# .gitignore
-# README.md
+git worktree remove code BA Deploy --force
+git checkout "$MAIN"
+git branch -D workspace demand deploy
 ```
 
-## 风险提示
+历史没被改写，所以 develop 分支始终可用；`../backup-*.git` 是最后兜底。
 
-- 迁移前**必须**确保所有团队成员已提交变更
-- 迁移后**必须**通知所有成员重新 clone（worktree 路径变了，旧的 worktree 失效）
-- 代码路径变化后需更新 IDE 配置和 CI 路径
-- 远程默认分支切换**必须**先在 GitHub/GitLab 备份 develop 分支
-- 建议在测试分支上先验证整个流程
+## 常见错误
 
-## 回滚
-
-如果迁移出问题：
-
-```bash
-# 1. 恢复远程默认分支 → develop（在 GitHub/GitLab settings）
-# 2. 通知所有成员回退：
-#    - 删除本地 workspace 分支
-#    - git worktree remove code BA Deploy
-#    - 重新 git pull origin develop
-# 3. 备份仓库 (backup.git) 始终可作最后兜底
-```
+| 错误 | 后果 | 正确做法 |
+|------|------|---------|
+| `git rm -rf .` 代替 `git reset` | **删光工作区文件** | `git reset` |
+| 先把代码 `mv` 进 `code/` 再 `worktree add code develop` | `fatal: 'code' already exists`；即便成功也是 `code/code/src` | 先腾空根目录，让 worktree add 把文件"变"进去 |
+| 迁移后根目录还留着 `src/` | workspace 分支被污染 | 按第 4 步删掉已跟踪文件 |
+| 没备份就动手 | 无法回退 | `git clone --mirror` |
+| 用 `--force` 跳过"工作区不干净"检查 | 丢掉未提交改动 | 先 commit |

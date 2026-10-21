@@ -3,3 +3,11 @@
 # 临时备份目录（agent 误操作或文件覆盖时使用）
 .trash/
 args
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db

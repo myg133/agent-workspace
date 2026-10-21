@@ -1,4 +1,8 @@
-# Agent Workspace 组织规范
+> **归档文档**：本文写于 1.0 时代，描述的是"仓库根 = develop worktree"的旧结构。
+> 现行规范以 [SKILL.md](../../skills/agent-workspace/SKILL.md) 为准（workspace 根容器 + 平铺 worktree）。
+> 保留此文仅用于追溯设计演进。
+
+# Agent Workspace 组织规范（v1.0 归档）
 
 ## 这是什么
 

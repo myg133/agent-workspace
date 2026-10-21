@@ -70,7 +70,7 @@ git push -u origin feature/REQ-xxx
 # 在 GitHub/GitLab 创建 PR → develop
 ```
 
-PR 合并后 Dev Agent 自动清理 worktree（详见 `skills/agent-workspace/references/lifecycle/worktree-cleanup.md`）。
+PR 合并后 Dev Agent 自动清理 worktree（详见 `skills/agent-workspace/references/lifecycle/cleanup.md`）。
 
 ## 各角色 Agent 入口
 
@@ -78,8 +78,9 @@ PR 合并后 Dev Agent 自动清理 worktree（详见 `skills/agent-workspace/re
 - **Dev Agent**（子 agent）→ 进入 `feature-REQ-xxx/` 目录
 - **QA Agent**（子 agent）→ Pre-merge 进 `feature-REQ-xxx/`，Post-merge 进 `code/` + staging
 - **Deploy Agent**（子 agent）→ 进入 `Deploy/` 目录
+- **Explore Agent**（子 agent，只读）→ 任意目录
 
-新 agent 启动时必须加载 `skills/agent-workspace/SKILL.md`。
+新 agent 启动时先读 `skills/agent-workspace/SKILL.md`（索引），再读 `references/roles/<角色>.md`。
 
 ## 硬规则
 
@@ -94,9 +95,12 @@ PR 合并后 Dev Agent 自动清理 worktree（详见 `skills/agent-workspace/re
 ## 详细文档
 
 - 工作流规范：`skills/agent-workspace/SKILL.md`
+- 全局约定：`skills/agent-workspace/references/global/`
+- 角色工作流：`skills/agent-workspace/references/roles/`
 - 初始化：`skills/agent-workspace/references/init/`
-- 生命周期：`skills/agent-workspace/references/lifecycle/`
+- 生命周期与发布：`skills/agent-workspace/references/lifecycle/`
 - 模板：`skills/agent-workspace/assets/templates/`
+- 自检工具：`python skills/agent-workspace/scripts/aw.py verify`
 - 各角色 Agent 定义：`com.anspire-open.agents/`
 - 各角色 README：见对应 worktree 根目录（如 `BA/README.md`）
 

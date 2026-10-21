@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Workspace 架构图</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 40px 24px 48px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .canvas { width: 100%; max-width: 1560px; }
+  .title { font-size: 15px; color: #9aa3b2; letter-spacing: .5px; margin-bottom: 4px; }
+  .subtitle { font-size: 12.5px; color: #b8bfca; margin-bottom: 24px; }
+  svg { width: 100%; height: auto; display: block; }
+
+  .node { fill: #e4f0fd; stroke: #cfe3fb; stroke-width: 1.1; }
+  .node-alt { fill: #eef6fe; stroke: #dbeafc; stroke-width: 1.1; }
+  .node-auth { fill: #dcecfd; stroke: #c3dbfa; stroke-width: 1.2; }
+  .node-product { fill: #dfeefe; stroke: #c6dcfa; stroke-width: 1.3; }
+  .node-step { fill: #f2f8fe; stroke: #d9e8fc; stroke-width: 1.1; }
+  .panel { fill: #f8fbfe; stroke: #e4ecf6; stroke-width: 1; }
+
+  .t-main { fill: #2b7de0; font-size: 16px; font-weight: 500; text-anchor: middle; }
+  .t-sub { fill: #6aa5e9; font-size: 12.5px; text-anchor: middle; }
+  .t-sub-sm { fill: #7fb0e8; font-size: 11.5px; text-anchor: middle; }
+  .t-step { fill: #3a86e2; font-size: 14px; font-weight: 500; text-anchor: middle; }
+  .t-step-sub { fill: #7fb0e8; font-size: 11px; text-anchor: middle; }
+  .t-num { fill: #a9c9ef; font-size: 10.5px; font-weight: 600; text-anchor: middle; }
+  .t-label { fill: #aeb6c2; font-size: 12px; text-anchor: middle; }
+  .t-panel-h { fill: #6b7686; font-size: 12px; font-weight: 600; }
+  .t-panel { fill: #8b95a5; font-size: 11.5px; }
+
+  .ln { stroke: #bcc3ce; stroke-width: 1.2; fill: none;
+        stroke-linecap: round; stroke-linejoin: round; }
+  .ln-dash { stroke: #cdd4de; stroke-width: 1.2; fill: none;
+             stroke-dasharray: 5 4; stroke-linecap: round; }
+  .ln-auth { stroke: #a8c8ec; stroke-width: 1.3; fill: none;
+             stroke-linecap: round; stroke-linejoin: round; }
+  .ln-step { stroke: #c9d6e6; stroke-width: 1.2; fill: none;
+             stroke-linecap: round; stroke-linejoin: round; }
+  .cyl-body { fill: #e4f0fd; stroke: #cfe3fb; stroke-width: 1.1; }
+  .cyl-top { fill: #d6e9fc; stroke: #cfe3fb; stroke-width: 1.1; }
+</style>
+</head>
+<body>
+<div class="canvas">
+  <div class="title">Agent Workspace 架构</div>
+  <div class="subtitle">非开发人员入口 · 用户初始化 · 权限控制 · 多 Agent 协作 · GitLab CI · ArgoCD · Kubernetes · Traefik</div>
+
+<svg viewBox="0 0 1700 1620" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arw" viewBox="0 0 8 8" refX="7" refY="4"
+            markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1.5,1.5 L7,4 L1.5,6.5" fill="none" stroke="#bcc3ce"
+            stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arw-d" viewBox="0 0 8 8" refX="7" refY="4"
+            markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1.5,1.5 L7,4 L1.5,6.5" fill="none" stroke="#cdd4de"
+            stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arw-a" viewBox="0 0 8 8" refX="7" refY="4"
+            markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1.5,1.5 L7,4 L1.5,6.5" fill="none" stroke="#a8c8ec"
+            stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arw-s" viewBox="0 0 8 8" refX="7" refY="4"
+            markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M1.5,1.5 L7,4 L1.5,6.5" fill="none" stroke="#c9d6e6"
+            stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- ══════════ ① 非开发人员 ══════════ -->
+
+  <rect class="node-product" x="640" y="20" width="320" height="76" rx="14"/>
+  <text class="t-main" x="800" y="56">非开发人员</text>
+  <text class="t-sub" x="800" y="78">业务 · 产品 · 运营 · 管理者</text>
+
+  <path class="ln" d="M 800 96 L 800 130" marker-end="url(#arw)"/>
+
+  <!-- ══════════ ② 上层封装：统一工作台 ══════════ -->
+
+  <rect class="node-product" x="580" y="132" width="440" height="102" rx="14"/>
+  <text class="t-main" x="800" y="166">统一工作台（上层封装）</text>
+  <text class="t-sub-sm" x="800" y="190">对话式需求入口 · 进度看板 · 结果交付</text>
+  <text class="t-sub-sm" x="800" y="210">无需 Git / K8s 知识 · 平台代管全流程</text>
+
+  <path class="ln" d="M 800 234 L 800 268" marker-end="url(#arw)"/>
+  <text class="t-label" x="850" y="256">首次进入</text>
+
+  <!-- ══════════ ③ 用户初始化流程 ══════════ -->
+
+  <rect class="panel" x="40" y="270" width="1620" height="190" rx="10"/>
+  <text class="t-panel-h" x="62" y="296">用户初始化（首次使用，平台自动编排）</text>
+  <line x1="62" y1="308" x2="1638" y2="308" stroke="#e8eef6" stroke-width="1"/>
+
+  <!-- Step 1 -->
+  <rect class="node-step" x="70" y="322" width="228" height="112" rx="12"/>
+  <text class="t-num" x="184" y="344">STEP 01</text>
+  <text class="t-step" x="184" y="370">账号开通</text>
+  <text class="t-step-sub" x="184" y="392">SSO / 邀请制</text>
+  <text class="t-step-sub" x="184" y="410">企业身份对接</text>
+
+  <path class="ln-step" d="M 300 378 L 326 378" marker-end="url(#arw-s)"/>
+
+  <!-- Step 2 -->
+  <rect class="node-step" x="330" y="322" width="228" height="112" rx="12"/>
+  <text class="t-num" x="444" y="344">STEP 02</text>
+  <text class="t-step" x="444" y="370">角色分配</text>
+  <text class="t-step-sub" x="444" y="392">业务 / 产品 / 运营</text>
+  <text class="t-step-sub" x="444" y="410">按角色授权</text>
+
+  <path class="ln-step" d="M 560 378 L 586 378" marker-end="url(#arw-s)"/>
+
+  <!-- Step 3 -->
+  <rect class="node-step" x="590" y="322" width="228" height="112" rx="12"/>
+  <text class="t-num" x="704" y="344">STEP 03</text>
+  <text class="t-step" x="704" y="370">创建工作空间</text>
+  <text class="t-step-sub" x="704" y="392">项目级隔离</text>
+  <text class="t-step-sub" x="704" y="410">独立 Git 仓库</text>
+
+  <path class="ln-step" d="M 820 378 L 846 378" marker-end="url(#arw-s)"/>
+
+  <!-- Step 4 -->
+  <rect class="node-step" x="850" y="322" width="228" height="112" rx="12"/>
+  <text class="t-num" x="964" y="344">STEP 04</text>
+  <text class="t-step" x="964" y="370">选择项目模板</text>
+  <text class="t-step-sub" x="964" y="392">预置需求流程</text>
+  <text class="t-step-sub" x="964" y="410">技术栈配置</text>
+
+  <path class="ln-step" d="M 1080 378 L 1106 378" marker-end="url(#arw-s)"/>
+
+  <!-- Step 5 -->
+  <rect class="node-step" x="1110" y="322" width="228" height="112" rx="12"/>
+  <text class="t-num" x="1224" y="344">STEP 05</text>
+  <text class="t-step" x="1224" y="370">Agent 自动装配</text>
+  <text class="t-step-sub" x="1224" y="392">BA / Dev / QA / Deploy</text>
+  <text class="t-step-sub" x="1224" y="410">Worktree 初始化</text>
+
+  <path class="ln-step" d="M 1340 378 L 1366 378" marker-end="url(#arw-s)"/>
+
+  <!-- Step 6 -->
+  <rect class="node-step" x="1370" y="322" width="228" height="112" rx="12"/>
+  <text class="t-num" x="1484" y="344">STEP 06</text>
+  <text class="t-step" x="1484" y="370">环境就绪</text>
+  <text class="t-step-sub" x="1484" y="392">工作台入口开放</text>
+  <text class="t-step-sub" x="1484" y="410">可提交首个需求</text>
+
+  <path class="ln" d="M 800 460 L 800 498" marker-end="url(#arw)"/>
+  <text class="t-label" x="850" y="484">已初始化</text>
+
+  <!-- ══════════ ④ 身份认证与权限 ══════════ -->
+
+  <rect class="node-auth" x="590" y="500" width="420" height="100" rx="14"/>
+  <text class="t-main" x="800" y="532">身份认证与权限控制</text>
+  <text class="t-sub-sm" x="800" y="556">GitLab SSO · 分支保护 · MR 审批</text>
+  <text class="t-sub-sm" x="800" y="574">K8s RBAC · ACR 密钥 · Traefik TLS</text>
+
+  <path class="ln-auth" d="M 800 600 L 800 636" marker-end="url(#arw-a)"/>
+  <text class="t-label" x="856" y="622">已授权</text>
+
+  <!-- ══════════ ⑤ BA 主干 ══════════ -->
+
+  <rect class="node" x="660" y="638" width="280" height="82" rx="14"/>
+  <text class="t-main" x="800" y="673">BA Agent</text>
+  <text class="t-sub" x="800" y="695">需求 · 调度 · 状态机</text>
+
+  <path class="ln" d="M 800 720 L 800 754" marker-end="url(#arw)"/>
+
+  <rect class="node" x="620" y="756" width="360" height="82" rx="14"/>
+  <text class="t-main" x="800" y="791">需求管理 · demand 分支</text>
+  <text class="t-sub" x="800" y="813">需求文档 · 验收标准 · status.md</text>
+
+  <!-- 扇出 -->
+  <path class="ln" d="M 800 838 L 800 856 L 170 856 L 170 890" marker-end="url(#arw)"/>
+  <path class="ln" d="M 800 838 L 800 856 L 530 856 L 530 890" marker-end="url(#arw)"/>
+  <path class="ln" d="M 800 838 L 800 856 L 1010 856 L 1010 890" marker-end="url(#arw)"/>
+  <path class="ln" d="M 800 838 L 800 856 L 1370 856 L 1370 890" marker-end="url(#arw)"/>
+
+  <!-- ══════════ ⑥ 四角色 ══════════ -->
+
+  <rect class="node" x="40" y="892" width="260" height="86" rx="14"/>
+  <text class="t-main" x="170" y="929">Dev Agent</text>
+  <text class="t-sub" x="170" y="951">编码 · 测试 · PR</text>
+
+  <rect class="node" x="400" y="892" width="260" height="86" rx="14"/>
+  <text class="t-main" x="530" y="929">QA Agent</text>
+  <text class="t-sub" x="530" y="951">审查 · 验证 · 报告</text>
+
+  <rect class="node" x="880" y="892" width="260" height="86" rx="14"/>
+  <text class="t-main" x="1010" y="929">Deploy Agent</text>
+  <text class="t-sub" x="1010" y="951">Kustomize · 发布</text>
+
+  <rect class="node" x="1240" y="892" width="260" height="86" rx="14"/>
+  <text class="t-main" x="1370" y="929">Explore Agent</text>
+  <text class="t-sub" x="1370" y="951">只读 · 调研 · 摸底</text>
+
+  <path class="ln" d="M 170 978 L 170 1012" marker-end="url(#arw)"/>
+  <path class="ln" d="M 530 978 L 530 1012" marker-end="url(#arw)"/>
+  <path class="ln" d="M 1010 978 L 1010 1012" marker-end="url(#arw)"/>
+  <path class="ln" d="M 1370 978 L 1370 1012" marker-end="url(#arw)"/>
+
+  <!-- ══════════ ⑦ 产出层 ══════════ -->
+
+  <rect class="node-alt" x="40" y="1014" width="260" height="76" rx="14"/>
+  <text class="t-main" x="170" y="1047">feature/REQ-xxx</text>
+  <text class="t-sub" x="170" y="1068">独立 worktree</text>
+
+  <rect class="node-alt" x="400" y="1014" width="260" height="76" rx="14"/>
+  <text class="t-main" x="530" y="1047">测试用例 / 验证报告</text>
+  <text class="t-sub" x="530" y="1068">BA/demands/REQ-xxx/</text>
+
+  <rect class="node-alt" x="880" y="1014" width="260" height="76" rx="14"/>
+  <text class="t-main" x="1010" y="1047">deploy 分支</text>
+  <text class="t-sub" x="1010" y="1068">overlays/uat · Ingress</text>
+
+  <rect class="node-alt" x="1240" y="1014" width="260" height="76" rx="14"/>
+  <text class="t-main" x="1370" y="1047">调研报告</text>
+  <text class="t-sub" x="1370" y="1068">path:line 级证据</text>
+
+  <!-- ══════════ ⑧ CI / CD ══════════ -->
+
+  <path class="ln" d="M 170 1090 L 170 1132" marker-end="url(#arw)"/>
+  <path class="ln" d="M 1010 1090 L 1010 1132" marker-end="url(#arw)"/>
+
+  <rect class="node" x="30" y="1134" width="280" height="86" rx="14"/>
+  <text class="t-main" x="170" y="1171">CI 流水线</text>
+  <text class="t-sub" x="170" y="1193">build → test → docker build</text>
+
+  <rect class="node" x="890" y="1134" width="240" height="86" rx="14"/>
+  <text class="t-main" x="1010" y="1171">ArgoCD</text>
+  <text class="t-sub" x="1010" y="1193">App-of-Apps · selfHeal</text>
+
+  <path class="ln-dash" d="M 310 1177 L 886 1177" marker-end="url(#arw-d)"/>
+  <text class="t-label" x="598" y="1166">CI 写入 deploy 分支镜像 tag</text>
+
+  <!-- ══════════ ⑨ 制品 / 运行时 ══════════ -->
+
+  <path class="ln" d="M 170 1220 L 170 1262" marker-end="url(#arw)"/>
+  <path class="ln" d="M 1010 1220 L 1010 1262" marker-end="url(#arw)"/>
+
+  <path class="cyl-body"
+        d="M 55 1278 C 55 1266 285 1266 285 1278
+           L 285 1344 C 285 1356 55 1356 55 1344 Z"/>
+  <ellipse class="cyl-top" cx="170" cy="1278" rx="115" ry="12"/>
+  <text class="t-main" x="170" y="1314">ACR 镜像仓库</text>
+  <text class="t-sub" x="170" y="1335">aigccontainer.azurecr.cn</text>
+
+  <path class="ln-dash" d="M 285 1306 L 886 1306" marker-end="url(#arw-d)"/>
+  <text class="t-label" x="586" y="1295">镜像拉取</text>
+
+  <rect class="node" x="850" y="1264" width="320" height="86" rx="14"/>
+  <text class="t-main" x="1010" y="1301">K8s 命名空间 × 5</text>
+  <text class="t-sub" x="1010" y="1323">open-man · fde · gateway · aisearch · wb365</text>
+
+  <!-- ══════════ ⑩ 流量入口 ══════════ -->
+
+  <path class="ln" d="M 1010 1350 L 1010 1390" marker-end="url(#arw)"/>
+
+  <rect class="node" x="870" y="1392" width="280" height="76" rx="14"/>
+  <text class="t-main" x="1010" y="1425">Traefik Ingress</text>
+  <text class="t-sub" x="1010" y="1446">通配 TLS · 自动发现</text>
+
+  <path class="ln" d="M 1010 1468 L 1010 1506" marker-end="url(#arw)"/>
+
+  <rect class="node" x="870" y="1508" width="280" height="76" rx="14"/>
+  <text class="t-main" x="1010" y="1541">业务 Pod</text>
+  <text class="t-sub" x="1010" y="1562">Deployment 滚动更新</text>
+
+  <!-- ══════════ ⑪ 外部用户 ══════════ -->
+
+  <rect class="node" x="1350" y="1392" width="220" height="76" rx="14"/>
+  <text class="t-main" x="1460" y="1425">外部用户</text>
+  <text class="t-sub" x="1460" y="1446">*.local.anspire.cn</text>
+
+  <path class="ln" d="M 1350 1430 L 1154 1430" marker-end="url(#arw)"/>
+  <text class="t-label" x="1252" y="1419">HTTPS</text>
+
+  <!-- ══════════ ⑫ 权限矩阵 ══════════ -->
+
+  <rect class="panel" x="40" y="1392" width="620" height="200" rx="10"/>
+  <text class="t-panel-h" x="60" y="1420">权限控制矩阵</text>
+  <line x1="60" y1="1432" x2="640" y2="1432" stroke="#e8eef6" stroke-width="1"/>
+
+  <text class="t-panel" x="60" y="1456">GitLab</text>
+  <text class="t-panel" x="180" y="1456">分支保护 · MR 审批 · CODEOWNERS</text>
+
+  <text class="t-panel" x="60" y="1482">Kubernetes</text>
+  <text class="t-panel" x="180" y="1482">RBAC · ServiceAccount · NetworkPolicy</text>
+
+  <text class="t-panel" x="60" y="1508">ACR</text>
+  <text class="t-panel" x="180" y="1508">拉取密钥（azurecr-pull）· 推送权限</text>
+
+  <text class="t-panel" x="60" y="1534">Traefik</text>
+  <text class="t-panel" x="180" y="1534">通配 TLS · 认证中间件 · 路由隔离</text>
+
+  <text class="t-panel" x="60" y="1560">ArgoCD</text>
+  <text class="t-panel" x="180" y="1560">Project 隔离 · sync 权限 · 仓库凭据</text>
+
+</svg>
+</div>
+</body>
+</html>
