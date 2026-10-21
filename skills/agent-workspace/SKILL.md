@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.5.0
+  version: 1.6.0
 ---
 
 # Agent Workspace
@@ -79,8 +79,10 @@ python <skill-path>/scripts/aw.py audit
    由 `aw.py claim` 强制（先进 `ALREADY_HOLDING`，不是靠提醒）。
 8. 认领是创建 worktree 的唯一入口：禁止手工 `git worktree add` 绕过认领。
 9. BA 间消息只走 `bus` 分支的空 commit；**契约/决策才进 `demand`**，不要把对话提交到 demand。
-10. `develop` 只通过 PR 合并；`main` 只从 `release` 合并。
-11. 命令铁律：`git checkout --orphan` 之后用 `git reset`，**绝不用 `git rm -rf .`**（会删工作区文件）。
+10. 契约有版本：已 ratified 的 `vN.md` 不可改；消费方在 `.feature/manifest.json` 里 pin 版本；
+    合并前 `aw.py contract check` 必须通过。
+11. `develop` 只通过 PR 合并；`main` 只从 `release` 合并。
+12. 命令铁律：`git checkout --orphan` 之后用 `git reset`，**绝不用 `git rm -rf .`**（会删工作区文件）。
 
 ## 我该读什么
 
@@ -97,6 +99,7 @@ python <skill-path>/scripts/aw.py audit
 | 发布 | `references/lifecycle/release.md` | `roles/deploy.md` |
 | 升级已运行的项目 | `references/lifecycle/upgrade.md` | `aw.py upgrade` |
 | BA 之间沟通 | `references/global/messaging.md` | `aw.py msg` |
+| 接口/契约对齐 | `references/global/contracts.md` | `aw.py contract check` |
 
 子 Agent 的 prompt 里应当**直接给出角色文件路径**，不要让它自己猜该读哪一节。
 
@@ -122,6 +125,7 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 | `aw.py audit` | 只读巡检，输出四段报告 | 0 干净，1 有问题 |
 | `aw.py upgrade` | 旧项目升级检查（只读）：补什么/清什么/改什么 | 0 无需动作，1 有待处理 |
 | `aw.py msg send/inbox/ack/flush` | BA 间消息（空 commit 走 `bus` 分支） | 0 成功，3 排队/拒绝 |
+| `aw.py contract check` | 契约一致性：pin 版本、consumer 缺失、未 ack | 0 通过，1 有问题 |
 | `aw.py next-req` | 计算下一个可用 REQ 编号 | 0 |
 | `aw.py queue add/list/sync` | 维护待认领队列 | 0 |
 | `aw.py claim whoami/next/take/release/list/doctor` | 任务认领（**WIP=1，工具强制**） | 0 成功，3 拒绝 |
@@ -161,6 +165,7 @@ Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输�
 | `references/global/concurrency.md` | 多 BA：身份、WIP=1 认领、锁、doctor |
 | `references/global/platform-notes.md` | Windows / macOS / Linux / WSL 差异 |
 | `references/global/messaging.md` | BA 间消息：bus 分支、格式、寻址、ack |
+| `references/global/contracts.md` | 契约版本、消费方 pin、检查规则 |
 | `references/roles/*.md` | 五个角色的完整工作流 |
 | `references/init/*.md` | 新建 / 迁移 |
 | `references/lifecycle/*.md` | 巡检 / 回收 / 发布 |

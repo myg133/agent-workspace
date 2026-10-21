@@ -2,6 +2,28 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.6.0] - 2026-10-21
+
+### 新增：契约检查（跨 BA 接口对齐）
+
+- `aw.py contract check [--strict] [--no-fetch] [--json]`
+- 契约文件：`BA/contracts/<name>/vN.md` + `CURRENT`，已 ratified 的版本不可变
+- 消费方在 `.feature/manifest.json` 里 `pin` 版本；缺失或落后都会失败
+- 与消息通道联动：`contract-change` 后 consumer 未 `ack` → 超 deadline 失败，否则告警
+
+检查规则：
+
+| 规则 | 级别 |
+|------|------|
+| CURRENT 指向的版本文件不存在 | FAIL |
+| feature pin < CURRENT | FAIL |
+| feature pin > CURRENT | FAIL |
+| consumer 未 pin | FAIL |
+| 未声明 consumers | WARN |
+| 契约变更未 ack | 超期 FAIL，否则 WARN |
+
+文档：`references/global/contracts.md`；模板：`assets/templates/contract.md.tpl`。
+
 ## [1.5.0] - 2026-10-21
 
 ### 新增：BA 间消息（bus 分支）

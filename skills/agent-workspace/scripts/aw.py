@@ -1490,6 +1490,150 @@ def cmd_msg(args) -> int:
     raise GitError("未知 msg 动作: %s" % action)
 
 
+# ---------------------------------------------------------------- contract check
+
+def _ver_num(value) -> int:
+    return int(re.sub(r"[^0-9]", "", str(value)) or 0)
+
+
+def _parse_contract_file(path: Path | None) -> dict:
+    meta: dict = {"consumers": []}
+    if path is None or not path.exists():
+        return meta
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        m = re.match(r"^\s*-\s*([A-Za-z_]+)\s*:\s*(.+?)\s*$", line)
+        if not m:
+            continue
+        key, value = m.group(1).lower(), m.group(2).strip()
+        if key in ("consumers", "cc"):
+            inner = value[1:-1] if value.startswith("[") and value.endswith("]") else value
+            meta[key] = [v.strip() for v in inner.split(",") if v.strip()]
+        else:
+            meta[key] = value
+    return meta
+
+
+def load_contracts(root: Path) -> list[dict]:
+    base = root / "BA" / "contracts"
+    if not base.is_dir():
+        return []
+    contracts = []
+    for folder in sorted(base.iterdir()):
+        if not folder.is_dir():
+            continue
+        versions = {_ver_num(p.stem): p for p in folder.glob("v*.md")}
+        entry = {"name": folder.name, "versions": versions, "meta": {"consumers": []}}
+        current_file = folder / "CURRENT"
+        if not current_file.exists():
+            entry["error"] = "缺 CURRENT 文件"
+            contracts.append(entry)
+            continue
+        current = _ver_num(current_file.read_text(encoding="utf-8", errors="ignore").strip())
+        entry["current"] = current
+        if current not in versions:
+            entry["error"] = "CURRENT=v%d 但 v%d.md 不存在" % (current, current)
+        entry["meta"] = _parse_contract_file(versions.get(current))
+        contracts.append(entry)
+    return contracts
+
+
+def load_feature_pins(root: Path) -> list[dict]:
+    features = []
+    for e in worktrees(root):
+        if not e["path"].name.startswith("feature-") or not e["path"].exists():
+            continue
+        manifest = e["path"] / ".feature" / "manifest.json"
+        data = read_json(manifest, {}) if manifest.exists() else {}
+        pins = data.get("contracts") or {}
+        features.append({
+            "name": e["path"].name,
+            "agent_id": data.get("agent_id", ""),
+            "pins": {str(k): _ver_num(v) for k, v in pins.items()},
+            "has_manifest": manifest.exists(),
+        })
+    return features
+
+
+def _contract_acks(root: Path, fetch: bool) -> list[dict]:
+    return [m for m in load_bus_messages(root, fetch=fetch) if m.get("type") == "contract-ack"]
+
+
+def cmd_contract(args) -> int:
+    root = repo_root()
+    contracts = load_contracts(root)
+    if not contracts:
+        print("未启用契约管理（BA/contracts/ 不存在或为空）")
+        return 0
+
+    features = load_feature_pins(root)
+    messages = load_bus_messages(root, fetch=not args.no_fetch)
+    acks = [m for m in messages if m.get("type") == "contract-ack"]
+    changes = [m for m in messages if m.get("type") == "contract-change"]
+
+    fails, warns, rows = [], [], []
+    now = _dt.datetime.now(_dt.timezone.utc)
+
+    for c in contracts:
+        name = c["name"]
+        current = c.get("current")
+        consumers = c.get("meta", {}).get("consumers", [])
+        if c.get("error"):
+            fails.append("%s: %s" % (name, c["error"]))
+        pinning = []
+        for f in features:
+            if name in f["pins"]:
+                pinning.append("%s(v%d)" % (f["name"], f["pins"][name]))
+                if current and f["pins"][name] < current:
+                    fails.append("%s: %s pin v%d < current v%d" % (name, f["name"], f["pins"][name], current))
+                elif current and f["pins"][name] > current:
+                    fails.append("%s: %s pin v%d > current v%d（版本超前）" % (name, f["name"], f["pins"][name], current))
+        for f in features:
+            if f["agent_id"] and f["agent_id"] in consumers and name not in f["pins"]:
+                fails.append("%s: %s 的消费者 %s 未在 manifest 里 pin 该契约" % (name, f["name"], f["agent_id"]))
+        if not consumers:
+            warns.append("%s: 未声明 consumers，无法判断谁需要确认" % name)
+        rows.append([name, "v%s" % current if current else "?", ", ".join(consumers) or "-",
+                     ", ".join(pinning) or "-"])
+
+        latest_change = next((m for m in reversed(changes)
+                              if m.get("contract") == name
+                              and (not current or _ver_num(m.get("version", 0)) == current)), None)
+        if latest_change:
+            acked = {m.get("from") for m in acks
+                     if m.get("contract") == name
+                     and _ver_num(m.get("version", 0)) == _ver_num(latest_change.get("version", 0))}
+            missing = [x for x in consumers if x not in acked]
+            if missing:
+                deadline = latest_change.get("deadline") or ""
+                overdue = False
+                if deadline:
+                    try:
+                        overdue = _dt.datetime.fromisoformat(deadline.replace("Z", "+00:00")) < now
+                    except ValueError:
+                        overdue = False
+                msg = "%s v%s 等待 ack: %s" % (name, latest_change.get("version"), ", ".join(missing))
+                (fails if overdue else warns).append(msg)
+
+    if args.json:
+        print(json.dumps({"contracts": rows, "fails": fails, "warns": warns},
+                         ensure_ascii=False, indent=2))
+    else:
+        print("契约检查  （%s）" % root)
+        if rows:
+            _table(["契约", "current", "consumers", "已 pin 的 feature"], rows)
+        for item in fails:
+            print("[FAIL] %s" % item)
+        for item in warns:
+            print("[WARN] %s" % item)
+        print("\n结论: %d FAIL / %d WARN" % (len(fails), len(warns)))
+
+    if fails:
+        return 1
+    if args.strict and warns:
+        return 1
+    return 0
+
+
 # ---------------------------------------------------------------- upgrade (只读检查)
 
 REMOVED_REFS = {
@@ -1699,6 +1843,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_claim.add_argument("--remove-worktree", action="store_true")
     p_claim.add_argument("--repair", action="store_true")
     p_claim.set_defaults(func=cmd_claim)
+
+    p_contract = sub.add_parser("contract", help="契约一致性检查")
+    p_contract.add_argument("action", choices=["check", "list"])
+    p_contract.add_argument("--strict", action="store_true")
+    p_contract.add_argument("--no-fetch", action="store_true")
+    p_contract.add_argument("--json", action="store_true")
+    p_contract.set_defaults(func=cmd_contract)
 
     p_msg = sub.add_parser("msg", help="BA 间消息（空 commit 走 bus 分支）")
     p_msg.add_argument("action", choices=["send", "inbox", "list", "ack", "flush"])
