@@ -75,8 +75,11 @@ python <skill-path>/scripts/aw.py audit
 4. `status.md` 只有 BA 能改；QA 不 commit；Dev 不改状态。
 5. 跨 worktree 引用一律写 `<repo-root>/...` 绝对路径。
 6. 一个 worktree 只服务一个需求，合并即回收。
-7. `develop` 只通过 PR 合并；`main` 只从 `release` 合并。
-8. 命令铁律：`git checkout --orphan` 之后用 `git reset`，**绝不用 `git rm -rf .`**（会删工作区文件）。
+7. 多 BA 同机协作：每个会话必须带稳定的 `AW_AGENT_ID`；**一个 agent 同时只能持有 1 个认领**，
+   由 `aw.py claim` 强制（先进 `ALREADY_HOLDING`，不是靠提醒）。
+8. 认领是创建 worktree 的唯一入口：禁止手工 `git worktree add` 绕过认领。
+9. `develop` 只通过 PR 合并；`main` 只从 `release` 合并。
+10. 命令铁律：`git checkout --orphan` 之后用 `git reset`，**绝不用 `git rm -rf .`**（会删工作区文件）。
 
 ## 我该读什么
 
@@ -115,6 +118,8 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 | `aw.py verify` | 校验硬约束（可挂 CI / pre-commit） | 0 通过，1 违规 |
 | `aw.py audit` | 只读巡检，输出四段报告 | 0 干净，1 有问题 |
 | `aw.py next-req` | 计算下一个可用 REQ 编号 | 0 |
+| `aw.py queue add/list/sync` | 维护待认领队列 | 0 |
+| `aw.py claim whoami/next/take/release/list/doctor` | 任务认领（**WIP=1，工具强制**） | 0 成功，3 拒绝 |
 
 Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输出、`/c/...` 路径、跨盘符、长路径等细节见
 `references/global/platform-notes.md`。
@@ -148,7 +153,7 @@ Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输�
 | `references/global/paths.md` | 路径基准与兄弟目录可见性 |
 | `references/global/gitignore.md` | 双层防御原理与验证 |
 | `references/global/state-machine.md` | 状态机、单一写入者、门禁 |
-| `references/global/concurrency.md` | 多 BA：session、懒注册、认领、冲突 |
+| `references/global/concurrency.md` | 多 BA：身份、WIP=1 认领、锁、doctor |
 | `references/global/platform-notes.md` | Windows / macOS / Linux / WSL 差异 |
 | `references/roles/*.md` | 五个角色的完整工作流 |
 | `references/init/*.md` | 新建 / 迁移 |

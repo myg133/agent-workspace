@@ -44,13 +44,47 @@ python <skill>/scripts/aw.py audit          # 只读巡检，输出表格
 6. 状态推到 已就绪，commit+push
 ```
 
-## 4. 派单（已就绪 → 进行中）
+## 4. 认领（唯一入口）
+
+**不要手工 `git worktree add`。** 认领是唯一入口，worktree 是它的副产物。
 
 ```bash
-# 先在仓库根建 worktree（不是 BA/ 内建）
-git worktree add feature-REQ-001 -b feature/REQ-001 develop
+# AW_AGENT_ID 在启动时注入，整个会话不变
+export AW_AGENT_ID=ba-slot-1
+python <skill>/scripts/aw.py claim next
 ```
 
+输出只有几种，按返回值分支：
+
+| 输出 | 含义 | 你的动作 |
+|------|------|---------|
+| `CLAIMED REQ-003` | 成功，worktree 已建好、manifest 已提交 | 派 Dev |
+| `ALREADY_HOLDING REQ-002` | 你手上还有活 | **停止认领**，先做完 REQ-002 |
+| `TAKEN_BY ba-slot-2` | 别人先领了 | 换下一个（再跑 `claim next`） |
+| `QUEUE_EMPTY` | 队列空了 | 等待或退出 |
+| `CLAIM_FAILED ...` | 建 worktree 失败，已回滚 | 看错误，重试 |
+
+**硬约束**：一个 `agent_id` 同时只能持有 1 个认领，工具层面强制。
+想换个任务，先 `claim release`——不能"再领一个"。
+
+配套命令：
+
+```bash
+aw.py claim whoami                 # 我是谁、我拿着什么
+aw.py claim list                   # 谁在做什么
+aw.py claim release REQ-003        # 交回（worktree 保留）
+aw.py claim release REQ-003 --remove-worktree   # 交回并回收
+aw.py claim doctor [--repair]      # 查一人多单 / 死会话 / 孤儿 worktree
+aw.py queue add REQ-004 --title "..."   # 入队
+aw.py queue sync                   # 从 BA/demands 扫"已就绪"
+```
+
+> `BA/dispatch/req-registry.md` 和 `agent-registry.md` 现在是**只读快照**，
+> 认领的真相在 `<repo-root>/.aw/claims/`。不要再靠编辑表格来认领。
+
+## 5. 派单（已就绪 → 进行中）
+
+认领成功后，worktree 已在 `<repo-root>/feature-REQ-003`。
 派 Dev 的 briefing 必须自包含（子 Agent 看不到你的对话）：
 
 ```text
@@ -66,7 +100,7 @@ git worktree add feature-REQ-001 -b feature/REQ-001 develop
 
 同时并行：QA 生成测试用例、Dev 开工（两者可同时进行，QA 的用例作为 Dev 的输入补丁）。
 
-## 5. 状态流转操作
+## 5.1 状态流转操作
 
 ```bash
 git pull --rebase origin demand
@@ -87,10 +121,13 @@ git push origin demand
 
 ```bash
 cd <repo-root>
-git worktree remove feature-REQ-001          # 有未提交改动才需要 --force
-git branch -d feature/REQ-001
-git push origin --delete feature/REQ-001
+python <skill>/scripts/aw.py claim release REQ-003 --remove-worktree
+git branch -d feature/REQ-003
+git push origin --delete feature/REQ-003
 ```
+
+`claim release` 会检查工作区是否干净：有未提交改动时保留 worktree 并提示，
+不会静默丢代码。合并前的分支不要删。
 
 删除前用 `references/lifecycle/cleanup.md` 的安全检查清单。记录到 `dispatch/cleanup-log.md`。
 

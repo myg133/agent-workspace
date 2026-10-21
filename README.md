@@ -79,11 +79,33 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 | `aw.py verify [--strict]` | 校验硬约束，可挂 CI / pre-commit |
 | `aw.py audit` | 只读巡检：拓扑、僵尸 worktree、stale session |
 | `aw.py next-req` | 计算下一个可用 REQ 编号 |
+| `aw.py queue add/list/sync` | 维护待认领队列 |
+| `aw.py claim next` | 原子认领（**一个 agent 同时只能持 1 个**） |
+| `aw.py claim doctor` | 查一人多单 / 死会话 / 孤儿 worktree |
 
 依赖 Python 3.8+ / git 2.20+，只用标准库。
 
 Windows 直接用 `aw.cmd verify` 或 `.\aw.ps1 verify`（自动选择 `py` / `python`）；中文输出、盘符、长路径等细节见
 [platform-notes.md](skills/agent-workspace/references/global/platform-notes.md)。
+
+## 多个 BA 同机协作
+
+4 个以上 BA 共享一个仓库时，给每个会话注入稳定槽位：
+
+```powershell
+$env:AW_AGENT_ID = 'ba-slot-1'; omp
+```
+
+认领走工具，不走表格：
+
+```bash
+aw.py claim next      # CLAIMED REQ-003 / ALREADY_HOLDING REQ-002 / QUEUE_EMPTY
+aw.py claim list
+aw.py claim doctor --repair
+```
+
+WIP=1 由锁 + 每任务一文件强制，**重启也不会多领**（判定用 agent_id 而非 session）。
+详见 [concurrency.md](skills/agent-workspace/references/global/concurrency.md)。
 
 ## 仓库结构
 

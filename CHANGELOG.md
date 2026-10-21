@@ -2,6 +2,28 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.3.0] - 2026-10-21
+
+### 新增：任务认领（WIP=1）
+
+同机多 BA 共享一个仓库时，解决"一个 BA 领了多个任务"。
+
+- `aw.py claim whoami / next / take / release / list / doctor`
+- `aw.py queue add / list / sync`（`sync` 从 `BA/demands/*/status.md` 扫"已就绪"）
+- 身份：`AW_AGENT_ID`（稳定槽位）+ `AW_SESSION_ID` / `DSH_SESSION_ID`（本次启动）
+- 互斥：`msvcrt.locking`（Windows）/ `fcntl.flock`（POSIX），进程退出自动释放
+- 状态：`.aw/` 下**一个任务一个文件**，取代共享 Markdown 表的读-改-写竞态
+- worktree 由认领创建（失败回滚），禁止手工 `git worktree add` 绕过
+- 认领时把 `.feature/manifest.json` 提交到 feature 分支，记录"谁领的"
+- `doctor --repair`：多领、死会话、缺 worktree 自动归档并退回队列
+
+### 变更
+
+- `req-registry.md` / `agent-registry.md` 降级为**只读快照**，认领真相在 `.aw/claims/`。
+- SKILL 硬约束新增：认领是 worktree 唯一入口；一个 agent 只能持 1 个认领。
+- `global/concurrency.md` 重写为"身份 + 锁 + WIP + doctor"，并补充共享工作区的 git 纪律
+  （禁止 `git add -A`、commit 带 pathspec、index.lock 重试）。
+
 ## [1.2.1] - 2026-10-21
 
 ### 修复（Windows）

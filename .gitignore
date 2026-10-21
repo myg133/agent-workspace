@@ -4,6 +4,8 @@
 .trash/
 args
 
+.aw/
+
 # Python
 __pycache__/
 *.pyc

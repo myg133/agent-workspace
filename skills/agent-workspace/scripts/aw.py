@@ -12,9 +12,11 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -651,6 +653,532 @@ def cmd_migrate(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- claim / queue
+#
+# 同机多 BA 共享一个仓库时的认领层：
+#   - 身份：AW_AGENT_ID（稳定槽位）+ AW_SESSION_ID / DSH_SESSION_ID（本次启动）
+#   - 互斥：OS 文件锁（进程退出自动释放）
+#   - 状态：一个任务一个文件，避免整表覆盖
+#   - WIP：每个 agent_id 同时只能持有 1 个任务，由工具强制，不靠提醒
+
+AW_DIR = ".aw"
+CLAIM_STATES = ("active", "blocked", "review")
+
+
+def aw_path(root: Path, *parts: str) -> Path:
+    path = root / AW_DIR
+    for part in parts:
+        path = path / part
+    return path
+
+
+def aw_init(root: Path) -> None:
+    for sub in ("locks", "claims", "sessions", "archive"):
+        aw_path(root, sub).mkdir(parents=True, exist_ok=True)
+    queue = aw_path(root, "queue.json")
+    if not queue.exists():
+        write_text(queue, "[]\n")
+
+
+def read_json(path: Path, default):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return default
+
+
+def write_json(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
+    os.replace(tmp, path)
+
+
+class FileLock:
+    """跨进程排他锁：Windows 用 msvcrt，POSIX 用 fcntl，进程退出自动释放。"""
+
+    def __init__(self, path: Path, timeout: float = 10.0):
+        self.path = path
+        self.timeout = timeout
+        self.fd: int | None = None
+
+    def __enter__(self) -> "FileLock":
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.fd = os.open(str(self.path), os.O_RDWR | os.O_CREAT, 0o644)
+        deadline = time.time() + self.timeout
+        while True:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(self.fd, msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return self
+            except OSError:
+                if time.time() > deadline:
+                    os.close(self.fd)
+                    self.fd = None
+                    raise TimeoutError("等待锁超时: %s" % self.path)
+                time.sleep(0.05)
+
+    def __exit__(self, *exc) -> None:
+        if self.fd is None:
+            return
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                os.lseek(self.fd, 0, os.SEEK_SET)
+                msvcrt.locking(self.fd, msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(self.fd, fcntl.LOCK_UN)
+        finally:
+            os.close(self.fd)
+            self.fd = None
+
+
+def pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        try:
+            import ctypes
+
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+            if not handle:
+                return False
+            code = ctypes.c_ulong()
+            ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+            kernel32.CloseHandle(handle)
+            return bool(ok) and code.value == 259  # STILL_ACTIVE
+        except Exception:
+            return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _now() -> str:
+    return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+SESSION_TTL_SECONDS = 1800
+
+
+def _session_alive(rec: dict, ttl: int = SESSION_TTL_SECONDS) -> bool:
+    """存活判定：同机优先看长驻进程 pid，其次看心跳新鲜度。"""
+    if not rec:
+        return False
+    if rec.get("host") == socket.gethostname():
+        pid = int(rec.get("pid") or 0)
+        if pid and pid_alive(pid):
+            return True
+    seen = rec.get("last_seen") or ""
+    try:
+        ts = _dt.datetime.fromisoformat(seen).timestamp()
+    except ValueError:
+        return False
+    return (time.time() - ts) < ttl
+
+
+def resolve_identity(root: Path, role: str = "ba") -> dict:
+    agent_id = (os.environ.get("AW_AGENT_ID") or "").strip()
+    if not agent_id:
+        raise GitError(
+            "缺少 AW_AGENT_ID。\n"
+            "多 BA 同机协作时必须给每个会话一个稳定槽位，例如：\n"
+            "  PowerShell:  $env:AW_AGENT_ID='ba-slot-1'; omp\n"
+            "  bash:        AW_AGENT_ID=ba-slot-1 omp"
+        )
+    session_id = (
+        os.environ.get("AW_SESSION_ID")
+        or os.environ.get("DSH_SESSION_ID")
+        or "%s-%s-%s" % (agent_id, _dt.datetime.now().strftime("%Y%m%d%H%M%S"), os.urandom(2).hex())
+    )
+    # 会话文件按 agent 槽位归并：一个槽位同时只有一个活会话
+    aw_init(root)
+    path = aw_path(root, "sessions", "%s.json" % agent_id)
+    old = read_json(path, {})
+    agent_pid = int(os.environ.get("AW_AGENT_PID") or 0)
+    if not agent_pid and old.get("pid") and pid_alive(int(old["pid"])):
+        agent_pid = int(old["pid"])
+    record = {
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "pid": agent_pid,
+        "host": socket.gethostname(),
+        "role": role,
+        "cwd": str(Path.cwd()),
+        "started_at": old.get("started_at") or _now(),
+        "last_seen": _now(),
+    }
+    write_json(path, record)
+    return record
+
+
+def load_claims(root: Path) -> list[dict]:
+    claims = []
+    for path in sorted(aw_path(root, "claims").glob("*.json")):
+        data = read_json(path, None)
+        if isinstance(data, dict) and data.get("req"):
+            data["_path"] = str(path)
+            claims.append(data)
+    return claims
+
+
+def load_queue(root: Path) -> list[dict]:
+    data = read_json(aw_path(root, "queue.json"), [])
+    return data if isinstance(data, list) else []
+
+
+def save_queue(root: Path, queue: list[dict]) -> None:
+    write_json(aw_path(root, "queue.json"), queue)
+
+
+def claim_path(root: Path, req: str) -> Path:
+    return aw_path(root, "claims", "%s.json" % req)
+
+
+def holding_claim(claims: list[dict], agent_id: str) -> dict | None:
+    for c in claims:
+        if c.get("agent_id") == agent_id and c.get("state", "active") in CLAIM_STATES:
+            return c
+    return None
+
+
+def archive_claim(root: Path, claim: dict, reason: str) -> None:
+    """把认领移出 claims/：归档 + 从活动集合中删除。"""
+    data = {k: v for k, v in claim.items() if k != "_path"}
+    data["released_at"] = _now()
+    data["release_reason"] = reason
+    stamp = _dt.datetime.now().strftime("%Y%m%d%H%M%S")
+    write_json(aw_path(root, "archive", "%s-%s.json" % (claim["req"], stamp)), data)
+    Path(claim["_path"]).unlink(missing_ok=True)
+
+
+def requeue(root: Path, claim: dict, queue: list[dict], source: str) -> None:
+    if not any(q["req"] == claim["req"] for q in queue):
+        queue.insert(0, {"req": claim["req"], "title": claim.get("title", ""),
+                         "added_at": _now(), "source": source})
+
+
+def _reap_dead(root: Path, claims: list[dict], queue: list[dict]) -> int:
+    """把死会话占用的认领归档并退回队列，返回处理条数。"""
+    reaped = 0
+    for c in claims:
+        session = read_json(aw_path(root, "sessions", "%s.json" % c.get("agent_id", "")), {})
+        if not _session_alive(session):
+            requeue(root, c, queue, "recovered")
+            archive_claim(root, c, "dead-session")
+            reaped += 1
+    return reaped
+
+
+def _create_worktree(root: Path, req: str, base: str) -> None:
+    name = "feature-%s" % req
+    branch = "feature/%s" % req
+    path = root / name
+    if path.exists():
+        cur = git("rev-parse", "--abbrev-ref", "HEAD", cwd=path, check=False).stdout.strip()
+        if cur == branch:
+            return
+        raise GitError("%s 已存在且不在 %s 上（当前 %s）" % (name, branch, cur))
+    has_branch = git("rev-parse", "--verify", "--quiet", "refs/heads/%s" % branch,
+                     cwd=root, check=False).returncode == 0
+    last = None
+    for attempt in range(4):
+        try:
+            if has_branch:
+                git("worktree", "add", name, branch, cwd=root)
+            else:
+                git("worktree", "add", name, "-b", branch, base, cwd=root)
+            return
+        except GitError as exc:
+            last = exc
+            time.sleep(0.3 * (2 ** attempt))
+    raise GitError("创建 worktree 失败（重试 4 次）: %s" % last)
+
+
+def _write_manifest(root: Path, req: str, ident: dict) -> None:
+    wt = root / ("feature-%s" % req)
+    if not wt.exists():
+        return
+    demands = root / "BA" / "demands"
+    demand_dir = next((p for p in demands.glob("%s-*" % req)), demands / req) if demands.is_dir() else demands / req
+    manifest = {
+        "req": req,
+        "branch": "feature/%s" % req,
+        "agent_id": ident["agent_id"],
+        "session_id": ident["session_id"],
+        "owner": ident["agent_id"],
+        "base_branch": "develop",
+        "created_at": _now(),
+        "demand_dir": str(demand_dir),
+    }
+    write_json(wt / ".feature" / "manifest.json", manifest)
+    # 把分配记录提交进 feature 分支：既是审计，也让工作区保持干净（便于回收）
+    ident_args = ensure_identity(wt)
+    git(*ident_args, "add", ".feature/manifest.json", cwd=wt, check=False)
+    git(*ident_args, "commit", "-q", "-m", "[BA] 分配 %s → %s" % (req, ident["agent_id"]),
+        cwd=wt, check=False)
+
+
+def cmd_claim(args) -> int:
+    root = repo_root()
+    ident = resolve_identity(root, role=args.role)
+    action = args.action
+    aw_init(root)
+
+    if action == "whoami":
+        claims = load_claims(root)
+        mine = holding_claim(claims, ident["agent_id"])
+        print("agent_id  : %s" % ident["agent_id"])
+        print("session   : %s" % ident["session_id"])
+        print("role      : %s" % ident["role"])
+        print("repo      : %s" % root)
+        print("holding   : %s" % (mine["req"] if mine else "-"))
+        return 0
+
+    if action == "list":
+        claims = load_claims(root)
+        if not claims:
+            print("（无认领）")
+            return 0
+        rows = []
+        for c in claims:
+            rows.append([c["req"], c.get("agent_id", "-"), c.get("state", "-"),
+                         c.get("worktree", "-"), c.get("claimed_at", "-")[11:19]])
+        _table(["REQ", "agent", "state", "worktree", "claimed"], rows)
+        return 0
+
+    if action == "next":
+        with FileLock(aw_path(root, "locks", "claims.lock")):
+            claims = load_claims(root)
+            queue = load_queue(root)
+            _reap_dead(root, claims, queue)
+            claims = load_claims(root)
+            mine = holding_claim(claims, ident["agent_id"])
+            if mine:
+                save_queue(root, queue)
+                print("ALREADY_HOLDING %s" % mine["req"])
+                return 3
+            taken = {c["req"] for c in claims if c.get("state") in CLAIM_STATES}
+            candidate = next((q for q in queue if q["req"] not in taken), None)
+            if not candidate:
+                save_queue(root, queue)
+                print("QUEUE_EMPTY")
+                return 3
+            req = candidate["req"]
+            claim = {
+                "req": req,
+                "title": candidate.get("title", ""),
+                "agent_id": ident["agent_id"],
+                "session_id": ident["session_id"],
+                "worktree": "feature-%s" % req,
+                "state": "active",
+                "claimed_at": _now(),
+            }
+            write_json(claim_path(root, req), claim)
+            queue = [q for q in queue if q["req"] != req]
+            save_queue(root, queue)
+        return _finish_claim(root, req, ident)
+
+    if action == "take":
+        req = args.req.upper()
+        with FileLock(aw_path(root, "locks", "claims.lock")):
+            claims = load_claims(root)
+            queue = load_queue(root)
+            _reap_dead(root, claims, queue)
+            claims = load_claims(root)
+            mine = holding_claim(claims, ident["agent_id"])
+            if mine:
+                save_queue(root, queue)
+                print("ALREADY_HOLDING %s" % mine["req"])
+                return 3
+            existing = next((c for c in claims if c["req"] == req and c.get("state") in CLAIM_STATES), None)
+            if existing:
+                print("TAKEN_BY %s" % existing.get("agent_id", "?"))
+                return 3
+            claim = {
+                "req": req,
+                "title": next((q.get("title", "") for q in queue if q["req"] == req), ""),
+                "agent_id": ident["agent_id"],
+                "session_id": ident["session_id"],
+                "worktree": "feature-%s" % req,
+                "state": "active",
+                "claimed_at": _now(),
+            }
+            write_json(claim_path(root, req), claim)
+            save_queue(root, [q for q in queue if q["req"] != req])
+        return _finish_claim(root, req, ident)
+
+    if action == "release":
+        req = args.req.upper()
+        with FileLock(aw_path(root, "locks", "claims.lock")):
+            path = claim_path(root, req)
+            claim = read_json(path, None)
+            if not claim:
+                print("NOT_CLAIMED %s" % req)
+                return 3
+            if claim.get("agent_id") != ident["agent_id"] and not args.force:
+                print("NOT_YOURS %s（属于 %s）" % (req, claim.get("agent_id")))
+                return 3
+            claim["state"] = "released"
+            claim["released_at"] = _now()
+            write_json(aw_path(root, "archive", "%s-%s.json" % (req, _dt.datetime.now().strftime("%Y%m%d%H%M%S"))), claim)
+            path.unlink(missing_ok=True)
+        if args.remove_worktree:
+            wt = root / ("feature-%s" % req)
+            if wt.exists():
+                dirty = git("status", "--porcelain", cwd=wt, check=False).stdout.strip()
+                if dirty and not args.force:
+                    print("RELEASED %s（worktree 有未提交改动，已保留）" % req)
+                    return 0
+                git("worktree", "remove", wt.name, cwd=root, check=False)
+        print("RELEASED %s" % req)
+        return 0
+
+    if action == "doctor":
+        claims = load_claims(root)
+        queue = load_queue(root)
+        sessions = {}
+        for p in aw_path(root, "sessions").glob("*.json"):
+            data = read_json(p, {})
+            if data.get("agent_id"):
+                sessions[data["agent_id"]] = data
+        problems = []
+
+        by_agent: dict[str, list[dict]] = {}
+        for c in claims:
+            if c.get("state") in CLAIM_STATES:
+                by_agent.setdefault(c.get("agent_id", "?"), []).append(c)
+        for agent, items in by_agent.items():
+            if len(items) > 1:
+                problems.append(("multi-claim", "%s 持有 %s" % (agent, ", ".join(i["req"] for i in items))))
+
+        for c in claims:
+            if c.get("state") not in CLAIM_STATES:
+                continue
+            sess = sessions.get(c.get("agent_id", ""))
+            if not _session_alive(sess):
+                problems.append(("dead-session", "%s 由已退出的会话占用（%s）" % (c["req"], c.get("agent_id"))))
+            wt = root / c.get("worktree", "")
+            if not wt.exists():
+                problems.append(("missing-worktree", "%s 的 worktree 不存在" % c["req"]))
+
+        registered = {c.get("worktree") for c in claims if c.get("state") in CLAIM_STATES}
+        for p in root.iterdir():
+            if p.is_dir() and p.name.startswith("feature-REQ-") and p.name not in registered:
+                problems.append(("orphan-worktree", "%s 没有对应的认领" % p.name))
+
+        if not problems:
+            print("OK 没有发现问题（%d 个认领，%d 个会话）" % (len(claims), len(sessions)))
+            return 0
+        for kind, detail in problems:
+            print("[%s] %s" % (kind, detail))
+        if not args.repair:
+            print("\n加 --repair 可修复 multi-claim / dead-session / 队列")
+            return 1
+
+        with FileLock(aw_path(root, "locks", "claims.lock")):
+            claims = load_claims(root)
+            queue = load_queue(root)
+            fixed = 0
+            seen: dict[str, dict] = {}
+            for c in sorted(claims, key=lambda x: x.get("claimed_at", "")):
+                agent = c.get("agent_id", "?")
+                sess = read_json(aw_path(root, "sessions", "%s.json" % agent), {})
+                dead = not _session_alive(sess)
+                duplicate = agent in seen
+                missing_wt = not (root / c.get("worktree", "")).exists()
+                if dead or duplicate or missing_wt:
+                    reason = "dead-session" if dead else ("multi-claim" if duplicate else "missing-worktree")
+                    requeue(root, c, queue, reason)
+                    archive_claim(root, c, reason)
+                    fixed += 1
+                else:
+                    seen[agent] = c
+            save_queue(root, queue)
+        print("已修复 %d 项" % fixed)
+        return 0
+
+    raise GitError("未知 claim 动作: %s" % action)
+
+
+def _finish_claim(root: Path, req: str, ident: dict) -> int:
+    base = "develop"
+    try:
+        _create_worktree(root, req, base)
+        _write_manifest(root, req, ident)
+    except (GitError, OSError) as exc:
+        queue = load_queue(root)
+        claim = read_json(claim_path(root, req), None)
+        if claim:
+            claim["_path"] = str(claim_path(root, req))
+            requeue(root, claim, queue, "rollback")
+            archive_claim(root, claim, "worktree-failed")
+        save_queue(root, queue)
+        print("CLAIM_FAILED %s: %s" % (req, exc))
+        return 1
+    print("CLAIMED %s" % req)
+    print("  agent   : %s" % ident["agent_id"])
+    print("  worktree: %s" % (root / ("feature-%s" % req)))
+    print("  branch  : feature/%s" % req)
+    return 0
+
+
+def cmd_queue(args) -> int:
+    root = repo_root()
+    aw_init(root)
+    queue = load_queue(root)
+    if args.action == "list":
+        if not queue:
+            print("（队列为空）")
+            return 0
+        _table(["REQ", "title", "added"], [[q["req"], q.get("title", ""), q.get("added_at", "")[:10]] for q in queue])
+        return 0
+    if args.action == "add":
+        req = args.req.upper()
+        if any(q["req"] == req for q in queue):
+            print("ALREADY_QUEUED %s" % req)
+            return 3
+        queue.append({"req": req, "title": args.title or "", "added_at": _now(), "source": "manual"})
+        save_queue(root, queue)
+        print("QUEUED %s" % req)
+        return 0
+    if args.action == "sync":
+        demands = root / "BA" / "demands"
+        added = 0
+        existing = {q["req"] for q in queue}
+        claims = {c["req"] for c in load_claims(root) if c.get("state") in CLAIM_STATES}
+        if demands.is_dir():
+            for d in sorted(demands.iterdir()):
+                if not d.is_dir() or not d.name.startswith("REQ-"):
+                    continue
+                req = d.name.split("-", 1)[0] + "-" + d.name.split("-")[1] if d.name.count("-") >= 1 else d.name
+                status = d / "status.md"
+                text = status.read_text(encoding="utf-8") if status.exists() else ""
+                if "已就绪" not in text:
+                    continue
+                if req in existing or req in claims:
+                    continue
+                queue.append({"req": req, "title": d.name, "added_at": _now(), "source": "demands"})
+                existing.add(req)
+                added += 1
+        save_queue(root, queue)
+        print("SYNCED %d（队列共 %d）" % (added, len(queue)))
+        return 0
+    raise GitError("未知 queue 动作: %s" % args.action)
+
+
 # ---------------------------------------------------------------- main
 
 def build_parser() -> argparse.ArgumentParser:
@@ -683,6 +1211,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_req = sub.add_parser("next-req", help="计算下一个可用 REQ 编号")
     p_req.set_defaults(func=cmd_next_req)
+
+    p_claim = sub.add_parser("claim", help="任务认领（每个 agent 同时只允许 1 个）")
+    p_claim.add_argument("action", choices=["whoami", "next", "take", "release", "list", "doctor"])
+    p_claim.add_argument("req", nargs="?", default="")
+    p_claim.add_argument("--role", default="ba")
+    p_claim.add_argument("--force", action="store_true")
+    p_claim.add_argument("--remove-worktree", action="store_true")
+    p_claim.add_argument("--repair", action="store_true")
+    p_claim.set_defaults(func=cmd_claim)
+
+    p_queue = sub.add_parser("queue", help="待认领队列")
+    p_queue.add_argument("action", choices=["add", "list", "sync"])
+    p_queue.add_argument("req", nargs="?", default="")
+    p_queue.add_argument("--title", default="")
+    p_queue.set_defaults(func=cmd_queue)
     return parser
 
 
