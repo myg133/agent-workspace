@@ -6,6 +6,9 @@ args
 
 .aw/
 
+# 测试产物
+suite.log
+
 # Python
 __pycache__/
 *.pyc

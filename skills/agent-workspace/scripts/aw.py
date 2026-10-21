@@ -35,10 +35,13 @@ def git(*args: str, cwd: Path | str | None = None, check: bool = True,
         timeout: float | None = None) -> subprocess.CompletedProcess:
     # core.quotepath=false：中文/空格文件名按原样输出，避免 "\346\226\207" 这类转义
     cmd = ["git", "-c", "core.quotepath=false", *args]
-    proc = subprocess.run(
-        cmd, cwd=str(cwd) if cwd else None, timeout=timeout,
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-    )
+    try:
+        proc = subprocess.run(
+            cmd, cwd=str(cwd) if cwd else None, timeout=timeout,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+    except subprocess.TimeoutExpired:
+        raise GitError("git %s 超时（%ss）" % (" ".join(args), timeout))
     if check and proc.returncode != 0:
         raise GitError(
             "git %s 失败 (code %s)\n%s" % (" ".join(args), proc.returncode, proc.stderr.strip())
@@ -1253,7 +1256,10 @@ def render_message(meta: dict) -> str:
 
 
 def _bus_fetch(root: Path) -> None:
-    git("fetch", "-q", "origin", BUS_BRANCH, cwd=root, check=False, timeout=20)
+    try:
+        git("fetch", "-q", "origin", BUS_BRANCH, cwd=root, check=False, timeout=20)
+    except GitError:
+        pass  # 离线/远端不可达：读本地已有 bus
 
 
 def _bus_tip(root: Path) -> str | None:
@@ -1306,20 +1312,23 @@ def bus_flush(root: Path, quiet: bool = False) -> str:
         return "local"
 
     for attempt in range(4):
-        _bus_fetch(root)
-        base = _bus_tip(root)
-        created = base
-        for path in pending:
-            text = path.read_text(encoding="utf-8")
-            meta = parse_message(text) or {}
-            created = _commit_message(root, text, created, meta.get("at", ""))
-        git("update-ref", "refs/heads/%s" % BUS_BRANCH, created, cwd=root, check=False)
-        pushed = git("push", "-q", "origin", "%s:%s" % (BUS_BRANCH, BUS_BRANCH),
-                     cwd=root, check=False, timeout=30)
-        if pushed.returncode == 0:
+        try:
+            _bus_fetch(root)
+            base = _bus_tip(root)
+            created = base
             for path in pending:
-                path.unlink(missing_ok=True)
-            return "ok"
+                text = path.read_text(encoding="utf-8")
+                meta = parse_message(text) or {}
+                created = _commit_message(root, text, created, meta.get("at", ""))
+            git("update-ref", "refs/heads/%s" % BUS_BRANCH, created, cwd=root, check=False)
+            pushed = git("push", "-q", "origin", "%s:%s" % (BUS_BRANCH, BUS_BRANCH),
+                         cwd=root, check=False, timeout=30)
+            if pushed.returncode == 0:
+                for path in pending:
+                    path.unlink(missing_ok=True)
+                return "ok"
+        except (GitError, OSError):
+            pass
         time.sleep(0.4 * (2 ** attempt))
     if not quiet:
         print("推送失败，消息已排队（下次 send/inbox 会自动重试）", file=sys.stderr)

@@ -91,6 +91,15 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 Windows 直接用 `aw.cmd verify` 或 `.\aw.ps1 verify`（自动选择 `py` / `python`）；中文输出、盘符、长路径等细节见
 [platform-notes.md](skills/agent-workspace/references/global/platform-notes.md)。
 
+## 自测
+
+```bash
+python -m unittest discover -s skills/agent-workspace/tests -v
+```
+
+17 个用例覆盖：布局、巡检、认领并发、消息寻址/游标/回执/离线队列、契约检查、升级检查。
+全部在临时目录运行，不碰当前仓库。
+
 ## 升级已有项目
 
 ```bash

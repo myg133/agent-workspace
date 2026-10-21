@@ -2,6 +2,20 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.6.1] - 2026-10-21
+
+### 新增：可重跑的自测套件
+
+- `skills/agent-workspace/tests/test_aw.py`，17 个用例，`python -m unittest discover -s skills/agent-workspace/tests -v`
+- 覆盖：init 布局、verify 污染检测、claim 的 WIP=1 / 重启 / 并发、msg 寻址 / 游标 / ack / 离线队列 / bus 零文件、contract 四条 FAIL 规则、upgrade 检查
+- 全部在临时目录运行，不改当前仓库
+
+### 修复
+
+- `git()` 超时现在转为 `GitError`，不再抛裸 `TimeoutExpired`
+- `bus_flush` 现在把拉取/推送异常当作一次失败重试，离线时不会中断
+- `_bus_fetch` 在读取路径上吞掉网络错误，读本地缓存
+
 ## [1.6.0] - 2026-10-21
 
 ### 新增：契约检查（跨 BA 接口对齐）
