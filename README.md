@@ -82,11 +82,21 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 | `aw.py queue add/list/sync` | 维护待认领队列 |
 | `aw.py claim next` | 原子认领（**一个 agent 同时只能持 1 个**） |
 | `aw.py claim doctor` | 查一人多单 / 死会话 / 孤儿 worktree |
+| `aw.py upgrade` | 旧项目升级检查：补什么、清什么、改什么（只读） |
 
 依赖 Python 3.8+ / git 2.20+，只用标准库。
 
 Windows 直接用 `aw.cmd verify` 或 `.\aw.ps1 verify`（自动选择 `py` / `python`）；中文输出、盘符、长路径等细节见
 [platform-notes.md](skills/agent-workspace/references/global/platform-notes.md)。
+
+## 升级已有项目
+
+```bash
+aw.py upgrade      # 只读：列出「需要补 / 需要清 / 需要改」
+```
+
+目录拓扑在 1.x 内不变，升级只做**补文件**和**改引用**，不重建、不 rebase、不改分支名。
+详见 [upgrade.md](skills/agent-workspace/references/lifecycle/upgrade.md)。
 
 ## 多个 BA 同机协作
 

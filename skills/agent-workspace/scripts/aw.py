@@ -1179,6 +1179,174 @@ def cmd_queue(args) -> int:
     raise GitError("未知 queue 动作: %s" % args.action)
 
 
+# ---------------------------------------------------------------- upgrade (只读检查)
+
+REMOVED_REFS = {
+    "worktree-audit.md": "references/lifecycle/audit.md",
+    "worktree-cleanup.md": "references/lifecycle/cleanup.md",
+}
+
+
+def skill_version(path: Path | None = None) -> str:
+    target = path or (SKILL_DIR / "SKILL.md")
+    try:
+        text = target.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return "unknown"
+    m = re.search(r"(?m)^\s*version:\s*(\S+)\s*$", text)
+    return m.group(1) if m else "unknown"
+
+
+def _scan_refs(root: Path, limit: int = 600) -> list[tuple[str, str, str]]:
+    skip = {".git", "node_modules", ".local", "dist", "build", ".venv", "__pycache__", ".aw"}
+    hits, seen = [], 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip]
+        for name in filenames:
+            if not name.endswith((".md", ".txt", ".yaml", ".yml")):
+                continue
+            seen += 1
+            if seen > limit:
+                return hits
+            path = Path(dirpath) / name
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            for old, new in REMOVED_REFS.items():
+                if old in text:
+                    hits.append((str(path.relative_to(root)), old, new))
+    return hits
+
+
+def cmd_upgrade(args) -> int:
+    root = repo_root()
+    installed = skill_version()
+    add, clean, adjust = [], [], []
+
+    if not (root / "code").is_dir() and branch_of(root) != "workspace":
+        print("当前目录不是 workspace 项目，upgrade 不适用: %s" % root, file=sys.stderr)
+        return 2
+
+    # 1. 布局
+    if branch_of(root) != "workspace":
+        adjust.append(("根分支", "当前 %s，应为 workspace" % branch_of(root), "git checkout workspace"))
+    files = sorted(p for p in git_out("ls-files", cwd=root).splitlines() if p)
+    if files != sorted(ROOT_FILES):
+        extra = [f for f in files if f not in ROOT_FILES]
+        adjust.append(("根容器跟踪文件", "多余 %d 项: %s" % (len(extra), ", ".join(extra[:5])),
+                       "git rm -r --cached <path> 后提交 [Workspace] cleanup"))
+
+    wt = worktrees(root)
+    for e in wt:
+        if e["path"] == root:
+            continue
+        if not e["path"].exists() or e.get("prunable"):
+            clean.append(("失效 worktree", str(e["path"]), "git worktree prune"))
+        elif e["path"].parent != root:
+            clean.append(("worktree 位置违规", str(e["path"]), "移到仓库根下一层后 git worktree repair"))
+
+    if (root / "workspaces").exists():
+        clean.append(("中间目录 workspaces/", "违反平铺约束", "清空后删除目录，worktree 重建到仓库根"))
+
+    # 2. 补 bootstrap
+    bootstrap = [
+        ("BA/README.md", "ba-readme.md.tpl"),
+        ("BA/dispatch/rules.md", "dispatch-rules.md.tpl"),
+        ("BA/dispatch/agent-registry.md", "agent-registry.md.tpl"),
+        ("BA/dispatch/req-registry.md", "req-registry.md.tpl"),
+        ("BA/dispatch/cleanup-log.md", "cleanup-log.md.tpl"),
+        ("Deploy/README.md", "deploy-readme.md.tpl"),
+    ]
+    for rel, tpl in bootstrap:
+        if not (root / rel).exists():
+            add.append((rel, "cp <skill>/assets/templates/%s %s" % (tpl, rel)))
+
+    # 3. .gitignore
+    gi = root / ".gitignore"
+    gi_text = gi.read_text(encoding="utf-8", errors="ignore") if gi.exists() else ""
+    if "/*/" not in gi_text:
+        adjust.append((".gitignore 缺少 /*/", "第一层子目录未被屏蔽，git add -A 可能污染 workspace 分支",
+                       "按 assets/templates/root-gitignore.tpl 补齐"))
+    for e in wt:
+        local = e["path"] / ".local"
+        if not local.is_dir():
+            continue
+        wgi = e["path"] / ".gitignore"
+        text = wgi.read_text(encoding="utf-8", errors="ignore") if wgi.exists() else ""
+        if ".local/" not in text:
+            adjust.append(("%s/.gitignore" % (e["path"].name), "有 .local/ 但未忽略", "追加一行 .local/ 并提交"))
+
+    # 4. feature 产物
+    for e in wt:
+        if e["path"].name.startswith("feature-") and not (e["path"] / ".feature" / "manifest.json").exists():
+            add.append(("%s/.feature/manifest.json" % e["path"].name,
+                        "缺少分配记录",
+                        "启用 .feature 规范时补 manifest（agent_id / base_commit）"))
+
+    # 5. 僵尸 worktree
+    for e in wt:
+        name = e["path"].name
+        if not name.startswith(("feature-", "hotfix-")) or not e["path"].exists():
+            continue
+        try:
+            age_hours = (time.time() - e["path"].stat().st_ctime) / 3600
+        except OSError:
+            age_hours = 0
+        if age_hours < args.idle_hours:
+            continue  # 刚建的 worktree 天然"已合并"，不算僵尸
+        br = e["branch"] or ""
+        try:
+            dirty = git("status", "--porcelain", cwd=e["path"], check=False).stdout.strip()
+        except OSError:
+            continue
+        merged = br in git("branch", "--merged", "develop", "--format=%(refname:short)",
+                           cwd=root, check=False).stdout.split()
+        if merged and not dirty:
+            clean.append(("已合并未回收", name, "aw.py claim release %s --remove-worktree（或手工 worktree remove）"
+                          % name.replace("feature-", "")))
+
+    # 6. 旧引用 / vendored skill
+    for rel, old, new in _scan_refs(root):
+        adjust.append((rel, "引用了已改名的 %s" % old, "改为 %s" % new))
+
+    for candidate in ("skills/agent-workspace", ".agents/skills/agent-workspace"):
+        skill_md = root / candidate / "SKILL.md"
+        if skill_md.exists():
+            adjust.append((candidate, "项目内 vendor 了 skill（版本 %s）" % skill_version(skill_md),
+                           "建议改为外部安装 + 版本指针，避免多项目版本漂移"))
+
+    # 7. 版本记录
+    record = aw_path(root, "version.json")
+    recorded = read_json(record, {}).get("skill_version")
+    if recorded and recorded != installed:
+        add.append((".aw/version.json", "记录 %s，当前 skill %s" % (recorded, installed),
+                    "升级完成后更新记录"))
+
+    if args.json:
+        print(json.dumps({"root": str(root), "installed": installed, "recorded": recorded,
+                          "add": add, "clean": clean, "adjust": adjust}, ensure_ascii=False, indent=2))
+    else:
+        print("Agent Workspace 升级检查")
+        print("  项目       : %s" % root)
+        print("  技能版本   : %s" % installed)
+        print("  项目记录   : %s" % (recorded or "（未记录）"))
+        for title, items, mark in (("需要补", add, "+"), ("需要清", clean, "-"), ("需要改", adjust, "~")):
+            print("\n[%s %d 项]" % (title, len(items)))
+            if not items:
+                print("  （无）")
+            for item in items:
+                print("  %s %-34s %s" % (mark, item[0][:34], item[1]))
+                if len(item) > 2 and item[2]:
+                    print("      → %s" % item[2])
+        print("\n[不要动]")
+        print("  - 不要重建仓库、rebase、改分支名")
+        print("  - 已合并 worktree 的清理走 claim release 或 worktree remove，不要 rm -rf")
+        print("\n结论: %d 补 / %d 清 / %d 改" % (len(add), len(clean), len(adjust)))
+
+    return 0 if not (add or clean or adjust) else 1
+
+
 # ---------------------------------------------------------------- main
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1220,6 +1388,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_claim.add_argument("--remove-worktree", action="store_true")
     p_claim.add_argument("--repair", action="store_true")
     p_claim.set_defaults(func=cmd_claim)
+
+    p_up = sub.add_parser("upgrade", help="升级检查（只读，不改任何文件）")
+    p_up.add_argument("--json", action="store_true")
+    p_up.add_argument("--idle-hours", type=float, default=1.0, help="worktree 存活多久才算僵尸，默认 1 小时")
+    p_up.set_defaults(func=cmd_upgrade)
 
     p_queue = sub.add_parser("queue", help="待认领队列")
     p_queue.add_argument("action", choices=["add", "list", "sync"])

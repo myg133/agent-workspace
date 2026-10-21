@@ -2,6 +2,24 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.4.0] - 2026-10-21
+
+### 新增：升级检查（只读）
+
+已运行项目升级到新版 skill 时，先看清要动什么。
+
+- `aw.py upgrade [--json] [--idle-hours N]`：输出三段清单
+  - **需要补**：BA/dispatch 的 4 个登记表、Deploy/README、feature 的 manifest
+  - **需要清**：中间层 `workspaces/`、嵌套 worktree、已合并僵尸、失效登记、根分支污染、项目内 vendor 的旧 skill
+  - **需要改**：根 `.gitignore` 的 `/*/`、各 worktree 的 `.local/`、旧文件名引用（`worktree-audit.md` 等）
+- 附「不要动」护栏：不重建仓库、不 rebase、不改分支名。
+- 僵尸 worktree 判定加入 `--idle-hours`（默认 1 小时），避免刚建的分支被误报。
+- 新增 `references/lifecycle/upgrade.md`，含目录层面的「哪些要动 / 哪些不要动」对照表。
+
+### 说明
+
+1.x 内目录拓扑不变：升级是**补文件 + 改引用**，不是迁移。回滚只需删掉本次新增的文件。
+
 ## [1.3.0] - 2026-10-21
 
 ### 新增：任务认领（WIP=1）

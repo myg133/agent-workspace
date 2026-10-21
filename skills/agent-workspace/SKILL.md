@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.2.0
+  version: 1.4.0
 ---
 
 # Agent Workspace
@@ -94,6 +94,7 @@ python <skill-path>/scripts/aw.py audit
 | 迁移仓库 | `references/init/migrate-project.md` | — |
 | 巡检 / 回收 | `references/lifecycle/audit.md` | `lifecycle/cleanup.md` |
 | 发布 | `references/lifecycle/release.md` | `roles/deploy.md` |
+| 升级已运行的项目 | `references/lifecycle/upgrade.md` | `aw.py upgrade` |
 
 子 Agent 的 prompt 里应当**直接给出角色文件路径**，不要让它自己猜该读哪一节。
 
@@ -117,6 +118,7 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 | `aw.py migrate --main <branch>` | 原地迁移已有仓库 | 0 / 非 0 |
 | `aw.py verify` | 校验硬约束（可挂 CI / pre-commit） | 0 通过，1 违规 |
 | `aw.py audit` | 只读巡检，输出四段报告 | 0 干净，1 有问题 |
+| `aw.py upgrade` | 旧项目升级检查（只读）：补什么/清什么/改什么 | 0 无需动作，1 有待处理 |
 | `aw.py next-req` | 计算下一个可用 REQ 编号 | 0 |
 | `aw.py queue add/list/sync` | 维护待认领队列 | 0 |
 | `aw.py claim whoami/next/take/release/list/doctor` | 任务认领（**WIP=1，工具强制**） | 0 成功，3 拒绝 |
