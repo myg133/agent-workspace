@@ -923,6 +923,10 @@ def _write_manifest(root: Path, req: str, ident: dict) -> None:
         return
     demands = root / "BA" / "demands"
     demand_dir = next((p for p in demands.glob("%s-*" % req)), demands / req) if demands.is_dir() else demands / req
+    try:
+        demand_rel = demand_dir.relative_to(root).as_posix()
+    except ValueError:
+        demand_rel = "BA/demands/%s" % req
     manifest = {
         "req": req,
         "branch": "feature/%s" % req,
@@ -931,7 +935,7 @@ def _write_manifest(root: Path, req: str, ident: dict) -> None:
         "owner": ident["agent_id"],
         "base_branch": "develop",
         "created_at": _now(),
-        "demand_dir": str(demand_dir),
+        "demand_dir": demand_rel,   # 仓库相对路径，跨机可读
     }
     write_json(wt / ".feature" / "manifest.json", manifest)
     # 把分配记录提交进 feature 分支：既是审计，也让工作区保持干净（便于回收）
@@ -1229,6 +1233,34 @@ def _msg_id() -> str:
     return secrets.token_hex(4)
 
 
+ABS_PATH_PATTERNS = (
+    re.compile(r"(?<![A-Za-z0-9+.-])[A-Za-z]:[\\/]"),   # C:\ 或 C:/（不误伤 https://）
+    re.compile(r"^\\\\"),                             # UNC \\server\share
+    re.compile(r"(?<![A-Za-z0-9:.])/(?:Users|home|root|mnt)/"),  # /Users/x /home/x
+)
+
+
+def _has_abs_path(text: str) -> bool:
+    return any(p.search(text or "") for p in ABS_PATH_PATTERNS)
+
+
+def normalize_ref(ref: str) -> str:
+    """ref 必须是仓库相对路径；拒绝本机绝对路径，统一用 /。"""
+    value = (ref or "").strip().replace("\\", "/")
+    if not value:
+        return ""
+    value = re.sub(r"^<repo-root>/", "", value)
+    value = re.sub(r"^\./", "", value)
+    if _has_abs_path(value) or value.startswith("/"):
+        raise GitError(
+            "ref 不能是本机绝对路径（跨机器不可读，也会泄露目录结构）。\n"
+            "请改成仓库相对路径，例如：BA/contracts/user-api/v3.md"
+        )
+    if value.startswith("../"):
+        raise GitError("ref 请用仓库相对路径（如 BA/contracts/x.md），不要用 ../ 回到仓库根。")
+    return value
+
+
 def parse_message(text: str) -> dict | None:
     lines = text.replace("\r\n", "\n").split("\n")
     if lines and lines[0].startswith("[msg]"):
@@ -1487,10 +1519,16 @@ def cmd_msg(args) -> int:
             raise GitError("--body 不能为空")
         if len(body) > 2000:
             raise GitError("body 超过 2000 字符，请把正文放进 BA/contracts/ 或 BA/decisions/")
+        ref = normalize_ref(args.ref)
+        if _has_abs_path(body):
+            raise GitError(
+                "消息正文里不要放本机绝对路径（跨机器不可读，也会泄露目录结构）。\n"
+                "用仓库相对路径，例如：BA/contracts/user-api/v3.md"
+            )
         meta = {
             "id": _msg_id(), "from": ident["agent_id"], "to": to, "cc": cc,
             "at": _now_utc(), "type": args.type, "body": body,
-            "ref": args.ref or "", "contract": args.contract or "",
+            "ref": ref, "contract": args.contract or "",
             "version": args.version or "", "deadline": args.deadline or "",
             "thread": args.thread or "", "priority": args.priority or "p2",
             "subject": args.subject or (args.contract or ""),

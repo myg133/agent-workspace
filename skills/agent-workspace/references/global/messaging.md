@@ -52,7 +52,7 @@ deadline: 2026-10-22T00:00:00Z
 | `cc` | — | 同上 |
 | `at` | ✅ | RFC3339 UTC（`Z`） |
 | `type` | ✅ | 见下 |
-| `ref` | — | `路径 @ sha`，**不要写分支名** |
+| `ref` | — | **仓库相对路径** `路径 @ sha`，**不要写分支名、不要写本机绝对路径** |
 | `contract`/`version` | contract-* 必填 | 与 `BA/contracts/INDEX.md` 对齐 |
 | `deadline` | — | 超时未 ack 由巡检提醒 |
 | `thread` | — | 话题 id |
@@ -60,6 +60,24 @@ deadline: 2026-10-22T00:00:00Z
 | body | ✅ | ≤ 2000 字符，契约正文放 `BA/contracts/` |
 
 类型：`fyi` `question` `blocker` `handoff` `contract-change` `contract-ack` `decision`。
+
+### 路径约定（重要）
+
+消息会跨机器读，**不能出现本机绝对路径**：
+
+| 场景 | 写法 |
+|------|------|
+| 引用仓库内文件 | `BA/contracts/user-api/v3.md`（推荐） |
+| 带根占位 | `<repo-root>/BA/contracts/user-api/v3.md` → 发送时自动归一化为相对路径 |
+| 引用代码位置 | `src/auth/login.ts:42` |
+| 禁止 | `C:\proj\BA\...`、`/Users/me/...`、`/home/...`、`\\server\share` |
+
+`aw.py msg send` 会拒绝以上绝对路径（`ref` 和 `body` 都检查），原因有两个：
+
+1. **跨机不可读**：Mac / Linux 上没有 `C:\`；
+2. **泄露目录结构**：用户目录、机器名、项目布局都会进入 bus 历史，且无法撤回。
+
+同理，`.feature/manifest.json` 的 `demand_dir` 也存仓库相对路径，不存本机路径。
 
 ## 4. 寻址与可见性
 

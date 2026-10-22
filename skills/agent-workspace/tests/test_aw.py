@@ -211,6 +211,32 @@ class WorkspaceCase(unittest.TestCase):
         other = run(["msg", "inbox", "--full"], self.repo, agent="ba-2")
         self.assertIn("broadcast", other.stdout)
 
+    def test_msg_ref_must_be_relative(self):
+        bad = run(["msg", "send", "--to", "all", "--body", "x",
+                   "--ref", "C:\\proj\\BA\\a.md"], self.repo, agent="ba-1")
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("绝对路径", bad.stderr)
+
+    def test_msg_ref_normalizes_repo_root(self):
+        run(["msg", "send", "--to", "all", "--body", "x",
+             "--ref", "<repo-root>/BA/contracts/a.md"], self.repo, agent="ba-1")
+        out = run(["msg", "list", "--all", "--json"], self.repo, agent="ba-1")
+        self.assertIn('"ref": "BA/contracts/a.md"', out.stdout)
+
+    def test_msg_body_rejects_abs_path(self):
+        bad = run(["msg", "send", "--to", "all",
+                   "--body", "见 C:\\Users\\me\\proj\\a.md"], self.repo, agent="ba-1")
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("绝对路径", bad.stderr)
+
+    def test_manifest_demand_dir_is_relative(self):
+        run(["queue", "add", "REQ-001"], self.repo, agent="ba-1")
+        run(["claim", "next"], self.repo, agent="ba-1")
+        manifest = json.loads((self.repo / "feature-REQ-001" / ".feature" / "manifest.json")
+                              .read_text(encoding="utf-8"))
+        self.assertTrue(manifest["demand_dir"].startswith("BA/demands/"), manifest["demand_dir"])
+        self.assertNotIn(":", manifest["demand_dir"])
+
     def test_bus_has_no_files(self):
         a, _ = self._make_pair()
         run(["msg", "send", "--to", "all", "--body", "x"], a, agent="pcA")

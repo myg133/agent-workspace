@@ -2,6 +2,19 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.8.1] - 2026-10-22
+
+### 修复：消息与 manifest 泄露本机路径
+
+- `msg send` 现在校验 `ref` 与 `body`，拒绝 `C:\...`、`/Users/...`、`/home/...`、UNC 等绝对路径
+- `<repo-root>/...` 会在发送时归一化为仓库相对路径（`BA/contracts/...`）
+- `.feature/manifest.json` 的 `demand_dir` 改为仓库相对路径，不再写入本机绝对路径
+- 文档补充「消息里的路径约定」
+
+原因：消息跨机器读（Mac 没有 `C:\`），且绝对路径会把用户目录、机器名与项目布局写进 bus 历史。
+
+> 旧的 `.feature/manifest.json` 不会被自动改写；如果里面有绝对路径，手工改成 `BA/demands/...` 即可。
+
 ## [1.8.0] - 2026-10-22
 
 ### 新增：Planner 角色（总规划 / 设计 / 协调）
