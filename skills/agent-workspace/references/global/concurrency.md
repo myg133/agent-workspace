@@ -5,6 +5,9 @@
 
 ## 1. 身份：agent_id + session_id
 
+> 名称来源与强制规则见 `identity.md`：`--agent` > `AW_AGENT_ID` > 硬失败（exit 2）。
+> 下面只讲并发语义。
+
 | | agent_id | session_id |
 |---|---|---|
 | 生命周期 | 长期（机器上的槽位） | 每次启动 |

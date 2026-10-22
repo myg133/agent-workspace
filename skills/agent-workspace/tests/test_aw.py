@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -21,8 +22,11 @@ AW = Path(__file__).resolve().parent.parent / "scripts" / "aw.py"
 
 def run(args, cwd, agent="ba-test", extra_env=None):
     env = dict(os.environ)
-    env["AW_AGENT_ID"] = agent
-    env["AW_SESSION_ID"] = "sess-" + agent
+    env.pop("AW_AGENT_ID", None)
+    env.pop("AW_SESSION_ID", None)
+    if agent:
+        env["AW_AGENT_ID"] = agent
+        env["AW_SESSION_ID"] = "sess-" + agent
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
@@ -100,6 +104,17 @@ class WorkspaceCase(unittest.TestCase):
         self.assertEqual(len(claimed), 3, outs)
         self.assertEqual(len(set(claimed)), 3, outs)
 
+    # ---- 身份 ----
+    def test_missing_agent_id(self):
+        out = run(["claim", "next"], self.repo, agent=None)
+        self.assertEqual(out.returncode, 2, out.stdout)
+        self.assertIn("MISSING_AGENT_ID", out.stderr)
+
+    def test_agent_flag_without_env(self):
+        out = run(["agent", "whoami", "--agent", "ba-x"], self.repo, agent=None)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("ba-x", out.stdout)
+
     # ---- 消息 ----
     def _make_pair(self):
         remote = self.tmp / "remote.git"
@@ -140,6 +155,27 @@ class WorkspaceCase(unittest.TestCase):
         self.assertEqual(ack.returncode, 0, ack.stderr)
         inbox_a = run(["msg", "inbox"], a, agent="pcA")
         self.assertIn("contract-ack", inbox_a.stdout)
+
+    def test_inbox_json(self):
+        run(["msg", "send", "--to", "all", "--body", "x"], self.repo, agent="ba-1")
+        out = run(["msg", "inbox", "--json", "--no-advance"], self.repo, agent="ba-1")
+        data = json.loads(out.stdout)
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["messages"][0]["body"], "x")
+        again = run(["msg", "inbox", "--json"], self.repo, agent="ba-1")
+        self.assertEqual(json.loads(again.stdout)["count"], 1)
+        empty = run(["msg", "inbox", "--json"], self.repo, agent="ba-1")
+        self.assertEqual(json.loads(empty.stdout)["count"], 0)
+
+    def test_unread_gate_blocks_claim(self):
+        run(["queue", "add", "REQ-001"], self.repo, agent="ba-1")
+        run(["msg", "send", "--to", "ba-1", "--body", "look"], self.repo, agent="ba-1")
+        blocked = run(["claim", "next"], self.repo, agent="ba-1")
+        self.assertEqual(blocked.returncode, 4, blocked.stdout)
+        self.assertIn("UNREAD_MESSAGES", blocked.stdout)
+        run(["msg", "inbox"], self.repo, agent="ba-1")
+        ok = run(["claim", "next"], self.repo, agent="ba-1")
+        self.assertIn("CLAIMED", ok.stdout)
 
     def test_bus_has_no_files(self):
         a, _ = self._make_pair()

@@ -2,6 +2,25 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.7.0] - 2026-10-22
+
+### 新增：强制人工指定 agent 名称
+
+- 名称优先级：`--agent <name>` > `AW_AGENT_ID` > **硬失败**
+- 没有名称时所有子命令 `exit 2`，输出 `MISSING_AGENT_ID` 与"询问用户后重试"的指令
+- **不再自动生成名字**：共享目录下无法可靠区分会话，自动生成会导致重启换名、认领漂移
+- `--agent` 可写在子命令前或后：`aw.py --agent ba-1 claim next` / `aw.py claim next --agent ba-1`
+- `aw.py agent whoami` 显示 agent_id / session / 名称来源
+
+### 新增：未读消息门禁 + Notifier 角色
+
+- `claim next` 发现未读消息 → `UNREAD_MESSAGES <n>`，**exit 4**，不读消息不能领新任务（`--ignore-unread` 可强制）
+- `msg inbox --json`、`msg show <id>`：供 Notifier 子 agent 消费
+- 新增只读角色 `references/roles/notifier.md`：只允许 `inbox/show/list`，禁止 `send/ack/claim/git/写文件`
+- `msg inbox --no-advance`：Notifier 读消息但不推进游标，失败不丢消息；游标只由 BA 自己推进
+- `msg show <id>`：按 id 取单条完整消息（JSON），供摘要后追细节
+- 对应 agent 定义：`com.anspire-open.agents/anspire-open-notifier.md`
+
 ## [1.6.1] - 2026-10-21
 
 ### 新增：可重跑的自测套件

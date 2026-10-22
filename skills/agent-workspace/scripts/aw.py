@@ -31,6 +31,10 @@ class GitError(RuntimeError):
     pass
 
 
+class IdentityError(GitError):
+    """没有 agent 名称——必须由人指定后才能继续。"""
+
+
 def git(*args: str, cwd: Path | str | None = None, check: bool = True,
         timeout: float | None = None) -> subprocess.CompletedProcess:
     # core.quotepath=false：中文/空格文件名按原样输出，避免 "\346\226\207" 这类转义
@@ -797,11 +801,12 @@ def _session_alive(rec: dict, ttl: int = SESSION_TTL_SECONDS) -> bool:
 def resolve_identity(root: Path, role: str = "ba") -> dict:
     agent_id = (os.environ.get("AW_AGENT_ID") or "").strip()
     if not agent_id:
-        raise GitError(
-            "缺少 AW_AGENT_ID。\n"
-            "多 BA 同机协作时必须给每个会话一个稳定槽位，例如：\n"
-            "  PowerShell:  $env:AW_AGENT_ID='ba-slot-1'; omp\n"
-            "  bash:        AW_AGENT_ID=ba-slot-1 omp"
+        raise IdentityError(
+            "MISSING_AGENT_ID\n"
+            "还没有 agent 名称，不能继续。\n"
+            "请先向用户确认你的名称，然后用 --agent 重新执行：\n"
+            "  aw.py --agent ba-slot-1 <命令>\n"
+            "如果启动器能设置环境变量，也可以用 AW_AGENT_ID。"
         )
     session_id = (
         os.environ.get("AW_SESSION_ID")
@@ -965,6 +970,14 @@ def cmd_claim(args) -> int:
         return 0
 
     if action == "next":
+        if not getattr(args, "ignore_unread", False):
+            unread = _unread_for(root, ident)
+            if unread:
+                print("UNREAD_MESSAGES %d" % len(unread))
+                for m in unread[:5]:
+                    print("  %s %s %s" % (m.get("at", ""), m.get("from", ""), m.get("type", "")))
+                print("先处理消息：aw.py msg inbox（或让 notifier 读完），再 claim。")
+                return 4
         with FileLock(aw_path(root, "locks", "claims.lock")):
             claims = load_claims(root)
             queue = load_queue(root)
@@ -1137,6 +1150,18 @@ def _finish_claim(root: Path, req: str, ident: dict) -> int:
     print("  agent   : %s" % ident["agent_id"])
     print("  worktree: %s" % (root / ("feature-%s" % req)))
     print("  branch  : feature/%s" % req)
+    return 0
+
+
+def cmd_agent(args) -> int:
+    root = repo_root()
+    ident = resolve_identity(root)
+    source = os.environ.get("AW_AGENT_SOURCE") or ("env AW_AGENT_ID" if os.environ.get("AW_AGENT_ID") else "unknown")
+    print("agent_id : %s" % ident["agent_id"])
+    print("session  : %s" % ident["session_id"])
+    print("role     : %s" % ident["role"])
+    print("repo     : %s" % root)
+    print("source   : %s" % source)
     return 0
 
 
@@ -1397,6 +1422,12 @@ def _msg_line(meta: dict, ident: dict, full: bool = False) -> str:
     return line
 
 
+def _unread_for(root: Path, ident: dict) -> list[dict]:
+    messages = [m for m in load_bus_messages(root) if _is_mine(m, ident)]
+    at, mid = _read_cursor(root, ident["agent_id"])
+    return [m for m in messages if (m.get("at", ""), m.get("id", "")) > (at, mid)]
+
+
 def _read_cursor(root: Path, agent_id: str) -> tuple[str, str]:
     data = read_json(aw_path(root, "msg-cursor.json"), {})
     entry = data.get(agent_id, {})
@@ -1466,13 +1497,29 @@ def cmd_msg(args) -> int:
             at, mid = _read_cursor(root, ident["agent_id"])
             messages = [m for m in messages if (m.get("at", ""), m.get("id", "")) > (at, mid)]
         show = messages[-args.limit:] if args.limit else messages
-        if not show:
-            print("（无消息）")
-        for meta in show:
-            print(_msg_line(meta, ident, full=args.full))
-        if show and action == "inbox":
+        if args.json:
+            fields = ("id", "from", "to", "cc", "at", "type", "subject", "contract",
+                      "version", "ref", "deadline", "thread", "priority", "re", "result", "body")
+            payload = [{k: m.get(k) for k in fields if m.get(k)} for m in show]
+            print(json.dumps({"count": len(payload), "messages": payload},
+                             ensure_ascii=False, indent=2))
+        else:
+            if not show:
+                print("（无消息）")
+            for meta in show:
+                print(_msg_line(meta, ident, full=args.full))
+        if show and action == "inbox" and not args.no_advance:
             last = show[-1]
             _write_cursor(root, ident["agent_id"], last.get("at", ""), last.get("id", ""))
+        return 0
+
+    if action == "show":
+        target = next((m for m in load_bus_messages(root, fetch=not args.no_fetch)
+                       if m.get("id") == args.id), None)
+        if not target:
+            print("NOT_FOUND %s" % args.id)
+            return 3
+        print(json.dumps(target, ensure_ascii=False, indent=2))
         return 0
 
     if action == "ack":
@@ -1813,8 +1860,16 @@ def cmd_upgrade(args) -> int:
 
 # ---------------------------------------------------------------- main
 
+def _subparser_list(parser: argparse.ArgumentParser) -> list[argparse.ArgumentParser]:
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return list(action.choices.values())
+    return []
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aw.py", description="Agent Workspace 工具")
+    parser.add_argument("--agent", default=None, help="agent_id（优先于 AW_AGENT_ID）")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_init = sub.add_parser("init", help="初始化一个新的 workspace 项目")
@@ -1851,7 +1906,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_claim.add_argument("--force", action="store_true")
     p_claim.add_argument("--remove-worktree", action="store_true")
     p_claim.add_argument("--repair", action="store_true")
+    p_claim.add_argument("--ignore-unread", action="store_true", help="忽略未读消息强制认领")
     p_claim.set_defaults(func=cmd_claim)
+
+    p_agent = sub.add_parser("agent", help="查看当前 agent 身份")
+    p_agent.add_argument("action", choices=["whoami", "check"], nargs="?", default="whoami")
+    p_agent.set_defaults(func=cmd_agent)
 
     p_contract = sub.add_parser("contract", help="契约一致性检查")
     p_contract.add_argument("action", choices=["check", "list"])
@@ -1861,7 +1921,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_contract.set_defaults(func=cmd_contract)
 
     p_msg = sub.add_parser("msg", help="BA 间消息（空 commit 走 bus 分支）")
-    p_msg.add_argument("action", choices=["send", "inbox", "list", "ack", "flush"])
+    p_msg.add_argument("action", choices=["send", "inbox", "list", "ack", "flush", "show"])
+    p_msg.add_argument("--json", action="store_true", help="机器可读输出")
     p_msg.add_argument("id", nargs="?", default="")
     p_msg.add_argument("--to", default="", help="收件人，逗号分隔；支持 all / role:ba / agent_id")
     p_msg.add_argument("--cc", default="")
@@ -1880,6 +1941,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_msg.add_argument("--limit", type=int, default=50)
     p_msg.add_argument("--full", action="store_true")
     p_msg.add_argument("--no-fetch", action="store_true")
+    p_msg.add_argument("--no-advance", action="store_true", help="只读，不推进游标（Notifier 用）")
     p_msg.add_argument("--ok", action="store_true", help="ack 时表示同意（默认）")
     p_msg.add_argument("--note", default="", help="ack 附言")
     p_msg.add_argument("--reject", action="store_true", help="ack 时表示不同意")
@@ -1895,6 +1957,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_queue.add_argument("req", nargs="?", default="")
     p_queue.add_argument("--title", default="")
     p_queue.set_defaults(func=cmd_queue)
+
+    # 允许 --agent 写在子命令后面：aw.py msg inbox --agent ba-1
+    for subparser in _subparser_list(parser):
+        subparser.add_argument("--agent", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     return parser
 
 
@@ -1920,8 +1986,16 @@ def main(argv: list[str] | None = None) -> int:
     _init_console()
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "agent", None):
+        os.environ["AW_AGENT_ID"] = args.agent
+        os.environ["AW_AGENT_SOURCE"] = "--agent"
+    elif os.environ.get("AW_AGENT_ID"):
+        os.environ.setdefault("AW_AGENT_SOURCE", "env AW_AGENT_ID")
     try:
         return args.func(args)
+    except IdentityError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     except GitError as exc:
         print("错误: %s" % exc, file=sys.stderr)
         return 1

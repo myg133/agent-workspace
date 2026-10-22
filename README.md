@@ -85,6 +85,7 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 | `aw.py upgrade` | 旧项目升级检查：补什么、清什么、改什么（只读） |
 | `aw.py msg` | BA 间消息：空 commit 走 `bus` 分支，带收件人与 ack |
 | `aw.py contract check` | 契约一致性：pin 落后、consumer 未声明、变更未 ack |
+| `aw.py agent whoami` | 查看当前身份；没有 `--agent` 或 `AW_AGENT_ID` 时一切命令 exit 2 |
 
 依赖 Python 3.8+ / git 2.20+，只用标准库。
 

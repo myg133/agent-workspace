@@ -118,7 +118,18 @@ aw.py msg flush           # 重试 outbox 里的未发送消息
 
 **禁止**把对话直接提交到 demand——那会让需求历史不可读。
 
-## 9. 故障处理
+## 9. 谁在读消息
+
+BA 不会主动读——所以分两层：
+
+| 层 | 作用 |
+|----|------|
+| **门禁** | `claim next` 发现未读 → `UNREAD_MESSAGES`，exit 4，不读不许领新任务 |
+| **Notifier** | 只读子 agent，跑 `msg inbox --json --no-advance` 整理摘要交回 BA（不推进游标） |
+
+Notifier 的硬限制（只读、不回复、不 ack）见 `references/roles/notifier.md`。
+
+## 10. 故障处理
 
 | 现象 | 处理 |
 |------|------|
@@ -127,7 +138,7 @@ aw.py msg flush           # 重试 outbox 里的未发送消息
 | 消息解析失败被忽略 | 检查 `---` 分隔与必填字段；`aw.py msg list --all --full` 看原文 |
 | bus 被误删 | 最后一条消息的 commit 仍在 reflog；用 `git update-ref` 重建 |
 
-## 10. 规模
+## 11. 规模
 
 | 指标 | 数值 |
 |------|------|
