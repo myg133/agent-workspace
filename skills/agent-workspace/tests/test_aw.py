@@ -177,6 +177,40 @@ class WorkspaceCase(unittest.TestCase):
         ok = run(["claim", "next"], self.repo, agent="ba-1")
         self.assertIn("CLAIMED", ok.stdout)
 
+    def _inject(self, text, name="injected.md"):
+        outbox = self.repo / ".aw" / "outbox"
+        outbox.mkdir(parents=True, exist_ok=True)
+        (outbox / name).write_text(text, encoding="utf-8")
+        run(["msg", "flush"], self.repo, agent="ba-1")
+
+    def test_inbox_out_of_order_not_lost(self):
+        run(["msg", "send", "--to", "ba-1", "--body", "first"], self.repo, agent="ba-1")
+        run(["msg", "inbox"], self.repo, agent="ba-1")
+        text = "\n".join([
+            "[msg] fyi clock-skew -> ba-1", "", "---", "id: deadbeef",
+            "from: ba-2", "to: [ba-1]", "at: 2026-10-20T00:00:00Z", "type: fyi",
+            "---", "older but later",
+        ])
+        self._inject(text)
+        out = run(["msg", "inbox", "--full"], self.repo, agent="ba-1")
+        self.assertIn("deadbeef", out.stdout)
+
+    def test_inbox_limit_shows_oldest_first(self):
+        for body in ("m1", "m2", "m3"):
+            run(["msg", "send", "--to", "ba-1", "--body", body], self.repo, agent="ba-1")
+        first = run(["msg", "inbox", "--limit", "2", "--full"], self.repo, agent="ba-1")
+        self.assertIn("m1", first.stdout)
+        self.assertIn("m2", first.stdout)
+        self.assertNotIn("m3", first.stdout)
+        second = run(["msg", "inbox", "--limit", "2", "--full"], self.repo, agent="ba-1")
+        self.assertIn("m3", second.stdout)
+
+    def test_read_state_is_per_agent(self):
+        run(["msg", "send", "--to", "all", "--body", "broadcast"], self.repo, agent="ba-1")
+        run(["msg", "inbox"], self.repo, agent="ba-1")
+        other = run(["msg", "inbox", "--full"], self.repo, agent="ba-2")
+        self.assertIn("broadcast", other.stdout)
+
     def test_bus_has_no_files(self):
         a, _ = self._make_pair()
         run(["msg", "send", "--to", "all", "--body", "x"], a, agent="pcA")

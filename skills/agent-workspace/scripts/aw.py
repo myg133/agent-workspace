@@ -1422,10 +1422,38 @@ def _msg_line(meta: dict, ident: dict, full: bool = False) -> str:
     return line
 
 
+def _read_ids(root: Path, agent_id: str, messages: list[dict]) -> set[str]:
+    """已读集合（按消息 id，而不是时间戳）。
+
+    旧版本用 (at, id) 游标，会被"更早时间戳、更晚到达"的消息绕过导致丢消息；
+    这里在首次读取时把旧游标转换成等价 id 集合，保持向后兼容。
+    """
+    path = aw_path(root, "msg-read", "%s.json" % agent_id)
+    if path.exists():
+        return set(read_json(path, {}).get("ids") or [])
+    at, mid = _read_cursor(root, agent_id)
+    migrated: set[str] = set()
+    if at or mid:
+        for m in messages:
+            if (m.get("at", ""), m.get("id", "")) <= (at, mid) and m.get("id"):
+                migrated.add(m["id"])
+        _write_read_ids(root, agent_id, migrated, {m.get("id") for m in messages if m.get("id")})
+    return migrated
+
+
+def _write_read_ids(root: Path, agent_id: str, ids: set[str], universe: set[str]) -> None:
+    path = aw_path(root, "msg-read", "%s.json" % agent_id)
+    with FileLock(aw_path(root, "locks", "msg-read.lock")):
+        current = set(read_json(path, {}).get("ids") or [])
+        keep = (current & universe) if universe else current
+        merged = keep | set(ids)
+        write_json(path, {"ids": sorted(merged), "updated_at": _now()})
+
+
 def _unread_for(root: Path, ident: dict) -> list[dict]:
     messages = [m for m in load_bus_messages(root) if _is_mine(m, ident)]
-    at, mid = _read_cursor(root, ident["agent_id"])
-    return [m for m in messages if (m.get("at", ""), m.get("id", "")) > (at, mid)]
+    read = _read_ids(root, ident["agent_id"], messages)
+    return [m for m in messages if m.get("id") not in read]
 
 
 def _read_cursor(root: Path, agent_id: str) -> tuple[str, str]:
@@ -1482,7 +1510,7 @@ def cmd_msg(args) -> int:
     if action == "flush":
         state = bus_flush(root)
         print("FLUSH %s" % state)
-        return 0 if state == "ok" else 3
+        return 0 if state in ("ok", "local") else 3
 
     if action in ("inbox", "list"):
         messages = load_bus_messages(root, fetch=not args.no_fetch)
@@ -1493,10 +1521,17 @@ def cmd_msg(args) -> int:
         if args.since:
             messages = [m for m in messages if (m.get("at") or "") >= args.since]
         messages.sort(key=lambda m: (m.get("at", ""), m.get("id", "")))
+        universe = {m.get("id") for m in messages if m.get("id")}
         if action == "inbox" and not args.all:
-            at, mid = _read_cursor(root, ident["agent_id"])
-            messages = [m for m in messages if (m.get("at", ""), m.get("id", "")) > (at, mid)]
-        show = messages[-args.limit:] if args.limit else messages
+            read = _read_ids(root, ident["agent_id"], messages)
+            messages = [m for m in messages if m.get("id") not in read]
+            if args.limit:
+                # 未读时取最旧的 N 条，避免"只显示最新、旧的被永久跳过"
+                show = messages[:args.limit]
+            else:
+                show = messages
+        else:
+            show = messages[-args.limit:] if args.limit else messages
         if args.json:
             fields = ("id", "from", "to", "cc", "at", "type", "subject", "contract",
                       "version", "ref", "deadline", "thread", "priority", "re", "result", "body")
@@ -1508,9 +1543,9 @@ def cmd_msg(args) -> int:
                 print("（无消息）")
             for meta in show:
                 print(_msg_line(meta, ident, full=args.full))
-        if show and action == "inbox" and not args.no_advance:
-            last = show[-1]
-            _write_cursor(root, ident["agent_id"], last.get("at", ""), last.get("id", ""))
+        if show and action == "inbox" and not args.no_advance and not args.all:
+            _write_read_ids(root, ident["agent_id"],
+                            {m["id"] for m in show if m.get("id")}, universe)
         return 0
 
     if action == "show":
