@@ -39,6 +39,8 @@ stateDiagram-v2
 | `.feature/verification-report.md` | 同上 | **Dev**（自验） | QA 追加自己的 `qa-report.md` |
 | `dispatch/agent-registry.md` | `BA/dispatch/` | **BA**（每次提交时顺带更新） | 只能读 |
 | `dispatch/req-registry.md` | 同上 | **BA**（认领时写） | 只能读 |
+| `plan/*.md` | `BA/plan/` | **Planner** | 只能读 |
+| `decisions/ADR-*.md` | `BA/decisions/` | **Planner**（相关 BA ack） | 只能读 |
 
 **QA 不直接 commit 任何东西**：它产出报告内容，由 BA 落到 `demand` 分支。这样 `demand` 分支的历史里，永远只有 BA 的 session。
 

@@ -2,6 +2,22 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.8.0] - 2026-10-22
+
+### 新增：Planner 角色（总规划 / 设计 / 协调）
+
+在 BA 之上增加一层规划角色，回答"做什么、先做什么、边界在哪"。
+
+- `references/roles/planner.md`：定位、与 BA 的分工、`BA/plan/` 目录、节奏、容量指标、反模式
+- `com.anspire-open.agents/anspire-open-planner.md`
+- 写入权：Planner 只写 `BA/plan/` 与 `BA/decisions/`；不写需求、不改状态、不领 feature、不派单
+- 8 个 BA 的容量管理：队列长度、认领等待、ack 中位数、返工率
+- SKILL 路由表与硬约束同步更新（六个角色）
+
+### 说明
+
+Planner 目前是"纸面角色"：规范与定义已就位，尚未在真实流程中跑过完整周期。
+
 ## [1.7.1] - 2026-10-22
 
 ### 修复：消息游标会吞消息

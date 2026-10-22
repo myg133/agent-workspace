@@ -64,6 +64,7 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 
 | 角色 | 工作区 | 只做 | 规范 |
 |------|--------|------|------|
+| Planner | `BA/plan`、`BA/decisions` | 总规划、设计、跨 BA 协调（**不领任务、不改状态**） | [roles/planner.md](skills/agent-workspace/references/roles/planner.md) |
 | BA | `BA/` | 需求、派单、状态（**唯一**写状态的人） | [roles/ba.md](skills/agent-workspace/references/roles/ba.md) |
 | Dev | `feature-REQ-xxx/` | 实现、测试、自验、PR | [roles/dev.md](skills/agent-workspace/references/roles/dev.md) |
 | QA | feature / code | 验证、出报告（**不提交**） | [roles/qa.md](skills/agent-workspace/references/roles/qa.md) |
@@ -133,12 +134,12 @@ WIP=1 由锁 + 每任务一文件强制，**重启也不会多领**（判定用 
 
 ```text
 plugin.json                          Agent Plugins 清单
-com.anspire-open.agents/             五个角色的 agent 定义（薄壳，指向规范）
+com.anspire-open.agents/             六个角色的 agent 定义（薄壳，指向规范）
 skills/agent-workspace/
 ├── SKILL.md                         入口索引（138 行）
 ├── references/
 │   ├── global/                      布局、路径、.gitignore、状态机、并发
-│   ├── roles/                       五个角色的完整工作流
+│   ├── roles/                       六个角色的完整工作流
 │   ├── init/                        新建 / 迁移
 │   └── lifecycle/                   巡检 / 回收 / 发布
 ├── assets/templates/                19 个模板

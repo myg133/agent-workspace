@@ -1,14 +1,15 @@
 ---
 name: agent-workspace
-description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
+description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.7.1
+  version: 1.8.0
 ---
 
 # Agent Workspace
 
-一套"用 Git 当状态层"的多 Agent 开发工作流：**一个需求 = 一个 worktree = 一个容器**，BA 写需求、Dev 写代码、QA 只验证、Deploy 只管部署，所有状态落在 Git 里。
+一套"用 Git 当状态层"的多 Agent 开发工作流：**一个需求 = 一个 worktree = 一个容器**，
+Planner 定方向、BA 写需求、Dev 写代码、QA 只验证、Deploy 只管部署，所有状态落在 Git 里。
 
 ## 30 秒上手
 
@@ -44,7 +45,7 @@ python <skill-path>/scripts/aw.py audit
 | `workspace` | orphan | `<repo-root>/` | BA（极少） | — |
 | `main` | orphan | — | 发布管理员 | — |
 | `develop` | 普通 | `code/` | 仅 PR 合并 | `main` |
-| `demand` | orphan | `BA/` | BA | — |
+| `demand` | orphan | `BA/` | BA（`demands/`）、Planner（`plan/` `decisions/`） | — |
 | `deploy` | orphan | `Deploy/` | Deploy / CD | — |
 | `feature/REQ-xxx` | 普通 | `feature-REQ-xxx/` | Dev | `develop` |
 | `release/vX.Y.Z` | 普通 | — | 发布管理员 | `develop` |
@@ -79,18 +80,21 @@ python <skill-path>/scripts/aw.py audit
    由 `aw.py claim` 强制（先进 `ALREADY_HOLDING`，不是靠提醒）。
 8. 认领是创建 worktree 的唯一入口：禁止手工 `git worktree add` 绕过认领。
 9. BA 间消息只走 `bus` 分支的空 commit；**契约/决策才进 `demand`**，不要把对话提交到 demand。
-10. **身份必须由人指定**：`--agent <name>` 或 `AW_AGENT_ID`，都没有时工具 `exit 2`（`MISSING_AGENT_ID`），
+10. **Planner 不领 feature、不改状态、不派单**：只写 `BA/plan/` 与 `BA/decisions/`；
+    决策必须落 ADR，优先级一次只改一个。
+11. **身份必须由人指定**：`--agent <name>` 或 `AW_AGENT_ID`，都没有时工具 `exit 2`（`MISSING_AGENT_ID`），
     不自动生成、不猜。名称在同一仓库内唯一且跨会话稳定。
-11. 未读消息存在时 `claim next` 拒绝（`UNREAD_MESSAGES`，exit 4）——先读消息（或让 Notifier 读）再认领。
-12. 契约有版本：已 ratified 的 `vN.md` 不可改；消费方在 `.feature/manifest.json` 里 pin 版本；
+12. 未读消息存在时 `claim next` 拒绝（`UNREAD_MESSAGES`，exit 4）——先读消息（或让 Notifier 读）再认领。
+13. 契约有版本：已 ratified 的 `vN.md` 不可改；消费方在 `.feature/manifest.json` 里 pin 版本；
     合并前 `aw.py contract check` 必须通过。
-13. `develop` 只通过 PR 合并；`main` 只从 `release` 合并。
-14. 命令铁律：`git checkout --orphan` 之后用 `git reset`，**绝不用 `git rm -rf .`**（会删工作区文件）。
+14. `develop` 只通过 PR 合并；`main` 只从 `release` 合并。
+15. 命令铁律：`git checkout --orphan` 之后用 `git reset`，**绝不用 `git rm -rf .`**（会删工作区文件）。
 
 ## 我该读什么
 
 | 你是 | 先读 | 再读 |
 |------|------|------|
+| **Planner** | `references/roles/planner.md` | `global/state-machine.md`、`global/messaging.md` |
 | **BA** | `references/roles/ba.md` | `global/concurrency.md`、`global/state-machine.md` |
 | **Dev** | `references/roles/dev.md` | `global/paths.md` |
 | **QA** | `references/roles/qa.md` | `global/state-machine.md`（写入权） |
@@ -173,7 +177,7 @@ Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输�
 | `references/global/messaging.md` | BA 间消息：bus 分支、格式、寻址、ack |
 | `references/global/contracts.md` | 契约版本、消费方 pin、检查规则 |
 | `references/global/identity.md` | agent 名称的优先级、强制人工指定 |
-| `references/roles/*.md` | 五个角色的完整工作流 |
+| `references/roles/*.md` | 六个角色的完整工作流 |
 | `references/init/*.md` | 新建 / 迁移 |
 | `references/lifecycle/*.md` | 巡检 / 回收 / 发布 |
 | `assets/templates/*.tpl` | 根容器、需求、验收、状态、registry、feature 产物 |

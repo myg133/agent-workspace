@@ -146,6 +146,14 @@ git push origin --delete feature/REQ-003
 
 删除前用 `references/lifecycle/cleanup.md` 的安全检查清单。记录到 `dispatch/cleanup-log.md`。
 
+## 6.1 与 Planner 的分工
+
+- **Planner 定方向**：优先级、范围、跨 BA 契约方向、容量。
+- **你定落地**：需求文档、验收标准、派单、状态。
+- Planner 的结论看 `BA/plan/queue-policy.md` 与 `BA/decisions/`；
+  有异议在 bus 上发 `type: question`，不要私下改 `demand.md` 绕过。
+- 你**不改** `plan/`，Planner **不改** `status.md`。
+
 ## 7. 硬规则
 
 - 状态只由你改；Dev/QA 只报告。
