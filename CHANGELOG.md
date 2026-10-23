@@ -2,6 +2,23 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.17.0] - 2026-10-24
+
+### 新增：MCP 工具支持每次调用传 agent_id
+
+桌面端 agent 拿不到 `AW_AGENT_ID`，之前所有工具都会返回 `MISSING_AGENT_ID`。
+
+- 每个 MCP 工具新增可选参数 `agent_id`
+- 优先级：调用参数 > 环境变量 `AW_AGENT_ID` > 报错
+- 参数会作为 `--agent` 传给 `aw.py`，行为与 CLI 一致
+- 返回体里的 `agent` 字段反映本次实际使用的身份
+- 文档：mcp.md 新增「没有环境变量时：每次调用带 agent_id」
+
+### 说明
+
+`agent_id` 是自报的，工具只能校验 roster 是否存在且 active，不能证明归属；
+多会话共用同一个 MCP 服务进程时，必须每次显式传入。
+
 ## [1.16.0] - 2026-10-23
 
 ### 新增：bus 写权限限定

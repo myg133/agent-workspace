@@ -62,6 +62,37 @@ aw.py mcp print                   # 打印通用 JSON（手工粘贴）
 - 每个 agent 用同一份配置，只改 `AW_AGENT_ID`；
 - 没有 `AW_AGENT_ID` 时服务照常启动，但每次工具调用返回 `MISSING_AGENT_ID`。
 
+## 2.1 没有环境变量时：每次调用带 agent_id
+
+桌面端 agent 往往拿不到 `AW_AGENT_ID`。这种情况下，**每个工具都接受一个可选的 `agent_id` 参数**：
+
+```json
+{"name": "agent_whoami", "arguments": {"agent_id": "pcA-ba-1"}}
+```
+
+```json
+{"name": "msg_send", "arguments": {
+  "agent_id": "pcA-ba-1",
+  "to": "pcB-ba-1",
+  "type": "contract-change",
+  "body": "v3 增加 mfaToken"
+}}
+```
+
+规则：
+
+| 情况 | 身份来源 |
+|------|---------|
+| 调用带 `agent_id` | 用它（优先） |
+| 没带，但进程有 `AW_AGENT_ID` | 用环境变量 |
+| 都没有 | `MISSING_AGENT_ID`，不执行 |
+
+注意：
+
+- `agent_id` 是**自报**的，工具只能校验它是否在 roster 里、是否 active，不能证明"你就是他"；
+- 桌面端如果多个会话共用一个 MCP 服务进程，**必须每次带 `agent_id`**，否则无法区分；
+- 这个参数会作为 `--agent` 传给 `aw.py`，行为与 CLI 完全一致。
+
 ## 3. 工具
 
 | 工具 | 作用 |

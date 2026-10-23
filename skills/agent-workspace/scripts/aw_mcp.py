@@ -32,10 +32,11 @@ def log(*args) -> None:
     print(*args, file=sys.stderr, flush=True)
 
 
-def run_aw(argv: list[str], timeout: int = 180) -> subprocess.CompletedProcess:
+def run_aw(argv: list[str], agent: str | None = None, timeout: int = 180) -> subprocess.CompletedProcess:
     env = dict(os.environ)
-    if AGENT:
-        env["AW_AGENT_ID"] = AGENT
+    identity = (agent or AGENT or "").strip()
+    if identity:
+        env["AW_AGENT_ID"] = identity
     env.setdefault("AW_AGENT_PID", str(os.getpid()))
     env.setdefault("AW_SESSION_ID", "proc-%d" % os.getpid())
     return subprocess.run(
@@ -46,12 +47,20 @@ def run_aw(argv: list[str], timeout: int = 180) -> subprocess.CompletedProcess:
 
 
 def tool(name: str, description: str, props: dict, required: list[str] | None = None) -> dict:
+    # 每个工具都可以显式带 agent_id：桌面端没有环境变量时靠它认人
+    properties = {
+        "agent_id": {
+            "type": "string",
+            "description": "调用者身份；未设置 AW_AGENT_ID 时必填（如 pcA-ba-1）",
+        }
+    }
+    properties.update(props)
     return {
         "name": name,
         "description": description,
         "inputSchema": {
             "type": "object",
-            "properties": props,
+            "properties": properties,
             "required": required or [],
             "additionalProperties": False,
         },
@@ -218,20 +227,23 @@ def build_argv(name: str, args: dict) -> list[str]:
 
 
 def call_tool(name: str, args: dict) -> dict:
-    if not AGENT:
+    identity = (str(args.get("agent_id") or "").strip()) or AGENT
+    if not identity:
         return {
             "content": [{"type": "text", "text":
                          "MISSING_AGENT_ID\n"
-                         "本 MCP 服务没有收到 AW_AGENT_ID。\n"
-                         "请在每个 agent 的启动环境里设置：AW_AGENT_ID=pcA-ba-1"}],
+                         "没有 agent 身份。二选一：\n"
+                         "  1) 每次调用带参数 agent_id（桌面端推荐）\n"
+                         "  2) 启动环境设置 AW_AGENT_ID=pcA-ba-1"}],
             "isError": True,
         }
     try:
         argv = build_argv(name, args)
+        argv = ["--agent", identity, *argv]
     except (KeyError, ValueError) as exc:
         return {"content": [{"type": "text", "text": "参数错误: %s" % exc}], "isError": True}
     try:
-        proc = run_aw(argv)
+        proc = run_aw(argv, agent=identity)
     except subprocess.TimeoutExpired:
         return {"content": [{"type": "text", "text": "命令超时: %s" % name}], "isError": True}
 
@@ -240,7 +252,7 @@ def call_tool(name: str, args: dict) -> dict:
         "exit_code": proc.returncode,
         "stdout": proc.stdout.strip(),
         "stderr": proc.stderr.strip(),
-        "agent": AGENT,
+        "agent": identity,
     }
     # 3/4 是业务状态（ALREADY_HOLDING / UNREAD_MESSAGES），当作正常返回
     return {

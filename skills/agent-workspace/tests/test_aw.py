@@ -116,6 +116,17 @@ class WorkspaceCase(unittest.TestCase):
         finally:
             self._stop_mcp(proc)
 
+    def test_mcp_per_call_agent_id(self):
+        proc = self._mcp(agent=None)
+        try:
+            call = self._mcp_tool(proc, "agent_whoami", {"agent_id": "pcA-ba-1"})
+            payload = json.loads(call["result"]["content"][0]["text"])
+            self.assertEqual(payload["exit_code"], 0, payload)
+            self.assertIn("pcA-ba-1", payload["stdout"])
+            self.assertEqual(payload["agent"], "pcA-ba-1")
+        finally:
+            self._stop_mcp(proc)
+
     def test_mcp_requires_agent_id(self):
         proc = self._mcp(agent=None)
         try:
