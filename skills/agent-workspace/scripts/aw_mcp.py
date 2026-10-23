@@ -64,7 +64,15 @@ INT = {"type": "integer"}
 
 TOOLS = [
     tool("agent_whoami", "查看当前 agent 身份、终端锚点与 roster 状态", {}),
-    tool("agent_roster", "列出已注册的 agent 及本地会话状态", {}),
+    tool("agent_roster", "列出仓库名册中的 agent 及本地会话状态（JSON）", {}),
+    tool("agent_register", "注册 agent 到仓库名册 BA/plan/agents.json",
+         {"name": STR, "role": STR, "host": STR}, ["name"]),
+    tool("agent_activate", "重新激活名册中的 agent", {"name": STR}, ["name"]),
+    tool("agent_deactivate", "停用名册中的 agent（不再接收消息）", {"name": STR}, ["name"]),
+    tool("agent_publish", "提交并推送名册到 demand 分支，让其他机器可见",
+         {"message": STR}),
+    tool("agent_exit", "退出：session 置 offline、解绑终端",
+         {"force": BOOL, "keep_binding": BOOL}),
     tool("claim_next", "原子认领队首需求；已有认领或存在未读消息时拒绝",
          {"ignore_unread": {**BOOL, "description": "忽略未读消息强制认领"}}),
     tool("claim_take", "认领指定需求（同样受 WIP=1 限制）", {"req": STR}, ["req"]),
@@ -101,7 +109,28 @@ def build_argv(name: str, args: dict) -> list[str]:
     if name == "agent_whoami":
         return ["agent", "whoami"]
     if name == "agent_roster":
-        return ["agent", "roster"]
+        return ["agent", "roster", "--json"]
+    if name == "agent_register":
+        argv = ["agent", "register", a["name"]]
+        if a.get("role"):
+            argv += ["--role", a["role"]]
+        if a.get("host"):
+            argv += ["--host", a["host"]]
+        return argv
+    if name in ("agent_activate", "agent_deactivate"):
+        return ["agent", "activate" if name == "agent_activate" else "deactivate", a["name"]]
+    if name == "agent_publish":
+        argv = ["agent", "publish"]
+        if a.get("message"):
+            argv += ["--message", a["message"]]
+        return argv
+    if name == "agent_exit":
+        argv = ["agent", "exit"]
+        if a.get("force"):
+            argv.append("--force")
+        if a.get("keep_binding"):
+            argv.append("--keep-binding")
+        return argv
     if name == "claim_next":
         return ["claim", "next"] + (["--ignore-unread"] if a.get("ignore_unread") else [])
     if name == "claim_take":

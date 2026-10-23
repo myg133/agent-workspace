@@ -44,6 +44,8 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 | 工具 | 作用 |
 |------|------|
 | `agent_whoami` / `agent_roster` | 身份与名册 |
+| `agent_register` / `agent_activate` / `agent_deactivate` | 注册与启停 |
+| `agent_publish` | 把名册提交并推送到 demand，其他机器可见 |
 | `claim_next` / `claim_take` / `claim_release` / `claim_list` / `claim_doctor` | 认领 |
 | `msg_send` / `msg_inbox` / `msg_show` / `msg_ack` | 消息 |
 | `contract_check` | 契约门禁 |
@@ -69,6 +71,22 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 - `exit_code` 保留原语义（0 成功、3 业务拒绝、4 未读门禁）；
 - `isError` 只在真正的失败时为 true（0/3/4 都算正常业务返回）；
 - `ALREADY_HOLDING`、`UNREAD_MESSAGES` 都在 `stdout` 首行。
+
+## 4.1 注册流程（推荐）
+
+名册在仓库里（`BA/plan/agents.json`），所以 agent 之间能互相看见：
+
+```text
+① Planner 调 agent_register × 8
+② Planner 调 agent_publish        → commit + push demand
+③ 其他机器 git pull --rebase      → 拉到名册
+④ 每个 agent 调 agent_roster      → 看到全部人和在线状态
+⑤ 离岗调 agent_deactivate；收工调 agent_exit
+```
+
+- `agent_roster` 返回 JSON：`id / role / status / host / session_alive`；
+- 没有 publish，名册只在本机，其他机器“不知道有谁”；
+- 没有 pull，本机看到的是旧名册——**发送前先 pull**。
 
 ## 5. 与 CLI 的关系
 

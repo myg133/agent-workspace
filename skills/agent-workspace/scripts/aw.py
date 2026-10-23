@@ -1280,12 +1280,22 @@ def cmd_agent(args) -> int:
         if not agents:
             print("（roster 为空；用 aw.py agent register <name> 注册）")
             return 0
-        rows = []
+        payload = []
         for a in sorted(agents, key=lambda x: x["id"]):
             sess = read_json(aw_path(root, "sessions", "%s.json" % a["id"]), {})
-            rows.append([a["id"], a.get("role", "ba"), a.get("status", "active"),
-                         "alive" if _session_alive(sess) else "-"])
-        _table(["agent", "role", "status", "session"], rows)
+            payload.append({
+                "id": a["id"],
+                "role": a.get("role", "ba"),
+                "status": a.get("status", "active"),
+                "host": a.get("host", ""),
+                "session_alive": bool(_session_alive(sess)),
+            })
+        if getattr(args, "json", False):
+            print(json.dumps({"agents": payload}, ensure_ascii=False, indent=2))
+        else:
+            _table(["agent", "role", "status", "host", "session"],
+                   [[x["id"], x["role"], x["status"], x["host"] or "-",
+                     "alive" if x["session_alive"] else "-"] for x in payload])
         return 0
 
     if action in ("register", "activate", "deactivate"):
@@ -1320,6 +1330,35 @@ def cmd_agent(args) -> int:
         save_roster(root, agents)
         print("%s %s" % ("ACTIVE" if action == "activate" else "INACTIVE", name))
         return 0
+
+    if action == "publish":
+        ba = root / "BA"
+        if not ba.is_dir():
+            print("找不到 BA/ 工作区", file=sys.stderr)
+            return 2
+        rel = "plan/agents.json"
+        if not (ba / rel).exists():
+            print("名册不存在：先 agent register", file=sys.stderr)
+            return 3
+        dirty = git("status", "--porcelain", rel, cwd=ba, check=False).stdout.strip()
+        if not dirty:
+            print("NO_CHANGES")
+            return 0
+        git("add", rel, cwd=ba)
+        ident_args = ensure_identity(ba)
+        git(*ident_args, "commit", "-q", "-m", args.message or "[BA] 更新 agent 名册", cwd=ba)
+        if not _has_remote(ba):
+            print("COMMITTED_LOCAL")
+            return 0
+        for attempt in range(3):
+            pushed = git("push", "-q", "origin", "demand", cwd=ba, check=False, timeout=30)
+            if pushed.returncode == 0:
+                print("PUBLISHED")
+                return 0
+            git("pull", "--rebase", "-q", "origin", "demand", cwd=ba, check=False, timeout=30)
+            time.sleep(0.5 * (2 ** attempt))
+        print("PUSH_FAILED（本地已提交，稍后重试 push）", file=sys.stderr)
+        return 3
 
     if action == "exit":
         ident = resolve_identity(root)
@@ -2208,13 +2247,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_agent = sub.add_parser("agent", help="查看/绑定当前 agent 身份")
     p_agent.add_argument("action",
                          choices=["whoami", "check", "bind", "unbind", "register", "roster",
-                                  "activate", "deactivate", "exit"],
+                                  "activate", "deactivate", "exit", "publish"],
                          nargs="?", default="whoami")
     p_agent.add_argument("name", nargs="?", default="")
     p_agent.add_argument("--force", action="store_true", help="bind 强制改绑 / exit 强制退出")
     p_agent.add_argument("--role", default="", help="register 时的角色")
     p_agent.add_argument("--host", default="", help="register 时的机器名")
     p_agent.add_argument("--keep-binding", action="store_true", help="exit 时保留终端绑定")
+    p_agent.add_argument("--json", action="store_true", help="roster 输出 JSON")
+    p_agent.add_argument("--message", default="", help="publish 的提交信息")
     p_agent.set_defaults(func=cmd_agent)
 
     p_contract = sub.add_parser("contract", help="契约一致性检查")

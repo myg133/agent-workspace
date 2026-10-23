@@ -102,10 +102,14 @@ aw.py --agent <错名> claim release REQ-xxx --force
 
 ```bash
 aw.py agent register pcA-ba-1 --role ba     # 注册 / 重新激活
-aw.py agent roster                          # 看名单与本地会话
+aw.py agent publish                         # 提交并推送名册到 demand
+aw.py agent roster --json                   # 看名单与本地会话
 aw.py agent deactivate pcA-ba-2             # 停用（不再接收消息）
 aw.py agent activate pcA-ba-2               # 恢复
 ```
+
+注册只写本地文件；**必须 `agent publish` 推送到 demand，其他机器才看得到**。
+其他机器 `git pull --rebase` 后才能 `agent roster` 看到新人。
 
 `msg send` 会校验收件人：
 

@@ -125,6 +125,30 @@ class WorkspaceCase(unittest.TestCase):
         finally:
             self._stop_mcp(proc)
 
+    def _mcp_tool(self, proc, name, args, rid=10):
+        return mcp_exchange(proc, {"jsonrpc": "2.0", "id": rid, "method": "tools/call",
+                                   "params": {"name": name, "arguments": args}})
+
+    def test_mcp_register_and_roster(self):
+        proc = self._mcp()
+        try:
+            reg = self._mcp_tool(proc, "agent_register", {"name": "pcA-ba-1", "role": "ba"})
+            payload = json.loads(reg["result"]["content"][0]["text"])
+            self.assertEqual(payload["exit_code"], 0, payload)
+            roster = self._mcp_tool(proc, "agent_roster", {}, rid=11)
+            data = json.loads(json.loads(roster["result"]["content"][0]["text"])["stdout"])
+            self.assertEqual(data["agents"][0]["id"], "pcA-ba-1")
+        finally:
+            self._stop_mcp(proc)
+
+    def test_agent_publish_commits_roster(self):
+        run(["agent", "register", "pcA-ba-1"], self.repo / "BA", agent=None)
+        out = run(["agent", "publish"], self.repo, agent=None)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("COMMITTED_LOCAL", out.stdout)
+        log = git(["log", "--oneline", "-1"], self.repo / "BA").stdout
+        self.assertIn("agent 名册", log)
+
     def test_verify_clean(self):
         out = run(["verify"], self.repo)
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)

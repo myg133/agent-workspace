@@ -57,6 +57,7 @@ aw.py agent register pcA-ba-1 --role ba
 aw.py agent register pcB-ba-2 --role ba
 aw.py agent roster                 # 对照本地会话看谁真正在线
 aw.py agent deactivate pcC-ba-2    # 长期离岗
+aw.py agent publish                # 推送到 demand，其他机器可见
 ```
 
 规则：

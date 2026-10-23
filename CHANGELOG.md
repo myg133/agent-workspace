@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.12.0] - 2026-10-23
+
+### 新增：注册流程进 MCP + 名册发布
+
+- MCP 新增工具：`agent_register` / `agent_activate` / `agent_deactivate` / `agent_publish` / `agent_exit`
+- `agent_roster` 改为返回 JSON（`id / role / status / host / session_alive`）
+- CLI 新增 `aw.py agent publish`：提交 `BA/plan/agents.json` 并推送到 `demand`，带 pull --rebase 重试
+- 名册仍是**仓库内文件**（`BA/plan/agents.json`），保证 agent 之间互相可见；publish 是让跨机可见的关键一步
+- 文档补充注册流程：register → publish → pull → roster
+
 ## [1.11.0] - 2026-10-23
 
 ### 新增：stdio MCP 适配层
