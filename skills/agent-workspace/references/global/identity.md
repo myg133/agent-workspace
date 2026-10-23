@@ -109,6 +109,18 @@ aw.py agent activate pcA-ba-2               # 恢复
 ```
 
 注册只写本地文件；**必须 `agent publish` 推送到 demand，其他机器才看得到**。
+
+注册时加 `--issue-token`（或 `--token <t>`）会启用令牌并打印一次：
+
+```text
+TOKEN pcA-ba-1 3f9c...
+```
+
+- roster 只存哈希；
+- token 交给对应 agent（提示或私有配置），不要提交；
+- MCP 调用带 `token` 参数，或设置 `AW_AGENT_TOKEN`；
+- CLI 用 `--agent-token <t>`；
+- 轮换：`aw.py agent token <name>`。
 其他机器 `git pull --rebase` 后才能 `agent roster` 看到新人。
 
 `msg send` 会校验收件人：

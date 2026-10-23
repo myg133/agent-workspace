@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -32,11 +33,14 @@ def log(*args) -> None:
     print(*args, file=sys.stderr, flush=True)
 
 
-def run_aw(argv: list[str], agent: str | None = None, timeout: int = 180) -> subprocess.CompletedProcess:
+def run_aw(argv: list[str], agent: str | None = None, token: str | None = None,
+           timeout: int = 180) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     identity = (agent or AGENT or "").strip()
     if identity:
         env["AW_AGENT_ID"] = identity
+    if token:
+        env["AW_AGENT_TOKEN"] = token
     env.setdefault("AW_AGENT_PID", str(os.getpid()))
     env.setdefault("AW_SESSION_ID", "proc-%d" % os.getpid())
     return subprocess.run(
@@ -52,7 +56,11 @@ def tool(name: str, description: str, props: dict, required: list[str] | None = 
         "agent_id": {
             "type": "string",
             "description": "调用者身份；未设置 AW_AGENT_ID 时必填（如 pcA-ba-1）",
-        }
+        },
+        "token": {
+            "type": "string",
+            "description": "agent 令牌；注册时由 agent register 一次性打印，用于证明身份",
+        },
     }
     properties.update(props)
     return {
@@ -226,6 +234,39 @@ def build_argv(name: str, args: dict) -> list[str]:
     raise ValueError("unknown tool: %s" % name)
 
 
+def _repo_root() -> Path | None:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=os.getcwd(), capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        ).stdout.strip()
+        if not out:
+            return None
+        if os.name == "nt":
+            import re
+            match = re.match(r"^/([A-Za-z])/(.*)$", out)
+            if match:
+                return Path("%s:/%s" % (match.group(1).upper(), match.group(2))).resolve().parent
+        return Path(out).resolve().parent
+    except Exception:
+        return None
+
+
+def _roster_entry(agent: str) -> dict | None:
+    root = _repo_root()
+    if root is None:
+        return None
+    try:
+        data = json.loads((root / "BA" / "plan" / "agents.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    for entry in data.get("agents") or []:
+        if entry.get("id") == agent:
+            return entry
+    return None
+
+
 def call_tool(name: str, args: dict) -> dict:
     identity = (str(args.get("agent_id") or "").strip()) or AGENT
     if not identity:
@@ -237,13 +278,26 @@ def call_tool(name: str, args: dict) -> dict:
                          "  2) 启动环境设置 AW_AGENT_ID=pcA-ba-1"}],
             "isError": True,
         }
+    entry = _roster_entry(identity) or {}
+    auth_token = (str(args.get("token") or "").strip()
+                  or (os.environ.get("AW_AGENT_TOKEN") or "").strip())
+    if entry.get("token_hash"):
+        supplied = auth_token
+        if not supplied or hashlib.sha256(supplied.encode("utf-8")).hexdigest() != entry["token_hash"]:
+            return {
+                "content": [{"type": "text", "text":
+                             "BAD_TOKEN\n"
+                             "该 agent 已启用令牌校验。请带上注册时打印的 token，"
+                             "或设置 AW_AGENT_TOKEN。"}],
+                "isError": True,
+            }
     try:
         argv = build_argv(name, args)
         argv = ["--agent", identity, *argv]
     except (KeyError, ValueError) as exc:
         return {"content": [{"type": "text", "text": "参数错误: %s" % exc}], "isError": True}
     try:
-        proc = run_aw(argv, agent=identity)
+        proc = run_aw(argv, agent=identity, token=auth_token)
     except subprocess.TimeoutExpired:
         return {"content": [{"type": "text", "text": "命令超时: %s" % name}], "isError": True}
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
 import os
 import re
@@ -842,6 +843,10 @@ def save_roster(root: Path, agents: list[dict]) -> None:
     write_json(roster_path(root), {"agents": agents})
 
 
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def active_agents(root: Path) -> set[str]:
     return {a["id"] for a in load_roster(root) if a.get("status", "active") == "active"}
 
@@ -948,6 +953,16 @@ def resolve_identity(root: Path, role: str = "ba", rebind: bool = False) -> dict
     agent_pid = int(os.environ.get("AW_AGENT_PID") or 0)
     if not agent_pid and old.get("pid") and pid_alive(int(old["pid"])):
         agent_pid = int(old["pid"])
+    roster = load_roster(root)
+    entry = next((a for a in roster if a.get("id") == agent_id), None)
+    if entry and entry.get("token_hash"):
+        supplied = (os.environ.get("AW_AGENT_TOKEN") or "").strip()
+        if not supplied or hashlib.sha256(supplied.encode("utf-8")).hexdigest() != entry["token_hash"]:
+            raise GitError(
+                "BAD_TOKEN\n"
+                "该 agent 已启用令牌校验。请用 --token 或 AW_AGENT_TOKEN 提供注册时打印的令牌。"
+            )
+
     record = {
         "agent_id": agent_id,
         "session_id": session_id,
@@ -1337,14 +1352,30 @@ def cmd_agent(args) -> int:
             entry["host"] = args.host or entry.get("host", socket.gethostname())
             entry["status"] = "active"
             entry["updated_at"] = _now()
+            token = (args.token or "").strip()
+            if not token and getattr(args, "issue_token", False) and not entry.get("token_hash"):
+                token = secrets.token_hex(12)
+            if token:
+                entry["token_hash"] = hash_token(token)
+                entry["token_issued_at"] = _now()
             if name not in by_id:
                 agents.append(entry)
             save_roster(root, agents)
             print("REGISTERED %s (%s)" % (name, entry["role"]))
+            if token:
+                print("TOKEN %s %s" % (name, token))
+                print("请把 token 只交给对应的 agent（写进它的提示或私有配置），不要提交到仓库。")
             return 0
         if name not in by_id:
             print("未注册的 agent: %s" % name, file=sys.stderr)
             return 3
+        if action == "token":
+            token = secrets.token_hex(12)
+            by_id[name]["token_hash"] = hash_token(token)
+            by_id[name]["token_issued_at"] = _now()
+            save_roster(root, agents)
+            print("TOKEN %s %s" % (name, token))
+            return 0
         by_id[name]["status"] = "active" if action == "activate" else "inactive"
         by_id[name]["updated_at"] = _now()
         save_roster(root, agents)
@@ -2403,6 +2434,7 @@ def _subparser_list(parser: argparse.ArgumentParser) -> list[argparse.ArgumentPa
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aw.py", description="Agent Workspace 工具")
     parser.add_argument("--agent", default=None, help="agent_id（优先于 AW_AGENT_ID）")
+    parser.add_argument("--agent-token", default=None, help="agent 令牌（优先于 AW_AGENT_TOKEN）")
     parser.add_argument("--no-bind", action="store_true", help="不读写终端绑定（一个终端跑多个 agent 时用）")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -2446,7 +2478,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_agent = sub.add_parser("agent", help="查看/绑定当前 agent 身份")
     p_agent.add_argument("action",
                          choices=["whoami", "check", "bind", "unbind", "register", "roster",
-                                  "activate", "deactivate", "exit", "publish"],
+                                  "activate", "deactivate", "exit", "publish", "token"],
                          nargs="?", default="whoami")
     p_agent.add_argument("name", nargs="?", default="")
     p_agent.add_argument("--force", action="store_true", help="bind 强制改绑 / exit 强制退出")
@@ -2455,6 +2487,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_agent.add_argument("--keep-binding", action="store_true", help="exit 时保留终端绑定")
     p_agent.add_argument("--json", action="store_true", help="roster 输出 JSON")
     p_agent.add_argument("--message", default="", help="publish 的提交信息")
+    p_agent.add_argument("--token", default="", help="register 时指定 token（启用校验）")
+    p_agent.add_argument("--issue-token", action="store_true", help="register 时自动生成 token")
     p_agent.set_defaults(func=cmd_agent)
 
     p_mcp = sub.add_parser("mcp", help="MCP 客户端配置：status / install / print")
@@ -2517,6 +2551,7 @@ def build_parser() -> argparse.ArgumentParser:
     # 允许 --agent 写在子命令后面：aw.py msg inbox --agent ba-1
     for subparser in _subparser_list(parser):
         subparser.add_argument("--agent", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+        subparser.add_argument("--agent-token", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
         subparser.add_argument("--no-bind", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     return parser
 
@@ -2550,6 +2585,8 @@ def main(argv: list[str] | None = None) -> int:
         os.environ.setdefault("AW_AGENT_SOURCE", "env AW_AGENT_ID")
     if getattr(args, "no_bind", False):
         os.environ["AW_NO_BIND"] = "1"
+    if getattr(args, "agent_token", None):
+        os.environ["AW_AGENT_TOKEN"] = args.agent_token
     try:
         return args.func(args)
     except IdentityError as exc:

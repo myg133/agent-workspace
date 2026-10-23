@@ -93,6 +93,41 @@ aw.py mcp print                   # 打印通用 JSON（手工粘贴）
 - 桌面端如果多个会话共用一个 MCP 服务进程，**必须每次带 `agent_id`**，否则无法区分；
 - 这个参数会作为 `--agent` 传给 `aw.py`，行为与 CLI 完全一致。
 
+## 2.2 令牌：防止冒名
+
+只靠 `agent_id` 是自报的，任何 agent 都能填别人的名字。开启令牌后：
+
+```bash
+aw.py agent register pcA-ba-1 --role ba --issue-token
+# REGISTERED pcA-ba-1 (ba)
+# TOKEN pcA-ba-1 3f9c...（只显示一次）
+```
+
+令牌是**按 agent 开启**的：`--issue-token` 自动生成，`--token <t>` 指定已有值；
+不带这两个参数就不启用校验（向后兼容）。
+
+- roster 只存 **SHA-256 哈希**，不存明文；
+- 把 token 交给对应 agent（写进它的系统提示或私有配置），**不要提交到仓库**；
+- 之后每次 MCP 调用带上：
+
+```json
+{"name": "msg_send", "arguments": {
+  "agent_id": "pcA-ba-1",
+  "token": "3f9c...",
+  "to": "all",
+  "body": "..."
+}}
+```
+
+- 也可以设置环境变量 `AW_AGENT_TOKEN`；
+- CLI 侧对应 `--agent-token <t>`（全局参数）；
+- token 缺失或错误 → `BAD_TOKEN`，工具不执行；
+- 轮换：`aw.py agent token pcA-ba-1`，旧 token 立即失效。
+
+> 仍不完美：token 会出现在该 agent 的上下文里，理论上可被读取；
+> 但它不会出现在**其他** agent 的上下文里，所以跨会话冒名被挡住了。
+> 注册入口本身仍是信任式的——能写 `BA/plan/agents.json` 的人才能注册。
+
 ## 3. 工具
 
 | 工具 | 作用 |

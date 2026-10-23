@@ -116,6 +116,37 @@ class WorkspaceCase(unittest.TestCase):
         finally:
             self._stop_mcp(proc)
 
+    def test_agent_register_issues_token(self):
+        out = run(["agent", "register", "ba-1", "--issue-token"], self.repo / "BA", agent=None)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("TOKEN ba-1", out.stdout)
+        data = json.loads((self.repo / "BA" / "plan" / "agents.json").read_text(encoding="utf-8"))
+        self.assertTrue(data["agents"][0]["token_hash"])
+
+    def test_cli_requires_token(self):
+        run(["agent", "register", "ba-1", "--token", "s3cret"], self.repo / "BA", agent=None)
+        blocked = run(["agent", "whoami"], self.repo, agent="ba-1")
+        self.assertEqual(blocked.returncode, 1)
+        self.assertIn("BAD_TOKEN", blocked.stderr)
+        ok = run(["agent", "whoami", "--agent-token", "s3cret"], self.repo, agent="ba-1")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+
+    def test_mcp_requires_valid_token(self):
+        run(["agent", "register", "ba-1", "--token", "s3cret"],
+            self.repo / "BA", agent=None)
+        proc = self._mcp(agent=None)
+        try:
+            bad = self._mcp_tool(proc, "agent_whoami", {"agent_id": "ba-1"})
+            self.assertTrue(bad["result"]["isError"])
+            self.assertIn("BAD_TOKEN", bad["result"]["content"][0]["text"])
+            good = self._mcp_tool(proc, "agent_whoami",
+                                  {"agent_id": "ba-1", "token": "s3cret"}, rid=12)
+            payload = json.loads(good["result"]["content"][0]["text"])
+            self.assertEqual(payload["exit_code"], 0, payload)
+            self.assertFalse(good["result"]["isError"])
+        finally:
+            self._stop_mcp(proc)
+
     def test_mcp_per_call_agent_id(self):
         proc = self._mcp(agent=None)
         try:

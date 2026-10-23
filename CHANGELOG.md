@@ -2,6 +2,24 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.18.0] - 2026-10-24
+
+### 新增：agent 令牌，防止 MCP 冒名
+
+只靠 `agent_id` 是自报的，任何会话都能填别人的名字。现在注册时签发一次性 token：
+
+- `aw.py agent register <name> --issue-token` 生成并打印 `TOKEN <name> <token>`（只显示一次）
+- roster 只存 SHA-256 哈希，不存明文
+- MCP 调用带 `token` 参数，或设置 `AW_AGENT_TOKEN`；CLI 用 `--agent-token`
+- token 缺失/错误 → `BAD_TOKEN`，工具不执行
+- `aw.py agent token <name>` 轮换，旧 token 立即失效
+- 文档：mcp.md「令牌：防止冒名」、identity.md 注册流程
+
+### 说明
+
+token 仍在该 agent 的上下文里，不能防住"自己人"；它挡住的是**跨会话冒名**。
+注册入口本身是信任式的（能写 `BA/plan/agents.json` 才能注册）。
+
 ## [1.17.0] - 2026-10-24
 
 ### 新增：MCP 工具支持每次调用传 agent_id

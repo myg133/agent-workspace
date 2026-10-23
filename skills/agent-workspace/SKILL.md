@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.17.0
+  version: 1.18.0
 ---
 
 # Agent Workspace
@@ -138,6 +138,9 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 **没有 `AW_AGENT_ID` 时**（桌面端常见）：每个工具都可以带上 `agent_id` 参数自报身份，
 例如 `{"name":"msg_send","arguments":{"agent_id":"pcA-ba-1","to":"all","body":"..."}}`。
 带参数优先于环境变量。
+
+如果 roster 里该 agent 有 `token_hash`，还必须带 `token`（注册时打印的一次性令牌），
+否则返回 `BAD_TOKEN`。令牌用于防止跨会话冒名，轮换用 `aw.py agent token <name>`。
 
 | 组 | 工具 |
 |----|------|
