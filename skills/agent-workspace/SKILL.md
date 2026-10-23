@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.14.1
+  version: 1.15.0
 ---
 
 # Agent Workspace
@@ -150,6 +150,19 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 **能阻塞就不要轮询**：等消息用 `msg_wait`（≤120 秒），不要每 5 秒调一次 `msg_inbox`。
 
 MCP 与 CLI 等价；客户端不支持 MCP 时用 `aw.py` + `AW_AGENT_ID`。
+
+### 使用策略（硬规则）
+
+1. **工具列表里有 `agent_whoami`** → 本会话必须用 MCP 工具，禁止 shell 调 `aw.py`（诊断、安装除外）。
+2. **没有** → 先执行安装检查，再退回 CLI，并告诉用户重启客户端：
+   ```bash
+   aw.py mcp ensure                 # 自动检测已存在的客户端配置
+   aw.py mcp install --client claude|cursor|vscode|claude-code [--path ...]
+   ```
+3. **同一个会话不要混用** MCP 与 CLI 做同一类操作：两者的身份/pid 不同，会让 liveness 和认领记录对不上。安装与诊断是唯一例外。
+4. 安装会**备份原配置**，但 MCP 工具**不能热加载**——必须重启客户端才生效。
+
+> “强制”指的是流程强制：没有 MCP 就跑安装；不是指能在当前会话里凭空变出工具。
 
 ## 脚本
 

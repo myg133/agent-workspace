@@ -2,6 +2,22 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.15.0] - 2026-10-23
+
+### 新增：MCP 安装与使用策略
+
+- `aw.py mcp status / install / ensure / print`：检测并写入 Claude Desktop / Cursor / VS Code / Claude Code 配置
+- 安装前自动备份原配置；已安装则输出 `ALREADY INSTALLED`
+- 生成 `.aw/mcp/aw-mcp.cmd`（Windows）或 `.aw/mcp/aw-mcp.sh`（POSIX）包装器，解决客户端不支持 `cwd`
+- SKILL 增加 MCP 使用策略（硬规则）：
+  - 工具列表有 `agent_whoami` → 必须用 MCP，禁止 shell 调 CLI（诊断除外）
+  - 没有 → 先 `mcp ensure`，再退回 CLI，并提示重启
+  - 同一会话不混用 MCP 与 CLI
+
+### 说明
+
+MCP 工具不能热加载，安装后必须重启客户端；“强制安装”指流程强制，不是当前会话即时生效。
+
 ## [1.14.1] - 2026-10-23
 
 ### 文档：把 MCP 工具写进 SKILL

@@ -1918,6 +1918,143 @@ def cmd_msg(args) -> int:
     raise GitError("未知 msg 动作: %s" % action)
 
 
+# ---------------------------------------------------------------- mcp setup
+
+MCP_SERVER = Path(__file__).resolve().parent / "aw_mcp.py"
+
+
+def _mcp_candidates(root: Path) -> list[tuple[str, Path]]:
+    home = Path.home()
+    appdata = os.environ.get("APPDATA")
+    items: list[tuple[str, Path]] = []
+    if appdata:
+        items.append(("claude", Path(appdata) / "Claude" / "claude_desktop_config.json"))
+    items.append(("claude", home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"))
+    items.append(("claude", home / ".config" / "Claude" / "claude_desktop_config.json"))
+    items.append(("cursor", home / ".cursor" / "mcp.json"))
+    items.append(("cursor", root / ".cursor" / "mcp.json"))
+    items.append(("claude-code", root / ".mcp.json"))
+    items.append(("vscode", root / ".vscode" / "mcp.json"))
+    return items
+
+
+def _mcp_config_key(client: str) -> str:
+    return "servers" if client == "vscode" else "mcpServers"
+
+
+def _mcp_wrapper(root: Path) -> Path:
+    folder = aw_path(root, "mcp")
+    folder.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        path = folder / "aw-mcp.cmd"
+        content = '@echo off\r\ncd /d "%s"\r\n"%s" "%s" %%*\r\n' % (root, sys.executable, MCP_SERVER)
+    else:
+        path = folder / "aw-mcp.sh"
+        content = '#!/bin/sh\ncd "%s" && exec "%s" "%s" "$@"\n' % (root, sys.executable, MCP_SERVER)
+    write_text(path, content)
+    if os.name != "nt":
+        try:
+            os.chmod(path, 0o755)
+        except OSError:
+            pass
+    return path
+
+
+def _mcp_entry(client: str, wrapper: Path) -> dict:
+    entry = {"command": str(wrapper), "args": []}
+    if client == "vscode":
+        entry = {"type": "stdio", **entry}
+    return entry
+
+
+def _install_mcp(client: str, path: Path, root: Path, dry_run: bool = False) -> dict:
+    key = _mcp_config_key(client)
+    wrapper = _mcp_wrapper(root)
+    entry = _mcp_entry(client, wrapper)
+    data = read_json(path, {})
+    if not isinstance(data, dict):
+        data = {}
+    servers = data.get(key)
+    if not isinstance(servers, dict):
+        servers = {}
+    had = "aw" in servers
+    unchanged = servers.get("aw") == entry
+    servers["aw"] = entry
+    data[key] = servers
+    if not dry_run and not unchanged:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            backup = path.with_name(path.name + ".bak-" + _dt.datetime.now().strftime("%Y%m%d%H%M%S"))
+            shutil.copy2(path, backup)
+        write_json(path, data)
+    return {"client": client, "path": str(path), "key": key, "replaced": had,
+            "unchanged": unchanged, "wrapper": str(wrapper)}
+
+
+def cmd_mcp(args) -> int:
+    root = repo_root()
+    aw_init(root)
+    action = args.action
+
+    if action == "print":
+        wrapper = _mcp_wrapper(root)
+        print(json.dumps({"mcpServers": {"aw": _mcp_entry("claude", wrapper)}},
+                         ensure_ascii=False, indent=2))
+        print("\n# 把 cwd 设成 %s，或直接使用上面的 wrapper" % root, file=sys.stderr)
+        return 0
+
+    if action == "status":
+        rows = []
+        for client, path in _mcp_candidates(root):
+            data = read_json(path, {}) if path.exists() else {}
+            servers = data.get(_mcp_config_key(client)) if isinstance(data, dict) else {}
+            has = isinstance(servers, dict) and "aw" in servers
+            rows.append({"client": client, "path": str(path),
+                         "exists": path.exists(), "installed": has})
+        if args.json:
+            print(json.dumps({"root": str(root), "candidates": rows}, ensure_ascii=False, indent=2))
+        else:
+            _table(["client", "exists", "installed", "path"],
+                   [[r["client"], "yes" if r["exists"] else "-",
+                     "yes" if r["installed"] else "-", r["path"]] for r in rows])
+        return 0
+
+    # install / ensure
+    client = args.client or "auto"
+    path: Path | None = Path(args.path).expanduser().resolve() if args.path else None
+
+    if path is None:
+        candidates = _mcp_candidates(root)
+        if client != "auto":
+            candidates = [(c, p) for c, p in candidates if c == client]
+        existing = [(c, p) for c, p in candidates if p.exists()]
+        if existing:
+            client, path = existing[0]
+        elif client != "auto" and candidates:
+            # 显式客户端：允许创建配置（父目录一起创建）
+            client, path = candidates[0]
+        else:
+            print("没有检测到已存在的 MCP 客户端配置。\n"
+                  "请显式指定，例如：\n"
+                  "  aw.py mcp install --client cursor --path ~/.cursor/mcp.json\n"
+                  "  aw.py mcp install --client claude", file=sys.stderr)
+            return 3
+
+    result = _install_mcp(client, path, root, dry_run=args.dry_run)
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        if result["unchanged"] and not args.dry_run:
+            print("ALREADY INSTALLED %s" % path)
+            print("  wrapper: %s" % result["wrapper"])
+            return 0
+        verb = "WOULD INSTALL" if args.dry_run else "INSTALLED"
+        print("%s %s" % (verb, path))
+        print("  client : %s" % client)
+        print("  key    : %s" % result["key"])
+        print("  wrapper: %s" % result["wrapper"])
+        print("\n重启客户端后 MCP 工具才会出现；环境里需要带 AW_AGENT_ID。")
+    return 0
 # ---------------------------------------------------------------- contract check
 
 def _ver_num(value) -> int:
@@ -2296,6 +2433,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_agent.add_argument("--json", action="store_true", help="roster 输出 JSON")
     p_agent.add_argument("--message", default="", help="publish 的提交信息")
     p_agent.set_defaults(func=cmd_agent)
+
+    p_mcp = sub.add_parser("mcp", help="MCP 客户端配置：status / install / print")
+    p_mcp.add_argument("action", choices=["status", "install", "ensure", "print"])
+    p_mcp.add_argument("--client", choices=["auto", "claude", "cursor", "vscode", "claude-code"], default="auto")
+    p_mcp.add_argument("--path", default="")
+    p_mcp.add_argument("--dry-run", action="store_true")
+    p_mcp.add_argument("--json", action="store_true")
+    p_mcp.set_defaults(func=cmd_mcp)
 
     p_contract = sub.add_parser("contract", help="契约一致性检查")
     p_contract.add_argument("action", choices=["check", "list"])

@@ -18,6 +18,26 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
   - `AW_SESSION_ID = proc-<pid>`（一个进程 = 一个会话）
 - 因此**不需要 `--agent` 参数，也不依赖 session_id 关联**。
 
+## 1.1 安装（自动写配置）
+
+```bash
+aw.py mcp status                  # 检测各客户端是否已有 aw 条目
+aw.py mcp install --client claude # 写 Claude Desktop 配置
+aw.py mcp install --client cursor --path ~/.cursor/mcp.json
+aw.py mcp install --client vscode --path .vscode/mcp.json
+aw.py mcp ensure                  # 只对已存在的配置做安装
+aw.py mcp print                   # 打印通用 JSON（手工粘贴）
+```
+
+行为：
+
+- 写配置前**备份**为 `<name>.bak-<时间戳>`；
+- 条目指向 `.aw/mcp/aw-mcp.cmd`（Windows）或 `.aw/mcp/aw-mcp.sh`（POSIX）包装器，
+  包装器负责 `cd` 到仓库根，避免客户端不支持 `cwd`；
+- 已安装且内容一致时输出 `ALREADY INSTALLED`，不重复写；
+- `--dry-run` 只打印不改；
+- **装完必须重启客户端**，MCP 工具才会出现在工具列表里。
+
 ## 2. 客户端配置
 
 通用 stdio 配置：

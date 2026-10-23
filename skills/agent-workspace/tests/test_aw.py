@@ -130,6 +130,25 @@ class WorkspaceCase(unittest.TestCase):
         return mcp_exchange(proc, {"jsonrpc": "2.0", "id": rid, "method": "tools/call",
                                    "params": {"name": name, "arguments": args}})
 
+    def test_mcp_install_config(self):
+        cfg = self.tmp / "claude.json"
+        out = run(["mcp", "install", "--client", "claude", "--path", str(cfg)], self.repo, agent=None)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        data = json.loads(cfg.read_text(encoding="utf-8"))
+        entry = data["mcpServers"]["aw"]
+        self.assertTrue(Path(entry["command"]).exists())
+        again = run(["mcp", "install", "--client", "claude", "--path", str(cfg)], self.repo, agent=None)
+        self.assertEqual(again.returncode, 0)
+        self.assertIn("ALREADY", again.stdout)
+
+    def test_mcp_install_dry_run(self):
+        cfg = self.tmp / "dry.json"
+        out = run(["mcp", "install", "--client", "claude", "--path", str(cfg), "--dry-run"],
+                  self.repo, agent=None)
+        self.assertEqual(out.returncode, 0)
+        self.assertIn("WOULD INSTALL", out.stdout)
+        self.assertFalse(cfg.exists())
+
     def test_mcp_register_and_roster(self):
         proc = self._mcp()
         try:
