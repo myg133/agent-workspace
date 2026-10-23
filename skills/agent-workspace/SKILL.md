@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.15.0
+  version: 1.15.1
 ---
 
 # Agent Workspace
@@ -131,6 +131,9 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 `scripts/aw_mcp.py` 是 stdio 适配层：**一个 agent 一个进程**，`AW_AGENT_ID` 由启动环境注入，
 不需要 `--agent`，也不依赖 session_id。配置见 `references/global/mcp.md`。
 
+> 不同客户端会给工具名加前缀：DSH 是 `mcp__aw__claim_next`，Claude/Cursor 是原名。
+> 判断"MCP 是否可用"时按**后缀**匹配，不要精确等于。
+
 | 组 | 工具 |
 |----|------|
 | 身份 / 名册 | `agent_whoami` `agent_roster` `agent_register` `agent_activate` `agent_deactivate` `agent_publish` `agent_exit` |
@@ -153,7 +156,7 @@ MCP 与 CLI 等价；客户端不支持 MCP 时用 `aw.py` + `AW_AGENT_ID`。
 
 ### 使用策略（硬规则）
 
-1. **工具列表里有 `agent_whoami`** → 本会话必须用 MCP 工具，禁止 shell 调 `aw.py`（诊断、安装除外）。
+1. **工具列表里出现以 `agent_whoami` 结尾的工具** → 本会话必须用 MCP，禁止 shell 调 `aw.py`（诊断、安装除外）。
 2. **没有** → 先执行安装检查，再退回 CLI，并告诉用户重启客户端：
    ```bash
    aw.py mcp ensure                 # 自动检测已存在的客户端配置

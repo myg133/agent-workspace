@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.15.1] - 2026-10-23
+
+### 文档：客户端差异
+
+- `mcp.md` 新增「omp / mcode / DSH」配置对照：文件位置、父键、工具名前缀、env 处理
+- 记录两个实测限制：mcode 的 `cwd` 只接受 `./` / `${PLUGIN_ROOT}`；DSH 必须用 `!!js` 转发 `AW_AGENT_ID`
+- SKILL 的 MCP 判定改为**后缀匹配**（兼容 `mcp__aw__` 前缀），并说明 DSH 工具命名
+
 ## [1.15.0] - 2026-10-23
 
 ### 新增：MCP 安装与使用策略

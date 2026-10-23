@@ -20,6 +20,9 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 
 ## 1.1 安装（自动写配置）
 
+> `mcp install` 直接支持 claude / cursor / vscode / claude-code。
+> omp / mcode / DSH 的格式不同，见 §5.2。
+
 ```bash
 aw.py mcp status                  # 检测各客户端是否已有 aw 条目
 aw.py mcp install --client claude # 写 Claude Desktop 配置
@@ -196,6 +199,104 @@ aw verify
 ```
 
 > `aw.py` 在 POSIX 上用 `fcntl.flock` 做锁，Windows 用 `msvcrt.locking`；行为一致。
+
+## 5.2 客户端差异（omp / mcode / DSH）
+
+同一个 `aw_mcp.py`，三个客户端的配置格式和工具命名都不同。
+
+| 客户端 | 配置文件 | 父键 | 工具名 | 环境变量 |
+|--------|----------|------|--------|----------|
+| omp | `.omp/mcp.json` 或 `~/.omp/agent/mcp.json` | `mcpServers` | 原名 | 大概率继承终端 |
+| mcode | 项目根 `.mcp.json` 或 `~/.minimax/mcp.json` | `mcpServers` | 原名 | 源码里是显式构造 |
+| DSH | `~/.dsh/profiles/<profile>/cordis.patch.yml` | YAML 列表 | `mcp__<server>__<tool>` | 必须显式转发 |
+
+### omp
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json",
+  "mcpServers": {
+    "aw": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["/path/to/aw_mcp.py"],
+      "cwd": "/path/to/repo",
+      "enabled": true,
+      "timeout": 180000
+    }
+  }
+}
+```
+
+- 支持 `cwd` 与 `timeout`，不需要包装器；
+- `timeout` 是给 `msg_wait` 留的余量（若客户端按秒计，写 `180`）；
+- 不要在配置里写 `AW_AGENT_ID`，它必须来自终端。
+
+### mcode
+
+项目根放 `.mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "aw": {
+      "type": "stdio",
+      "enabled": true,
+      "command": "python",
+      "args": ["/path/to/aw_mcp.py"],
+      "cwd": "./"
+    }
+  }
+}
+```
+
+两个限制（源码确认）：
+
+1. `cwd` 只接受 `./` 或 `${PLUGIN_ROOT}` 形式，不能写绝对路径；
+2. `env` 是显式构造的，没有合并 `process.env` 的迹象——**先用 `agent_whoami` 验证**。
+
+如果返回 `MISSING_AGENT_ID`：改用 CLI，或给每个 agent 独立的配置目录并在 `env` 里写死名字。
+不要在一份共享 `.mcp.json` 里写死 `AW_AGENT_ID`，否则 8 个 agent 会变成同一个。
+
+### DSH
+
+追加到 `~/.dsh/profiles/<profile>/cordis.patch.yml`：
+
+```yaml
+- id: mcp-aw
+  name: "@deepseek-ai/dsh-mcp-client"
+  config:
+    serverName: aw
+    transport: stdio
+    command: python
+    args:
+      - /path/to/aw_mcp.py
+    cwd: /path/to/repo
+    env:
+      AW_AGENT_ID: !!js process.env.AW_AGENT_ID
+    toolCallTimeoutMs: 180000
+    failOnStartupError: false
+```
+
+- DSH 会清洗环境变量，必须用 `!!js process.env.AW_AGENT_ID` 转发；
+- 工具名带前缀：`mcp__aw__claim_next`、`mcp__aw__msg_wait`；
+- 默认调用超时 60 秒，`msg_wait` 会超时，调大到 180000。
+
+### 共同验证
+
+```text
+1. 调 agent_whoami（DSH: mcp__aw__agent_whoami）
+2. stdout 里有 agent_id，exit_code = 0
+3. 调 agent_roster
+4. 调 msg_wait timeout=10
+```
+
+| 现象 | 原因 |
+|------|------|
+| MISSING_AGENT_ID | 环境没传进来 |
+| not a git repository | cwd 不对 |
+| msg_wait 60 秒断 | 客户端调用超时 |
+| 工具列表里没有 | 服务没起 / 配置没加载 |
 
 ## 6. 限制
 
