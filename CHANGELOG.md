@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.13.0] - 2026-10-23
+
+### 新增：msg_wait（阻塞等待消息）
+
+- CLI：`aw.py msg wait --timeout 120 --interval 5 [--thread ...] [--contract ...] [--type ...] [--sender ...] [--consume] [--json]`
+- 命中返回消息，退出码 0；超时返回 `WAIT_TIMEOUT` / `found:false`，退出码 3
+- **默认不消费**（不推进已读），`--consume` 才标记
+- MCP 新增 `msg_wait` 工具，服务端阻塞，一次调用替代 24 次 5 秒轮询
+- 文档：mcp.md / messaging.md 补充等待与轮询分档
+
 ## [1.12.0] - 2026-10-23
 
 ### 新增：注册流程进 MCP + 名册发布

@@ -48,6 +48,7 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 | `agent_publish` | 把名册提交并推送到 demand，其他机器可见 |
 | `claim_next` / `claim_take` / `claim_release` / `claim_list` / `claim_doctor` | 认领 |
 | `msg_send` / `msg_inbox` / `msg_show` / `msg_ack` | 消息 |
+| `msg_wait` | 阻塞等新消息（≤120 秒，默认不消费） |
 | `contract_check` | 契约门禁 |
 | `verify` / `audit` | 自检 |
 | `queue_add` / `queue_list` / `queue_sync` | 队列 |
@@ -87,6 +88,21 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 - `agent_roster` 返回 JSON：`id / role / status / host / session_alive`；
 - 没有 publish，名册只在本机，其他机器“不知道有谁”；
 - 没有 pull，本机看到的是旧名册——**发送前先 pull**。
+
+## 4.2 等待而不是轮询
+
+`msg_wait` 在服务端阻塞，最多 120 秒：
+
+```json
+{"tool":"msg_wait","arguments":{"timeout":120,"interval":5,"thread":"a1b2"}}
+```
+
+- 命中：返回 `{"found":true,"count":N,"messages":[...]}`，退出码 0；
+- 超时：返回 `{"found":false}`，退出码 3（`isError=false`）；
+- **默认不消费**：消息仍是未读，BA 自己决定何时 `msg_inbox` 或加 `consume:true`；
+- 过滤器：`thread` / `contract` / `type` / `sender`。
+
+这样一次工具调用就能等两分钟，替代 24 次 5 秒轮询。
 
 ## 5. 与 CLI 的关系
 

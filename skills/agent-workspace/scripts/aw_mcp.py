@@ -91,6 +91,10 @@ TOOLS = [
          ["to", "body"]),
     tool("msg_inbox", "读取发给我的未读消息", {"all": BOOL, "limit": INT, "full": BOOL,
                                               "no_advance": BOOL, "json": BOOL}),
+    tool("msg_wait", "阻塞等待发给我的新消息（默认 120 秒，不消费）",
+         {"timeout": {**INT, "minimum": 1, "maximum": 120},
+          "interval": INT, "thread": STR, "contract": STR, "type": STR,
+          "sender": STR, "consume": BOOL, "json": BOOL}),
     tool("msg_show", "按 id 查看单条消息", {"id": STR}, ["id"]),
     tool("msg_ack", "对契约变更回执", {"id": STR, "reject": BOOL, "note": STR}, ["id"]),
     tool("contract_check", "检查契约版本 pin、consumer 覆盖与未 ack 变更",
@@ -163,6 +167,17 @@ def build_argv(name: str, args: dict) -> list[str]:
                 argv.append("--" + key.replace("_", "-"))
         if a.get("limit"):
             argv += ["--limit", str(a["limit"])]
+        return argv
+    if name == "msg_wait":
+        timeout = min(120, max(1, int(a.get("timeout", 120))))
+        argv = ["msg", "wait", "--timeout", str(timeout), "--json"]
+        if a.get("interval"):
+            argv += ["--interval", str(a["interval"])]
+        for key in ("thread", "contract", "type", "sender"):
+            if a.get(key):
+                argv += ["--" + key, str(a[key])]
+        if a.get("consume"):
+            argv.append("--consume")
         return argv
     if name == "msg_show":
         return ["msg", "show", a["id"], "--json"]

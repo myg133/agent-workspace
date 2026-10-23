@@ -106,6 +106,7 @@ class WorkspaceCase(unittest.TestCase):
             names = {t["name"] for t in tools["result"]["tools"]}
             self.assertIn("claim_next", names)
             self.assertIn("msg_send", names)
+            self.assertIn("msg_wait", names)
             call = mcp_exchange(proc, {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                                        "params": {"name": "agent_whoami", "arguments": {}}})
             payload = json.loads(call["result"]["content"][0]["text"])
@@ -296,6 +297,19 @@ class WorkspaceCase(unittest.TestCase):
         self.assertIn("→ me", first.stdout)
         second = run(["msg", "inbox"], b, agent="pcB")
         self.assertIn("无消息", second.stdout)
+
+    def test_msg_wait_immediate(self):
+        run(["msg", "send", "--to", "ba-1", "--body", "ping"], self.repo, agent="ba-1")
+        out = run(["msg", "wait", "--timeout", "3", "--json"], self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        data = json.loads(out.stdout)
+        self.assertTrue(data["found"])
+        self.assertEqual(data["messages"][0]["body"], "ping")
+
+    def test_msg_wait_timeout(self):
+        out = run(["msg", "wait", "--timeout", "2", "--interval", "1"], self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 3)
+        self.assertIn("WAIT_TIMEOUT", out.stdout)
 
     def test_msg_ack(self):
         a, b = self._make_pair()

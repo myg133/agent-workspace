@@ -1846,6 +1846,45 @@ def cmd_msg(args) -> int:
                             {m["id"] for m in show if m.get("id")}, universe)
         return 0
 
+    if action == "wait":
+        deadline = time.time() + max(1, int(args.timeout))
+        interval = max(1, int(args.interval))
+        while True:
+            candidates = _unread_for(root, ident)
+            if args.thread:
+                candidates = [m for m in candidates if m.get("thread") == args.thread]
+            if args.contract:
+                candidates = [m for m in candidates if m.get("contract") == args.contract]
+            if args.type:
+                candidates = [m for m in candidates if m.get("type") == args.type]
+            if args.sender:
+                candidates = [m for m in candidates if m.get("from") == args.sender]
+            if candidates:
+                if args.json:
+                    fields = ("id", "from", "to", "at", "type", "subject", "contract",
+                              "version", "ref", "thread", "body")
+                    print(json.dumps({"found": True, "count": len(candidates),
+                                      "messages": [{k: m.get(k) for k in fields if m.get(k)}
+                                                   for m in candidates]},
+                                     ensure_ascii=False, indent=2))
+                else:
+                    for m in candidates:
+                        print(_msg_line(m, ident, full=True))
+                if args.consume:
+                    _write_read_ids(root, ident["agent_id"],
+                                    {m["id"] for m in candidates if m.get("id")},
+                                    {m["id"] for m in load_bus_messages(root, fetch=False) if m.get("id")})
+                return 0
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                if args.json:
+                    print(json.dumps({"found": False, "count": 0, "messages": []},
+                                     ensure_ascii=False))
+                else:
+                    print("WAIT_TIMEOUT")
+                return 3
+            time.sleep(min(interval, remaining))
+
     if action == "show":
         target = next((m for m in load_bus_messages(root, fetch=not args.no_fetch)
                        if m.get("id") == args.id), None)
@@ -2266,7 +2305,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_contract.set_defaults(func=cmd_contract)
 
     p_msg = sub.add_parser("msg", help="BA 间消息（空 commit 走 bus 分支）")
-    p_msg.add_argument("action", choices=["send", "inbox", "list", "ack", "flush", "show"])
+    p_msg.add_argument("action", choices=["send", "inbox", "list", "ack", "flush", "show", "wait"])
     p_msg.add_argument("--json", action="store_true", help="机器可读输出")
     p_msg.add_argument("id", nargs="?", default="")
     p_msg.add_argument("--to", default="", help="收件人，逗号分隔；支持 all / role:ba / agent_id")
@@ -2288,6 +2327,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_msg.add_argument("--no-fetch", action="store_true")
     p_msg.add_argument("--no-advance", action="store_true", help="只读，不推进游标（Notifier 用）")
     p_msg.add_argument("--force", action="store_true", help="跳过收件人注册校验")
+    p_msg.add_argument("--timeout", type=int, default=120, help="wait 最长秒数（默认 120）")
+    p_msg.add_argument("--interval", type=int, default=5, help="wait 轮询间隔秒数")
+    p_msg.add_argument("--consume", action="store_true", help="wait 命中后标记已读")
     p_msg.add_argument("--ok", action="store_true", help="ack 时表示同意（默认）")
     p_msg.add_argument("--note", default="", help="ack 附言")
     p_msg.add_argument("--reject", action="store_true", help="ack 时表示不同意")
