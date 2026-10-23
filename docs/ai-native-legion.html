@@ -234,8 +234,8 @@
       </div>
       <div class="meta">
         <span>agent-workspace</span><span class="dot"></span>
-        <span>v1.7.1</span><span class="dot"></span>
-        <span>1 Planner · 8 BA · 27 commits</span>
+        <span>v1.15.0</span><span class="dot"></span>
+        <span>1 Planner · 8 BA · 38 commits</span>
       </div>
     </div>
   </section>
@@ -333,7 +333,7 @@
         <div class="stat"><div class="v">8</div><div class="l">BA 会话</div></div>
         <div class="stat"><div class="v">6</div><div class="l">角色</div></div>
         <div class="stat"><div class="v">9</div><div class="l">分支</div></div>
-        <div class="stat"><div class="v">24</div><div class="l">测试</div></div>
+        <div class="stat"><div class="v">44</div><div class="l">测试</div></div>
         <div class="stat"><div class="v">0</div><div class="l">外部服务</div></div>
       </div>
     </div>
@@ -357,13 +357,20 @@
   <section class="slide">
     <div class="wrap">
       <div class="kicker">全景</div>
-      <h2>四层结构</h2>
+      <h2>五层结构</h2>
       <div class="arch">
         <div class="layer">
           <div class="lbl">Agents</div>
           <div class="body">
             <div class="node hi">Planner</div><div class="node hi">BA × 8</div><div class="node">Dev</div><div class="node">QA</div>
             <div class="node">Deploy</div><div class="node">Notifier（只读）</div><div class="node">Explore（只读）</div>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="lbl">Access</div>
+          <div class="body">
+            <div class="node">Skill（规则）</div><div class="node">CLI（aw.py）</div>
+            <div class="node hi">MCP（aw_mcp.py）</div>
           </div>
         </div>
         <div class="layer">
@@ -449,7 +456,52 @@
     </div>
   </section>
 
-  <!-- 9 角色 -->
+  <!-- 10 接入 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">接入</div>
+      <h2>三种接入，一套事实</h2>
+      <div class="grid g3" style="margin-top:4px">
+        <div class="card">
+          <div class="n">SKILL</div>
+          <h3>规则与流程</h3>
+          <p>agent 启动先读。<strong>解释“为什么”和“顺序”</strong>，本身不执行任何操作。</p>
+        </div>
+        <div class="card">
+          <div class="n">CLI</div>
+          <h3>aw.py</h3>
+          <p>CI、脚本、没有 MCP 的客户端。每条命令带 <code>AW_AGENT_ID</code>，返回文本 + 退出码。</p>
+        </div>
+        <div class="card" style="border-color:rgba(62,224,194,.3);background:rgba(62,224,194,.05)">
+          <div class="n">MCP</div>
+          <h3>aw_mcp.py</h3>
+          <p>支持 MCP 的 agent。<strong>23 个工具</strong>、schema 可发现、返回结构化 JSON。</p>
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:16px">
+        <div class="card">
+          <div class="n">硬规则</div>
+          <ul class="clean" style="font-size:16px;margin-top:2px">
+            <li>工具列表有 <code>agent_whoami</code> → <strong>必须用 MCP</strong></li>
+            <li>没有 → 先安装，本会话用 CLI</li>
+            <li>同一会话<strong>不混用</strong> MCP 与 CLI</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="n">安装（一次性）</div>
+          <pre style="margin-top:6px;font-size:13px">aw.py mcp status
+aw.py mcp install --client claude|cursor|vscode
+<span class="c"># 备份原配置 + 生成 cwd wrapper</span>
+<span class="c"># 重启客户端才生效（不能热加载）</span></pre>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:14px;font-size:13px">
+        MCP 只是调用面；身份仍来自 <code>AW_AGENT_ID</code>，逻辑仍全部在 <code>aw.py</code>。
+      </p>
+    </div>
+  </section>
+
+  <!-- 11 角色 -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker">角色</div>
@@ -622,13 +674,13 @@
           <div class="date">10.21 — 10.22</div>
           <h3>自治</h3>
           <p>WIP=1、bus 消息、契约门禁、强制身份、未读门禁。</p>
-          <div class="ver">v1.3 — v1.7.1</div>
+          <div class="ver">v1.3 — v1.15</div>
         </div>
       </div>
       <div class="stats" style="margin-top:38px">
-        <div class="stat"><div class="v">27</div><div class="l">commits</div></div>
-        <div class="stat"><div class="v">9</div><div class="l">releases</div></div>
-        <div class="stat"><div class="v">24</div><div class="l">tests</div></div>
+        <div class="stat"><div class="v">38</div><div class="l">commits</div></div>
+        <div class="stat"><div class="v">19</div><div class="l">releases</div></div>
+        <div class="stat"><div class="v">44</div><div class="l">tests</div></div>
         <div class="stat"><div class="v">6</div><div class="l">roles</div></div>
         <div class="stat"><div class="v">1</div><div class="l">repo</div></div>
       </div>
@@ -991,7 +1043,7 @@ POST /login 增加可选 mfaToken</pre>
 </div>
 
 <div class="hud">
-  <div class="num" id="num">01 / 27</div>
+  <div class="num" id="num">01 / 28</div>
   <div class="bar"><i id="bar"></i></div>
   <div class="num" id="pct">6%</div>
 </div>
