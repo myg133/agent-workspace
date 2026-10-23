@@ -2,6 +2,19 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.14.0] - 2026-10-23
+
+### 新增：Linux / macOS 支持
+
+- `scripts/aw`：POSIX shell 启动器（等价于 Windows 的 `aw.cmd`），已做 `sh -n` 语法检查
+- `.gitattributes`：强制 `*.sh` / `scripts/aw` 以 LF 检出，避免 Windows 克隆后 shebang 失效
+- MCP 文档新增「Linux / macOS」：客户端配置路径、`python3`、`export AW_AGENT_ID`、不支持 `cwd` 时的包装脚本
+- `platform-notes.md` 同步 POSIX 启动方式
+
+### 说明
+
+锁实现本来就分平台：Windows 用 `msvcrt.locking`，POSIX 用 `fcntl.flock`；本次补齐启动器与文档。CI 仍未覆盖 macOS/Linux 实跑。
+
 ## [1.13.0] - 2026-10-23
 
 ### 新增：msg_wait（阻塞等待消息）

@@ -76,6 +76,19 @@ OneDrive / 杀毒软件 / 正在跑的 dev server 会锁文件，导致 `worktre
 
 ## macOS / Linux
 
+### 启动 CLI
+
+```bash
+./skills/agent-workspace/scripts/aw verify
+# 或
+aw verify        # 软链/加入 PATH 后
+```
+
+### MCP
+
+配置、路径与包装脚本见 `references/global/mcp.md` 的「Linux / macOS」一节。
+要点：用 `python3`、`cwd` 用绝对 POSIX 路径、`AW_AGENT_ID` 用 `export`。
+
 - 直接 `python3 scripts/aw.py ...`。
 - macOS 默认大小写不敏感：`Feature-REQ-001` 与 `feature-REQ-001` 是同一个目录。
 - CI 里跑 `verify` / `audit` 需要完整仓库：`actions/checkout` 用 `fetch-depth: 0`，否则 `git log` 拿不到历史。

@@ -91,7 +91,8 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 
 依赖 Python 3.8+ / git 2.20+，只用标准库。
 
-Windows 直接用 `aw.cmd verify` 或 `.\aw.ps1 verify`（自动选择 `py` / `python`）；中文输出、盘符、长路径等细节见
+Windows 直接用 `aw.cmd verify` 或 `.\aw.ps1 verify`（自动选择 `py` / `python`）；
+Linux / macOS 用 `./scripts/aw verify`。中文输出、盘符、长路径等细节见
 [platform-notes.md](skills/agent-workspace/references/global/platform-notes.md)。
 
 ## 自测

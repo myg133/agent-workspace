@@ -114,6 +114,69 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 
 两者行为必须一致：改逻辑只改 `aw.py`，MCP 只做参数映射。
 
+## 5.1 Linux / macOS
+
+### 配置位置
+
+| 客户端 | 路径 |
+|--------|------|
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Linux) | `~/.config/Claude/claude_desktop_config.json` |
+| Cursor | `~/.cursor/mcp.json` |
+| VS Code | `<repo>/.vscode/mcp.json` |
+| Claude Code | `<repo>/.mcp.json` |
+
+### 配置
+
+```json
+{
+  "mcpServers": {
+    "aw": {
+      "command": "python3",
+      "args": ["/home/me/skills/agent-workspace/scripts/aw_mcp.py"],
+      "cwd": "/home/me/proj/my-project"
+    }
+  }
+}
+```
+
+### 身份
+
+```bash
+export AW_AGENT_ID=pcA-ba-1
+omp
+# 或一次性：
+AW_AGENT_ID=pcA-ba-1 omp
+```
+
+### 客户端不支持 cwd 时
+
+```sh
+#!/usr/bin/env sh
+# ~/bin/aw-mcp.sh
+set -eu
+cd "${AW_REPO_ROOT:-$HOME/proj/my-project}"
+exec python3 "$HOME/skills/agent-workspace/scripts/aw_mcp.py"
+```
+
+```bash
+chmod +x ~/bin/aw-mcp.sh
+```
+
+配置里 `"command": "/home/me/bin/aw-mcp.sh"`，`args` 留空。
+
+### POSIX 启动器
+
+CLI 侧有 `scripts/aw`（sh），等价于 Windows 的 `aw.cmd`：
+
+```bash
+./scripts/aw verify
+# 或加入 PATH 后
+aw verify
+```
+
+> `aw.py` 在 POSIX 上用 `fcntl.flock` 做锁，Windows 用 `msvcrt.locking`；行为一致。
+
 ## 6. 限制
 
 - 单次工具调用超时 180 秒（长任务请拆小）；
