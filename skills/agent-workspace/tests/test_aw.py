@@ -227,6 +227,25 @@ class WorkspaceCase(unittest.TestCase):
             out = run(["agent", "register", name], self.repo / "BA", agent=None)
             self.assertEqual(out.returncode, 0, out.stderr)
 
+    def test_bus_rejects_subagent_send(self):
+        run(["agent", "register", "dev-1", "--role", "dev"], self.repo / "BA", agent=None)
+        bad = run(["msg", "send", "--to", "all", "--body", "x"], self.repo, agent="dev-1")
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("不能使用 bus", bad.stderr)
+
+    def test_bus_rejects_aw_role_dev(self):
+        bad = run(["msg", "send", "--to", "all", "--body", "x"], self.repo,
+                  agent="ba-1", extra_env={"AW_ROLE": "dev"})
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("只允许 BA", bad.stderr)
+
+    def test_bus_allows_planner(self):
+        self._register("planner-1")
+        run(["agent", "register", "planner-1", "--role", "planner"], self.repo / "BA", agent=None)
+        out = run(["msg", "send", "--to", "all", "--body", "plan"], self.repo, agent="planner-1")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("SENT", out.stdout)
+
     def test_roster_rejects_unknown_recipient(self):
         self._register("ba-1")
         bad = run(["msg", "send", "--to", "ghost", "--body", "x"], self.repo, agent="ba-1")

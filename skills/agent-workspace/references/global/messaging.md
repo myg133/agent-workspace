@@ -1,5 +1,28 @@
 # BA 间消息（bus 分支）
 
+## 0. 谁能写 bus
+
+| 角色 | 发送 / ack | 读取 |
+|------|-----------|------|
+| Planner | ✅ | ✅ |
+| BA | ✅ | ✅ |
+| Dev / QA / Deploy / Explore | ❌ | 只读（一般也不需要） |
+| Notifier | ❌ | ✅（只读） |
+
+子 agent 与自己的 BA 交互，由 BA 决定是否对外发消息。
+
+判定顺序：
+
+1. `AW_ROLE` 环境变量（spawn 子 agent 时注入，如 `AW_ROLE=dev`）；
+2. roster 里该 agent 的 `role`（`agent register <name> --role dev`）；
+3. 都没有 → 按 `ba` 处理（向后兼容）。
+
+不是 `ba` / `planner` 时，`msg send` / `ack` / `flush` 直接拒绝：
+
+```text
+错误: bus 只允许 BA / Planner 使用；子 agent 请与你的 BA 交互，不要直接发消息。
+```
+
 ## 1. 为什么统一走 bus
 
 | 方案 | 冲突 | 历史噪音 | 跨机 | 结论 |

@@ -35,6 +35,9 @@ BA 不会主动读 bus。靠"记得去读"是不可靠的，所以拆成两层�
 
 > 光靠 prompt 不够。落地时还要在平台侧给这个子 agent **只读沙箱**（不挂 write_roots、不开放写工具）。
 
+**bus 写权限只给 BA / Planner**：Notifier 可以 `msg inbox` / `msg wait` / `msg show`，
+但 `msg send` / `msg ack` 会被工具直接拒绝（角色不是 ba/planner）。
+
 ## 4. 输出格式
 
 ```markdown

@@ -2,6 +2,17 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.16.0] - 2026-10-23
+
+### 新增：bus 写权限限定
+
+- 只有 **BA / Planner** 能执行 `msg send` / `msg ack` / `msg flush`
+- 子 agent（Dev / QA / Deploy / Explore / Notifier）调用会被拒绝：
+  `bus 只允许 BA / Planner 使用；子 agent 请与你的 BA 交互`
+- 角色判定：`AW_ROLE` 环境变量 > roster `role` > 默认 `ba`
+- 读取（inbox / wait / show）不受限，供 Notifier 代读
+- 文档：messaging.md 新增「谁能写 bus」，五个角色文档补充硬规则
+
 ## [1.15.1] - 2026-10-23
 
 ### 文档：客户端差异

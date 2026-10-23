@@ -114,6 +114,9 @@ aw.py mcp print                   # 打印通用 JSON（手工粘贴）
 
 ## 4.2 等待而不是轮询
 
+> `msg_send` / `msg_ack` 只对 BA / Planner 开放；子 agent 调用会被拒绝。
+> 子 agent 进程应设置 `AW_ROLE=dev`（或 roster 里 role=dev），不要复用 BA 的身份去发消息。
+
 `msg_wait` 在服务端阻塞，最多 120 秒：
 
 ```json

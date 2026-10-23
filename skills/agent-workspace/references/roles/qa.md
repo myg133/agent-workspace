@@ -79,6 +79,7 @@
 ```
 
 ## 6. 硬规则
+- **不直接使用 bus**：结论只报告给 BA，由 BA 对外发消息。
 
 - 不写代码、不修 bug、不 commit / push / merge。
 - 不改 `status.md`（那是 BA 的）。

@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.15.1
+  version: 1.16.0
 ---
 
 # Agent Workspace
@@ -80,6 +80,7 @@ python <skill-path>/scripts/aw.py audit
    由 `aw.py claim` 强制（先进 `ALREADY_HOLDING`，不是靠提醒）。
 8. 认领是创建 worktree 的唯一入口：禁止手工 `git worktree add` 绕过认领。
 9. BA 间消息只走 `bus` 分支的空 commit；**契约/决策才进 `demand`**，不要把对话提交到 demand。
+   **只有 BA / Planner 能写 bus**；Dev/QA/Deploy/Explore 等子 agent 一律通过自己的 BA 转达。
    消息里的路径一律用**仓库相对路径**（`BA/contracts/...`），禁止本机绝对路径。
 10. **Planner 不领 feature、不改状态、不派单**：只写 `BA/plan/` 与 `BA/decisions/`；
     决策必须落 ADR，优先级一次只改一个。

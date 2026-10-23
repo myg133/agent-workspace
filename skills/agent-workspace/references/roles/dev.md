@@ -84,6 +84,7 @@ git push origin --delete feature/REQ-001
 回收后通知 BA，由 BA 把 `已验证 → 已完成`。
 
 ## 8. 硬规则
+- **不直接使用 bus**：需要对外同步就告诉 BA，由 BA 发消息。
 
 - 不 merge、不 rebase develop 到 feature 分支上"顺手修别人的冲突"（先问 BA）。
 - 圈复杂度 ≤ 10，认知复杂度 ≤ 15。

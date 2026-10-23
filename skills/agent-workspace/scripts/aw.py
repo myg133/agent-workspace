@@ -884,8 +884,28 @@ def bind_identity(root: Path, key: str, name: str, force: bool = False) -> tuple
         return True, old
 
 
+def _assert_bus_writer(root: Path, ident: dict) -> None:
+    """bus 只允许 BA / Planner 写入；子 agent 必须回到自己的 BA。"""
+    role = (os.environ.get("AW_ROLE") or ident.get("role") or "ba").strip().lower()
+    if role not in ("ba", "planner"):
+        raise GitError(
+            "bus 只允许 BA / Planner 使用；子 agent 请与你的 BA 交互，不要直接发消息。"
+        )
+    roster = load_roster(root)
+    if roster:
+        entry = next((a for a in roster if a["id"] == ident["agent_id"]), None)
+        if entry and (entry.get("role") or "ba").strip().lower() not in ("ba", "planner"):
+            raise GitError(
+                "已注册角色 %s 不能使用 bus；子 agent 请与你的 BA 交互。"
+                % entry.get("role")
+            )
+
+
 def resolve_identity(root: Path, role: str = "ba", rebind: bool = False) -> dict:
     aw_init(root)
+    env_role = (os.environ.get("AW_ROLE") or "").strip().lower()
+    if env_role:
+        role = env_role
     explicit = (os.environ.get("AW_AGENT_ID") or "").strip()
     no_bind = os.environ.get("AW_NO_BIND") == "1"
     anchor = "" if no_bind else terminal_anchor()
@@ -1760,6 +1780,7 @@ def cmd_msg(args) -> int:
     action = args.action
 
     if action == "send":
+        _assert_bus_writer(root, ident)
         to = [t.strip() for t in (args.to or "").split(",") if t.strip()]
         cc = [t.strip() for t in (args.cc or "").split(",") if t.strip()]
         if not to:
@@ -1806,6 +1827,7 @@ def cmd_msg(args) -> int:
         return 0 if state == "ok" else (0 if state == "local" else 3)
 
     if action == "flush":
+        _assert_bus_writer(root, ident)
         state = bus_flush(root)
         print("FLUSH %s" % state)
         return 0 if state in ("ok", "local") else 3
@@ -1895,6 +1917,7 @@ def cmd_msg(args) -> int:
         return 0
 
     if action == "ack":
+        _assert_bus_writer(root, ident)
         target = next((m for m in load_bus_messages(root) if m.get("id") == args.id), None)
         if not target:
             print("NOT_FOUND %s" % args.id)
