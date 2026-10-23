@@ -1,95 +1,108 @@
-# Agent 身份（强制人工指定）
+# Agent 身份（防漂移）
 
-## 1. 优先级
+## 0. 为什么会"不知道自己是谁"
 
-```text
---agent <name>        （最高，推荐，写在命令里）
-AW_AGENT_ID=<name>    （启动器能注入时）
-都没有 → 硬失败
-```
-
-没有名称时 **不生成默认值、不猜、不继续**：
-
-```text
-$ aw.py claim next
-MISSING_AGENT_ID
-还没有 agent 名称，不能继续。
-请先向用户确认你的名称，然后用 --agent 重新执行：
-  aw.py --agent ba-slot-1 <命令>
-```
-
-退出码 **2**，所有子命令一致。
-
-## 2. 为什么不能自动生成
-
-多 BA 共享同一个工作目录时，**没有任何可靠的进程标识**能被脚本看到：
-
-- 同一目录下两个会话，环境变量可能都没有；
-- `pid` 每条命令都变；
-- `cwd` 相同；
-- 主机名相同。
-
-自动生成的名字看起来能用，但会带来两个后果：
-
-1. 会话重启换名 → 之前认领的任务变成"别人的"，WIP=1 失效；
-2. 两个会话各自生成 → 名字冲突无感知，任务归属混乱。
-
-所以这里选择**硬失败**：拿不到名字就不干活，由人补齐。
-
-## 3. 人工指定的正确姿势
-
-用户/操作者给每个会话一个**稳定**名字：
-
-```text
-ba-<机器或人>-<槽位>
-pcA-ba-1
-pcB-ba-2
-```
-
-要求：
-
-| 要求 | 原因 |
+| 原因 | 表现 |
 |------|------|
-| 全局唯一 | 认领、消息、契约都按它归属 |
-| 跨会话稳定 | 重启不换名，WIP 才能跨重启生效 |
-| 人可读 | 出问题时能一眼看出是谁 |
-| 不含空格/冒号 | 要写进 commit trailer 和文件名 |
+| 长会话上下文被压缩 | 开头那句"你叫 pcA-ba-1"被挤掉 |
+| 工具不能注入环境变量 | 每条命令都是新进程，没有 `AW_AGENT_ID` |
+| 模型遇到报错会"自救" | 看到 `MISSING_AGENT_ID` 后自己编一个名字继续跑 |
+| 同一目录多会话 | 写一个 `.aw/agent-id` 文件也分不清谁是谁 |
 
-之后每条命令都带：
+结果：同一个 agent 在不同命令里用了不同名字，认领、消息、契约全部串位。
 
-```bash
-aw.py --agent pcA-ba-1 claim next
-aw.py --agent pcA-ba-1 msg inbox
+**对策：把身份锚在"终端"上，而不是锚在模型的记忆里。**
+
+## 1. 解析顺序
+
+```text
+1. --agent <name>            （显式，最高）
+2. AW_AGENT_ID               （启动器能注入时）
+3. 终端锚点绑定               （本终端第一次指定时自动记住）
+4. 都没有 → exit 2（MISSING_AGENT_ID）
 ```
 
-## 4. 与 agent 工具配合
+## 2. 终端锚点
 
-| 工具能力 | 做法 |
-|---------|------|
-| 能注入环境变量 | 启动时 `AW_AGENT_ID=pcA-ba-1`，命令不用带参数 |
-| 不能注入，但能设置系统提示 | 在提示里写死名字，并要求"每条 aw.py 命令都带 `--agent <名字>`" |
-| 两者都没有 | 每次新会话开头，先问用户"我叫什么"，拿到名字后全程带参 |
+读取顺序：`WT_SESSION` → `TERM_SESSION_ID` → `TMUX_PANE` → `SSH_TTY` → `TTY`。
 
-## 5. 自检
+这些变量**由终端自己设置**，不依赖 agent 工具，也不依赖模型记不记得。
+
+### 自动绑定
+
+第一次带 `--agent` 执行时，会把这个终端与名字绑定：
 
 ```bash
-aw.py --agent pcA-ba-1 agent whoami
-# agent_id : pcA-ba-1
-# session  : session-...
-# role     : ba
-# source   : --agent
+aw.py --agent pcA-ba-1 agent whoami    # 顺便完成绑定
+aw.py agent whoami                     # 之后不带参数也能认出来
 ```
 
-`source` 会显示名字是从 `--agent` 还是环境变量来的，便于排查"为什么两个会话同名"。
+### 显式绑定
 
-## 6. 名字冲突怎么办
+```bash
+aw.py agent bind pcA-ba-1      # 当前终端 → pcA-ba-1
+aw.py agent bind pcA-ba-2 --force   # 改绑（会提示原绑定）
+aw.py agent unbind             # 解除
+```
 
-当前不做自动检测（共享目录里无法可靠判断"另一个进程是不是同一个名字"）。
-运维约定：
+### 同终端换名会被拒绝
 
-- 同一台机器上，槽位号不复用；
-- 新人加入先看 `BA/dispatch/agent-registry.md` 与 `.aw/sessions/` 已用名字；
-- 发现同名 → 其中一方改号，并 `claim release` 后重新认领。
+```text
+错误: 这个终端已经绑定 pcA-ba-1，不能改名成 pcA-ba-2。
+要改绑定：aw.py agent bind pcA-ba-2 --force
+```
+
+这是防漂移的关键：**一个终端只允许一个名字**。
+
+## 3. 一个终端跑多个 agent 怎么办
+
+用 `--no-bind` 跳过终端绑定，每次显式带名字：
+
+```bash
+aw.py --agent pcA-ba-1 --no-bind claim next
+aw.py --agent pcA-ba-2 --no-bind msg inbox
+```
+
+代价：没有任何自动记忆，必须保证每条命令都带对名字。
+
+## 4. 漂移之后怎么修
+
+```bash
+# 1) 看当前终端到底是谁
+aw.py agent whoami
+
+# 2) 看所有绑定
+cat .aw/identities.json
+
+# 3) 改绑
+aw.py agent bind <正确名字> --force
+
+# 4) 检查错名产生的认领
+aw.py claim list
+aw.py claim doctor
+
+# 5) 释放错名的认领（不删 worktree）
+aw.py --agent <错名> claim release REQ-xxx --force
+```
+
+已经写进 bus 的消息改不了（禁止 force-push），只能统计影响范围后按新规则拦住。
+
+## 5. 限制
+
+| 场景 | 行为 |
+|------|------|
+| 无终端锚点（CI、服务、纯管道） | 只能每次显式 `--agent` |
+| 同一终端多 agent | `--no-bind` + 每次显式 |
+| 终端复用（同一 tab 重启） | 绑定仍在；若换了人，`bind --force` 修正 |
+| `.aw/` 被删除 | 绑定丢失，重新 bind 一次 |
+
+## 6. 自检
+
+| 时机 | 命令 |
+|------|------|
+| 会话启动 | `aw.py agent whoami` |
+| 认领前 | 由 `claim next` 隐式校验（无身份直接 exit 2） |
+| 巡检 | Planner / BA 抽查 `.aw/identities.json` 是否有重复名字 |
 
 ## 7. 与 WIP 的关系
 
@@ -98,4 +111,4 @@ WIP=1 判定只看 `agent_id`：
 - 换 session 不换名字 → 仍然只允许 1 个认领；
 - 换名字 → 等于换人，历史认领不会自动跟过去（需要 `claim release` 或 `doctor --repair`）。
 
-这就是为什么"名字必须稳定"不是建议，而是前提。
+名字稳定是前提，终端绑定是让"稳定"不依赖模型记忆的手段。

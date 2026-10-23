@@ -698,7 +698,8 @@ def read_json(path: Path, default):
 
 def write_json(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    # 唯一临时名：并发写同一文件时不会互相踩（Windows 上固定 .tmp 会 WinError 32）
+    tmp = path.with_name("%s.%d.%s.tmp" % (path.name, os.getpid(), secrets.token_hex(2)))
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     os.replace(tmp, path)
 
@@ -798,14 +799,72 @@ def _session_alive(rec: dict, ttl: int = SESSION_TTL_SECONDS) -> bool:
     return (time.time() - ts) < ttl
 
 
-def resolve_identity(root: Path, role: str = "ba") -> dict:
-    agent_id = (os.environ.get("AW_AGENT_ID") or "").strip()
-    if not agent_id:
+def terminal_anchor() -> str:
+    """终端级锚点：同一个终端里的命令共享，不同终端互不相同。
+
+    不依赖 agent 工具注入环境变量——WT_SESSION 等由终端自己设置。
+    """
+    for key in ("WT_SESSION", "TERM_SESSION_ID", "TMUX_PANE", "SSH_TTY", "TTY"):
+        value = (os.environ.get(key) or "").strip()
+        if value:
+            return "%s=%s" % (key, value)
+    return ""
+
+
+def _binding_key(anchor: str) -> str:
+    return "%s|%s" % (socket.gethostname(), anchor)
+
+
+def load_bindings(root: Path) -> dict:
+    return read_json(aw_path(root, "identities.json"), {})
+
+
+def save_bindings(root: Path, data: dict) -> None:
+    write_json(aw_path(root, "identities.json"), data)
+
+
+def bind_identity(root: Path, key: str, name: str, force: bool = False) -> tuple[bool, str | None]:
+    """原子绑定：加锁读-改-写，避免并发丢绑定。"""
+    with FileLock(aw_path(root, "locks", "identities.lock"), timeout=10):
+        bindings = load_bindings(root)
+        old = (bindings.get(key) or {}).get("agent_id")
+        if old and old != name and not force:
+            return False, old
+        bindings[key] = {"agent_id": name, "bound_at": _now()}
+        save_bindings(root, bindings)
+        return True, old
+
+
+def resolve_identity(root: Path, role: str = "ba", rebind: bool = False) -> dict:
+    aw_init(root)
+    explicit = (os.environ.get("AW_AGENT_ID") or "").strip()
+    no_bind = os.environ.get("AW_NO_BIND") == "1"
+    anchor = "" if no_bind else terminal_anchor()
+    bindings = load_bindings(root)
+    key = _binding_key(anchor) if anchor else ""
+    bound = bindings.get(key, {})
+    source = os.environ.get("AW_AGENT_SOURCE") or ("env AW_AGENT_ID" if explicit else "")
+
+    if explicit:
+        agent_id = explicit
+        if anchor:
+            ok, old = bind_identity(root, key, agent_id, force=rebind)
+            if not ok:
+                raise GitError(
+                    "这个终端已经绑定 %s，不能改名成 %s。\n"
+                    "要改绑定：aw.py agent bind %s --force" % (old, agent_id, agent_id)
+                )
+            source = source or "--agent"
+    elif bound and bound.get("agent_id"):
+        agent_id = bound["agent_id"]
+        source = "terminal"
+    else:
         raise IdentityError(
             "MISSING_AGENT_ID\n"
             "还没有 agent 名称，不能继续。\n"
-            "请先向用户确认你的名称，然后用 --agent 重新执行：\n"
-            "  aw.py --agent ba-slot-1 <命令>\n"
+            "两种方式（二选一）：\n"
+            "  1) 指定一次，本终端会记住：aw.py --agent pcA-ba-1 agent whoami\n"
+            "  2) 显式绑定：            aw.py agent bind pcA-ba-1\n"
             "如果启动器能设置环境变量，也可以用 AW_AGENT_ID。"
         )
     session_id = (
@@ -829,6 +888,7 @@ def resolve_identity(root: Path, role: str = "ba") -> dict:
         "cwd": str(Path.cwd()),
         "started_at": old.get("started_at") or _now(),
         "last_seen": _now(),
+        "source": source,
     }
     write_json(path, record)
     return record
@@ -904,17 +964,19 @@ def _create_worktree(root: Path, req: str, base: str) -> None:
     has_branch = git("rev-parse", "--verify", "--quiet", "refs/heads/%s" % branch,
                      cwd=root, check=False).returncode == 0
     last = None
-    for attempt in range(4):
-        try:
-            if has_branch:
-                git("worktree", "add", name, branch, cwd=root)
-            else:
-                git("worktree", "add", name, "-b", branch, base, cwd=root)
-            return
-        except GitError as exc:
-            last = exc
-            time.sleep(0.3 * (2 ** attempt))
-    raise GitError("创建 worktree 失败（重试 4 次）: %s" % last)
+    # 同一仓库并发 worktree add 会撞 .git/worktrees 锁，这里用项目锁串行化
+    with FileLock(aw_path(root, "locks", "worktree.lock"), timeout=30):
+        for attempt in range(5):
+            try:
+                if has_branch:
+                    git("worktree", "add", name, branch, cwd=root)
+                else:
+                    git("worktree", "add", name, "-b", branch, base, cwd=root)
+                return
+            except GitError as exc:
+                last = exc
+                time.sleep(0.3 * (2 ** attempt))
+    raise GitError("创建 worktree 失败（重试 5 次）: %s" % last)
 
 
 def _write_manifest(root: Path, req: str, ident: dict) -> None:
@@ -1159,13 +1221,41 @@ def _finish_claim(root: Path, req: str, ident: dict) -> int:
 
 def cmd_agent(args) -> int:
     root = repo_root()
+    aw_init(root)
+    action = args.action or "whoami"
+    anchor = terminal_anchor()
+    key = _binding_key(anchor) if anchor else ""
+
+    if action in ("bind", "unbind"):
+        if not anchor:
+            print("当前环境没有终端锚点（WT_SESSION / TERM_SESSION_ID / TTY），只能用 --agent。",
+                  file=sys.stderr)
+            return 2
+        if action == "bind":
+            name = (args.name or "").strip()
+            if not name:
+                print("用法: aw.py agent bind <name> [--force]", file=sys.stderr)
+                return 2
+            ok, old = bind_identity(root, key, name, force=args.force)
+            if not ok:
+                print("这个终端已经绑定 %s；要改绑加 --force" % old, file=sys.stderr)
+                return 3
+            print("BOUND %s" % name)
+            print("  anchor: %s" % anchor)
+            return 0
+        bindings = load_bindings(root)
+        bindings.pop(key, None)
+        save_bindings(root, bindings)
+        print("UNBOUND %s" % anchor)
+        return 0
+
     ident = resolve_identity(root)
-    source = os.environ.get("AW_AGENT_SOURCE") or ("env AW_AGENT_ID" if os.environ.get("AW_AGENT_ID") else "unknown")
     print("agent_id : %s" % ident["agent_id"])
     print("session  : %s" % ident["session_id"])
     print("role     : %s" % ident["role"])
     print("repo     : %s" % root)
-    print("source   : %s" % source)
+    print("source   : %s" % ident.get("source", "unknown"))
+    print("anchor   : %s" % (anchor or "（无终端锚点）"))
     return 0
 
 
@@ -1415,6 +1505,10 @@ def load_bus_messages(root: Path, fetch: bool = True) -> list[dict]:
         if meta and meta.get("id"):
             meta["_sha"] = sha
             messages.append(meta)
+    # git log 是「新 → 旧」，反转成「旧 → 新」：消息顺序等于提交顺序，不受时钟影响
+    messages.reverse()
+    for idx, meta in enumerate(messages):
+        meta["_seq"] = idx
     return messages
 
 
@@ -1558,7 +1652,7 @@ def cmd_msg(args) -> int:
             messages = [m for m in messages if m.get("from") == args.sender]
         if args.since:
             messages = [m for m in messages if (m.get("at") or "") >= args.since]
-        messages.sort(key=lambda m: (m.get("at", ""), m.get("id", "")))
+        messages.sort(key=lambda m: m.get("_seq", 0))
         universe = {m.get("id") for m in messages if m.get("id")}
         if action == "inbox" and not args.all:
             read = _read_ids(root, ident["agent_id"], messages)
@@ -1727,6 +1821,7 @@ def cmd_contract(args) -> int:
         latest_change = next((m for m in reversed(changes)
                               if m.get("contract") == name
                               and (not current or _ver_num(m.get("version", 0)) == current)), None)
+        # changes 是「旧 → 新」，reversed 后第一个匹配即最新一次变更
         if latest_change:
             acked = {m.get("from") for m in acks
                      if m.get("contract") == name
@@ -1943,6 +2038,7 @@ def _subparser_list(parser: argparse.ArgumentParser) -> list[argparse.ArgumentPa
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aw.py", description="Agent Workspace 工具")
     parser.add_argument("--agent", default=None, help="agent_id（优先于 AW_AGENT_ID）")
+    parser.add_argument("--no-bind", action="store_true", help="不读写终端绑定（一个终端跑多个 agent 时用）")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_init = sub.add_parser("init", help="初始化一个新的 workspace 项目")
@@ -1982,8 +2078,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_claim.add_argument("--ignore-unread", action="store_true", help="忽略未读消息强制认领")
     p_claim.set_defaults(func=cmd_claim)
 
-    p_agent = sub.add_parser("agent", help="查看当前 agent 身份")
-    p_agent.add_argument("action", choices=["whoami", "check"], nargs="?", default="whoami")
+    p_agent = sub.add_parser("agent", help="查看/绑定当前 agent 身份")
+    p_agent.add_argument("action", choices=["whoami", "check", "bind", "unbind"], nargs="?", default="whoami")
+    p_agent.add_argument("name", nargs="?", default="")
+    p_agent.add_argument("--force", action="store_true", help="bind 时强制改绑")
     p_agent.set_defaults(func=cmd_agent)
 
     p_contract = sub.add_parser("contract", help="契约一致性检查")
@@ -2034,6 +2132,7 @@ def build_parser() -> argparse.ArgumentParser:
     # 允许 --agent 写在子命令后面：aw.py msg inbox --agent ba-1
     for subparser in _subparser_list(parser):
         subparser.add_argument("--agent", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+        subparser.add_argument("--no-bind", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     return parser
 
 
@@ -2064,11 +2163,16 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["AW_AGENT_SOURCE"] = "--agent"
     elif os.environ.get("AW_AGENT_ID"):
         os.environ.setdefault("AW_AGENT_SOURCE", "env AW_AGENT_ID")
+    if getattr(args, "no_bind", False):
+        os.environ["AW_NO_BIND"] = "1"
     try:
         return args.func(args)
     except IdentityError as exc:
         print(str(exc), file=sys.stderr)
         return 2
+    except TimeoutError as exc:
+        print("等待锁超时: %s" % exc, file=sys.stderr)
+        return 1
     except GitError as exc:
         print("错误: %s" % exc, file=sys.stderr)
         return 1

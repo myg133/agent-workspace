@@ -24,6 +24,8 @@ def run(args, cwd, agent="ba-test", extra_env=None):
     env = dict(os.environ)
     env.pop("AW_AGENT_ID", None)
     env.pop("AW_SESSION_ID", None)
+    for key in ("WT_SESSION", "TERM_SESSION_ID", "TMUX_PANE", "SSH_TTY", "TTY"):
+        env.pop(key, None)
     if agent:
         env["AW_AGENT_ID"] = agent
         env["AW_SESSION_ID"] = "sess-" + agent
@@ -94,14 +96,18 @@ class WorkspaceCase(unittest.TestCase):
             run(["queue", "add", "REQ-%03d" % i], self.repo)
         procs = []
         for i in range(1, 4):
-            env = dict(os.environ, AW_AGENT_ID="slot-%d" % i, AW_SESSION_ID="s%d" % i)
+            env = {k: v for k, v in os.environ.items()
+                   if k not in ("WT_SESSION", "TERM_SESSION_ID", "TMUX_PANE", "SSH_TTY", "TTY")}
+            env.update(AW_AGENT_ID="slot-%d" % i, AW_SESSION_ID="s%d" % i,
+                       WT_SESSION="test-term-%d" % i)
             procs.append(subprocess.Popen(
                 [sys.executable, str(AW), "claim", "next"], cwd=str(self.repo),
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                 encoding="utf-8", errors="replace", env=env))
-        outs = [p.communicate()[0] for p in procs]
+        results = [(p.communicate(), p.returncode) for p in procs]
+        outs = [r[0][0] for r in results]
         claimed = sorted(line.split()[1] for line in outs for line in [line] if "CLAIMED" in line)
-        self.assertEqual(len(claimed), 3, outs)
+        self.assertEqual(len(claimed), 3, [(o, e, rc) for ((o, e), rc) in results])
         self.assertEqual(len(set(claimed)), 3, outs)
 
     # ---- 身份 ----
@@ -109,6 +115,33 @@ class WorkspaceCase(unittest.TestCase):
         out = run(["claim", "next"], self.repo, agent=None)
         self.assertEqual(out.returncode, 2, out.stdout)
         self.assertIn("MISSING_AGENT_ID", out.stderr)
+
+    def test_terminal_binding_resolves(self):
+        env = {"WT_SESSION": "term-test-1"}
+        run(["agent", "bind", "ba-1"], self.repo, agent=None, extra_env=env)
+        out = run(["agent", "whoami"], self.repo, agent=None, extra_env=env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("ba-1", out.stdout)
+        self.assertIn("terminal", out.stdout)
+
+    def test_terminal_binding_blocks_rename(self):
+        env = {"WT_SESSION": "term-test-2"}
+        run(["agent", "bind", "ba-1"], self.repo, agent=None, extra_env=env)
+        bad = run(["agent", "whoami", "--agent", "ba-2"], self.repo, agent=None, extra_env=env)
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("已经绑定", bad.stderr)
+
+    def test_terminal_isolated(self):
+        run(["agent", "bind", "ba-1"], self.repo, agent=None, extra_env={"WT_SESSION": "term-A"})
+        other = run(["agent", "whoami"], self.repo, agent=None, extra_env={"WT_SESSION": "term-B"})
+        self.assertEqual(other.returncode, 2)
+
+    def test_no_bind_allows_explicit(self):
+        env = {"WT_SESSION": "term-shared"}
+        run(["agent", "bind", "ba-1"], self.repo, agent=None, extra_env=env)
+        out = run(["agent", "whoami", "--agent", "ba-2", "--no-bind"], self.repo, agent=None, extra_env=env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("ba-2", out.stdout)
 
     def test_agent_flag_without_env(self):
         out = run(["agent", "whoami", "--agent", "ba-x"], self.repo, agent=None)

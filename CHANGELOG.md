@@ -2,6 +2,32 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.9.0] - 2026-10-23
+
+### 新增：终端锚点绑定，修复 agent 身份漂移
+
+现象：长会话里几个 agent 忘了自己叫什么，同一 agent 在不同命令用了不同名字，认领与消息串位。
+
+根因：身份只存在于"模型记忆 + 环境变量"，而上下文会压缩、工具又注入不了环境变量。
+
+修复：
+
+- 身份解析新增第三层：**终端锚点**（`WT_SESSION` / `TERM_SESSION_ID` / `TMUX_PANE` / `SSH_TTY` / `TTY`）
+- 首次带 `--agent` 时自动把当前终端与该名字绑定；之后不带参数也能识别
+- `aw.py agent bind <name> [--force]` / `agent unbind` 显式管理
+- **同终端换名直接拒绝**，这是防漂移的关键
+- `--no-bind`：一个终端跑多个 agent 时跳过绑定，每次显式带名字
+- `agent whoami` 显示 `source`（--agent / env / terminal）与当前锚点
+
+文档：`references/global/identity.md` 重写，含漂移后的修复步骤与限制。
+
+### 修复
+
+- **并发写同一 JSON 冲突**：`write_json` 的临时文件名改为「进程号 + 随机」，修复 Windows `WinError 32`
+- **绑定读写竞态**：`identities.json` 的读-改-写加锁，避免并发丢失绑定
+- **并发建 worktree 失败**：`git worktree add` 用项目锁串行化（.git/worktrees 锁竞争）
+- **消息顺序**：改为 bus 提交顺序（旧→新），不再按时间戳排序；同一秒内的消息也能正确分页
+
 ## [1.8.1] - 2026-10-22
 
 ### 修复：消息与 manifest 泄露本机路径
