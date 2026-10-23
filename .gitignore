@@ -16,3 +16,6 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+# 临时脚本
+.tmp_*
+*.tmp
