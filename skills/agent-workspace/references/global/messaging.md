@@ -61,6 +61,19 @@ deadline: 2026-10-22T00:00:00Z
 
 类型：`fyi` `question` `blocker` `handoff` `contract-change` `contract-ack` `decision`。
 
+### 收件人校验
+
+`msg send` 只允许发给**已注册且 active** 的 agent：
+
+| 收件人 | 规则 |
+|--------|------|
+| 具名 `pcA-ba-1` | 在 `BA/plan/agents.json` 中且 `status=active` |
+| `all` | 至少一个 active |
+| `role:ba` | 至少一个该角色 active |
+
+未注册 → 拒绝并列出可用名字。应急可 `--force`，但会在日志里留下痕迹。
+名册由 Planner 用 `aw.py agent register/deactivate` 维护。
+
 ### 路径约定（重要）
 
 消息会跨机器读，**不能出现本机绝对路径**：

@@ -784,8 +784,10 @@ SESSION_TTL_SECONDS = 1800
 
 
 def _session_alive(rec: dict, ttl: int = SESSION_TTL_SECONDS) -> bool:
-    """存活判定：同机优先看长驻进程 pid，其次看心跳新鲜度。"""
+    """存活判定：显式退出 > 同机 pid > 心跳新鲜度。"""
     if not rec:
+        return False
+    if rec.get("status") == "offline":
         return False
     if rec.get("host") == socket.gethostname():
         pid = int(rec.get("pid") or 0)
@@ -821,6 +823,53 @@ def load_bindings(root: Path) -> dict:
 
 def save_bindings(root: Path, data: dict) -> None:
     write_json(aw_path(root, "identities.json"), data)
+
+
+ROSTER_REL = ("BA", "plan", "agents.json")
+
+
+def roster_path(root: Path) -> Path:
+    return root.joinpath(*ROSTER_REL)
+
+
+def load_roster(root: Path) -> list[dict]:
+    data = read_json(roster_path(root), {})
+    agents = data.get("agents") if isinstance(data, dict) else None
+    return [a for a in (agents or []) if isinstance(a, dict) and a.get("id")]
+
+
+def save_roster(root: Path, agents: list[dict]) -> None:
+    write_json(roster_path(root), {"agents": agents})
+
+
+def active_agents(root: Path) -> set[str]:
+    return {a["id"] for a in load_roster(root) if a.get("status", "active") == "active"}
+
+
+def validate_recipients(root: Path, to: list[str], cc: list[str], force: bool = False) -> None:
+    """收件人必须是已注册且 active 的 agent（或 all / role:x 组）。"""
+    if force:
+        return
+    roster = load_roster(root)
+    if not roster:
+        return  # 未配置 roster：保持向后兼容，不拦
+    known = {a["id"]: a for a in roster}
+    active = active_agents(root)
+    for token in [t for t in to + cc if t]:
+        if token == "all":
+            if not active:
+                raise GitError("没有 active 的 agent，无法广播")
+            continue
+        if token.startswith("role:"):
+            role = token[5:]
+            if not any(a.get("role") == role and a["id"] in active for a in roster):
+                raise GitError("没有 active 的 role:%s" % role)
+            continue
+        if token not in known:
+            sample = ", ".join(sorted(known)[:8])
+            raise GitError("未注册的 agent: %s\n已注册: %s" % (token, sample or "（空）"))
+        if token not in active:
+            raise GitError("%s 不是 active 状态（Planner 可用 agent activate 恢复）" % token)
 
 
 def bind_identity(root: Path, key: str, name: str, force: bool = False) -> tuple[bool, str | None]:
@@ -1226,6 +1275,74 @@ def cmd_agent(args) -> int:
     anchor = terminal_anchor()
     key = _binding_key(anchor) if anchor else ""
 
+    if action == "roster":
+        agents = load_roster(root)
+        if not agents:
+            print("（roster 为空；用 aw.py agent register <name> 注册）")
+            return 0
+        rows = []
+        for a in sorted(agents, key=lambda x: x["id"]):
+            sess = read_json(aw_path(root, "sessions", "%s.json" % a["id"]), {})
+            rows.append([a["id"], a.get("role", "ba"), a.get("status", "active"),
+                         "alive" if _session_alive(sess) else "-"])
+        _table(["agent", "role", "status", "session"], rows)
+        return 0
+
+    if action in ("register", "activate", "deactivate"):
+        cwd = Path.cwd().resolve()
+        ba = (root / "BA").resolve()
+        allowed = cwd == root.resolve() or cwd == ba or ba in cwd.parents
+        if not allowed:
+            print("请在仓库根或 BA/ 下执行（roster 属于 demand 分支）", file=sys.stderr)
+            return 2
+        name = (args.name or "").strip()
+        if not name:
+            print("用法: aw.py agent %s <name>" % action, file=sys.stderr)
+            return 2
+        agents = load_roster(root)
+        by_id = {a["id"]: a for a in agents}
+        if action == "register":
+            entry = by_id.get(name) or {"id": name, "registered_at": _now()}
+            entry["role"] = args.role or entry.get("role", "ba")
+            entry["host"] = args.host or entry.get("host", socket.gethostname())
+            entry["status"] = "active"
+            entry["updated_at"] = _now()
+            if name not in by_id:
+                agents.append(entry)
+            save_roster(root, agents)
+            print("REGISTERED %s (%s)" % (name, entry["role"]))
+            return 0
+        if name not in by_id:
+            print("未注册的 agent: %s" % name, file=sys.stderr)
+            return 3
+        by_id[name]["status"] = "active" if action == "activate" else "inactive"
+        by_id[name]["updated_at"] = _now()
+        save_roster(root, agents)
+        print("%s %s" % ("ACTIVE" if action == "activate" else "INACTIVE", name))
+        return 0
+
+    if action == "exit":
+        ident = resolve_identity(root)
+        claims = [c for c in load_claims(root)
+                  if c.get("agent_id") == ident["agent_id"] and c.get("state") in CLAIM_STATES]
+        if claims and not args.force:
+            print("还有认领未释放: %s" % ", ".join(c["req"] for c in claims), file=sys.stderr)
+            print("先 claim release，或加 --force 强制退出（认领会变成死会话）", file=sys.stderr)
+            return 3
+        sess_path = aw_path(root, "sessions", "%s.json" % ident["agent_id"])
+        sess = read_json(sess_path, {})
+        sess["status"] = "offline"
+        sess["ended_at"] = _now()
+        write_json(sess_path, sess)
+        if not args.keep_binding and key:
+            bindings = load_bindings(root)
+            bindings.pop(key, None)
+            save_bindings(root, bindings)
+        print("EXITED %s" % ident["agent_id"])
+        print("  claims : %d" % len(claims))
+        print("  binding: %s" % ("kept" if args.keep_binding else ("removed" if key else "-")))
+        return 0
+
     if action in ("bind", "unbind"):
         if not anchor:
             print("当前环境没有终端锚点（WT_SESSION / TERM_SESSION_ID / TTY），只能用 --agent。",
@@ -1250,12 +1367,14 @@ def cmd_agent(args) -> int:
         return 0
 
     ident = resolve_identity(root)
+    reg = next((a for a in load_roster(root) if a["id"] == ident["agent_id"]), None)
     print("agent_id : %s" % ident["agent_id"])
     print("session  : %s" % ident["session_id"])
     print("role     : %s" % ident["role"])
     print("repo     : %s" % root)
     print("source   : %s" % ident.get("source", "unknown"))
     print("anchor   : %s" % (anchor or "（无终端锚点）"))
+    print("roster   : %s" % (reg.get("status", "active") if reg else "未注册"))
     return 0
 
 
@@ -1619,6 +1738,14 @@ def cmd_msg(args) -> int:
                 "消息正文里不要放本机绝对路径（跨机器不可读，也会泄露目录结构）。\n"
                 "用仓库相对路径，例如：BA/contracts/user-api/v3.md"
             )
+        validate_recipients(root, to, cc, force=getattr(args, "force", False))
+        roster = load_roster(root)
+        if roster and not getattr(args, "force", False):
+            me = next((a for a in roster if a["id"] == ident["agent_id"]), None)
+            if not me:
+                raise GitError("发送者未注册: %s（先 aw.py agent register）" % ident["agent_id"])
+            if me.get("status") != "active":
+                raise GitError("发送者不是 active: %s" % ident["agent_id"])
         meta = {
             "id": _msg_id(), "from": ident["agent_id"], "to": to, "cc": cc,
             "at": _now_utc(), "type": args.type, "body": body,
@@ -2079,9 +2206,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_claim.set_defaults(func=cmd_claim)
 
     p_agent = sub.add_parser("agent", help="查看/绑定当前 agent 身份")
-    p_agent.add_argument("action", choices=["whoami", "check", "bind", "unbind"], nargs="?", default="whoami")
+    p_agent.add_argument("action",
+                         choices=["whoami", "check", "bind", "unbind", "register", "roster",
+                                  "activate", "deactivate", "exit"],
+                         nargs="?", default="whoami")
     p_agent.add_argument("name", nargs="?", default="")
-    p_agent.add_argument("--force", action="store_true", help="bind 时强制改绑")
+    p_agent.add_argument("--force", action="store_true", help="bind 强制改绑 / exit 强制退出")
+    p_agent.add_argument("--role", default="", help="register 时的角色")
+    p_agent.add_argument("--host", default="", help="register 时的机器名")
+    p_agent.add_argument("--keep-binding", action="store_true", help="exit 时保留终端绑定")
     p_agent.set_defaults(func=cmd_agent)
 
     p_contract = sub.add_parser("contract", help="契约一致性检查")
@@ -2113,6 +2246,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_msg.add_argument("--full", action="store_true")
     p_msg.add_argument("--no-fetch", action="store_true")
     p_msg.add_argument("--no-advance", action="store_true", help="只读，不推进游标（Notifier 用）")
+    p_msg.add_argument("--force", action="store_true", help="跳过收件人注册校验")
     p_msg.add_argument("--ok", action="store_true", help="ack 时表示同意（默认）")
     p_msg.add_argument("--note", default="", help="ack 附言")
     p_msg.add_argument("--reject", action="store_true", help="ack 时表示不同意")

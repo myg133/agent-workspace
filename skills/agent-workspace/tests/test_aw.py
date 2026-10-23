@@ -116,6 +116,39 @@ class WorkspaceCase(unittest.TestCase):
         self.assertEqual(out.returncode, 2, out.stdout)
         self.assertIn("MISSING_AGENT_ID", out.stderr)
 
+    def _register(self, *names):
+        for name in names:
+            out = run(["agent", "register", name], self.repo / "BA", agent=None)
+            self.assertEqual(out.returncode, 0, out.stderr)
+
+    def test_roster_rejects_unknown_recipient(self):
+        self._register("ba-1")
+        bad = run(["msg", "send", "--to", "ghost", "--body", "x"], self.repo, agent="ba-1")
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("未注册", bad.stderr)
+
+    def test_roster_rejects_inactive(self):
+        self._register("ba-1", "ba-2")
+        run(["agent", "deactivate", "ba-2"], self.repo / "BA", agent=None)
+        bad = run(["msg", "send", "--to", "ba-2", "--body", "x"], self.repo, agent="ba-1")
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("不是 active", bad.stderr)
+
+    def test_agent_exit_unbinds(self):
+        env = {"WT_SESSION": "term-exit"}
+        run(["agent", "bind", "ba-1"], self.repo, agent=None, extra_env=env)
+        out = run(["agent", "exit"], self.repo, agent=None, extra_env=env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        again = run(["agent", "whoami"], self.repo, agent=None, extra_env=env)
+        self.assertEqual(again.returncode, 2)
+
+    def test_agent_exit_refuses_with_claims(self):
+        run(["queue", "add", "REQ-001"], self.repo, agent="ba-1")
+        run(["claim", "next"], self.repo, agent="ba-1")
+        out = run(["agent", "exit"], self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 3)
+        self.assertIn("认领", out.stderr)
+
     def test_terminal_binding_resolves(self):
         env = {"WT_SESSION": "term-test-1"}
         run(["agent", "bind", "ba-1"], self.repo, agent=None, extra_env=env)

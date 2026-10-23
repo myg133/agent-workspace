@@ -48,6 +48,23 @@ BA/
 | 里程碑 | 复盘 ADR：哪些决策被推翻、为什么 |
 | 随时 | 跨 BA 冲突升级时拍板，并落 ADR |
 
+## 4.1 名册管理（Planner 专属）
+
+`BA/plan/agents.json` 是"谁有资格收消息"的唯一依据，由 Planner 维护：
+
+```bash
+aw.py agent register pcA-ba-1 --role ba
+aw.py agent register pcB-ba-2 --role ba
+aw.py agent roster                 # 对照本地会话看谁真正在线
+aw.py agent deactivate pcC-ba-2    # 长期离岗
+```
+
+规则：
+
+- 新成员先注册，再让他 `agent bind`；
+- 离岗 / 换人 → `deactivate`，不要直接删（历史消息要能解析）；
+- 每周对照 `agent roster` 与 `claim list`，清理"名册 active 但从未上线"的名字。
+
 ## 5. 优先级从哪来
 
 1. 用户/业务目标（最高）

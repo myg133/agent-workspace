@@ -2,6 +2,24 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.10.0] - 2026-10-23
+
+### 新增：Agent 名册 + 收件人校验 + 退出机制
+
+**问题**：Planner 会自己造 agent 名字，给根本没注册过的 agent 发消息。
+
+- 名册 `BA/plan/agents.json`（随 demand 分支跨机共享）
+- `aw.py agent register <name> [--role ba]` / `agent roster` / `agent activate|deactivate`
+- `msg send` 校验收件人：必须已注册且 active；`all` / `role:x` 要求至少一个 active
+- 未注册直接拒绝并列出可用名字；应急 `--force` 可绕过
+- `aw.py agent exit`：session 置 offline、解绑终端；有认领时拒绝（`--force` 强制，认领变死会话）
+- `agent whoami` 增加 roster 状态
+
+### 说明
+
+- 未配置 roster 时保持向后兼容（不拦截）；建议项目一开始就建立名册。
+- exit 是会话级，deactivate 是名册级：收工用 exit，长期离岗用 deactivate。
+
 ## [1.9.0] - 2026-10-23
 
 ### 新增：终端锚点绑定，修复 agent 身份漂移
