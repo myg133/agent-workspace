@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.10.0
+  version: 1.11.0
 ---
 
 # Agent Workspace
@@ -125,6 +125,12 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 - 别人的文件：`<repo-root>/BA/demands/REQ-xxx/...`（**不是** `BA/...`）。
 - 兄弟 worktree 物理可见，但**只可读、不可写**。
 
+## 如果客户端支持 MCP
+
+`scripts/aw_mcp.py` 是 stdio MCP 适配层：每个 agent 一个进程，`AW_AGENT_ID` 由启动环境注入，
+工具参数与 CLI 一一对应。配置与返回格式见 `references/global/mcp.md`。
+CLI 仍是唯一事实源，MCP 只做调用面。
+
 ## 脚本
 
 | 命令 | 作用 | 退出码 |
@@ -176,6 +182,7 @@ Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输�
 | `references/global/concurrency.md` | 多 BA：身份、WIP=1 认领、锁、doctor |
 | `references/global/platform-notes.md` | Windows / macOS / Linux / WSL 差异 |
 | `references/global/messaging.md` | BA 间消息：bus 分支、格式、寻址、ack |
+| `references/global/mcp.md` | MCP stdio 适配层：配置、工具、返回格式 |
 | `references/global/contracts.md` | 契约版本、消费方 pin、检查规则 |
 | `references/global/identity.md` | agent 名称的优先级、强制人工指定 |
 | `references/roles/*.md` | 六个角色的完整工作流 |

@@ -43,6 +43,15 @@ def git(args, cwd):
                           text=True, encoding="utf-8", errors="replace")
 
 
+MCP = AW.parent / "aw_mcp.py"
+
+
+def mcp_exchange(proc, payload):
+    proc.stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    proc.stdin.flush()
+    return json.loads(proc.stdout.readline())
+
+
 class WorkspaceCase(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="awtest-"))
@@ -62,6 +71,59 @@ class WorkspaceCase(unittest.TestCase):
         self.assertIn("branch refs/heads/demand", wt)
         self.assertIn("branch refs/heads/deploy", wt)
         self.assertTrue((self.repo / "BA" / "dispatch" / "agent-registry.md").exists())
+
+    @staticmethod
+    def _stop_mcp(proc):
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        for stream in (proc.stdin, proc.stdout, proc.stderr):
+            try:
+                stream.close()
+            except Exception:
+                pass
+
+    def _mcp(self, agent="ba-1"):
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("AW_AGENT_ID", "AW_SESSION_ID", "AW_AGENT_PID")}
+        if agent:
+            env["AW_AGENT_ID"] = agent
+        return subprocess.Popen(
+            [sys.executable, str(MCP)], cwd=str(self.repo), env=env,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace", bufsize=1,
+        )
+
+    def test_mcp_handshake_and_whoami(self):
+        proc = self._mcp()
+        try:
+            init = mcp_exchange(proc, {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                                       "params": {"protocolVersion": "2024-11-05"}})
+            self.assertEqual(init["result"]["serverInfo"]["name"], "aw-mcp")
+            tools = mcp_exchange(proc, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+            names = {t["name"] for t in tools["result"]["tools"]}
+            self.assertIn("claim_next", names)
+            self.assertIn("msg_send", names)
+            call = mcp_exchange(proc, {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                                       "params": {"name": "agent_whoami", "arguments": {}}})
+            payload = json.loads(call["result"]["content"][0]["text"])
+            self.assertEqual(payload["exit_code"], 0)
+            self.assertIn("ba-1", payload["stdout"])
+            self.assertFalse(call["result"]["isError"])
+        finally:
+            self._stop_mcp(proc)
+
+    def test_mcp_requires_agent_id(self):
+        proc = self._mcp(agent=None)
+        try:
+            call = mcp_exchange(proc, {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                       "params": {"name": "agent_whoami", "arguments": {}}})
+            self.assertTrue(call["result"]["isError"])
+            self.assertIn("MISSING_AGENT_ID", call["result"]["content"][0]["text"])
+        finally:
+            self._stop_mcp(proc)
 
     def test_verify_clean(self):
         out = run(["verify"], self.repo)

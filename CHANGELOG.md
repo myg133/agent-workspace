@@ -2,6 +2,23 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.11.0] - 2026-10-23
+
+### 新增：stdio MCP 适配层
+
+- `scripts/aw_mcp.py`：把 `aw.py` 暴露为 17 个 MCP 工具（无第三方依赖）
+- 一个 agent 一个进程：`AW_AGENT_ID` 由启动环境注入
+- 服务器启动时固定 `AW_AGENT_PID=本进程 pid`、`AW_SESSION_ID=proc-<pid>`，
+  **身份与进程绑定，不再依赖 session_id 关联**
+- 工具返回统一 JSON（`ok / exit_code / stdout / stderr / agent`），
+  0/3/4 视为业务正常，只有真正失败才是 `isError`
+- 参数 schema 覆盖枚举与必填项，agent 不需要读源码
+- 文档：`references/global/mcp.md`
+
+### 说明
+
+MCP 只做调用面，逻辑仍全部在 `aw.py`；CLI 保留，供 CI、脚本与不支持 MCP 的客户端使用。
+
 ## [1.10.0] - 2026-10-23
 
 ### 新增：Agent 名册 + 收件人校验 + 退出机制
