@@ -507,15 +507,18 @@ aw.py mcp install --client claude|cursor|vscode
       <div class="kicker">角色</div>
       <h2>一个 Planner，八个 BA，若干执行者</h2>
       <table class="dense" style="margin-top:6px">
-        <tr><th style="width:110px">角色</th><th style="width:230px">一句话</th><th style="width:190px">工作区</th><th>边界</th></tr>
-        <tr><td><strong>Planner</strong></td><td>总规划、设计、跨 BA 协调</td><td><code>BA/plan</code> <code>BA/decisions</code></td><td>不领任务、不改状态、不派单；只决定顺序</td></tr>
-        <tr><td><strong>BA</strong></td><td>需求、验收、派单、状态</td><td><code>BA/demands</code></td><td>不写代码；状态唯一写者</td></tr>
-        <tr><td><strong>Dev</strong></td><td>实现、测试、自验、PR</td><td><code>feature-REQ-xxx/</code></td><td>不合并、不改状态</td></tr>
-        <tr><td><strong>QA</strong></td><td>验证、审查、出报告</td><td>feature / <code>code/</code></td><td>不改代码、不提交</td></tr>
-        <tr><td><strong>Deploy</strong></td><td>部署配置、发布、回滚</td><td><code>Deploy/</code></td><td>不做构建、不改业务代码</td></tr>
-        <tr><td><strong>Notifier</strong></td><td>读消息、整理摘要</td><td>只读</td><td>不回复、不 ack、不处理</td></tr>
+        <tr><th style="width:100px">角色</th><th style="width:210px">一句话</th><th style="width:185px">工作区</th><th>边界</th><th style="width:86px">bus 写</th></tr>
+        <tr><td><strong>Planner</strong></td><td>总规划、设计、跨 BA 协调</td><td><code>BA/plan</code> <code>BA/decisions</code></td><td>不领任务、不改状态、不派单；只决定顺序</td><td><span class="cyan">✓</span></td></tr>
+        <tr><td><strong>BA</strong></td><td>需求、验收、派单、状态</td><td><code>BA/demands</code></td><td>不写代码；状态唯一写者</td><td><span class="cyan">✓</span></td></tr>
+        <tr><td><strong>Dev</strong></td><td>实现、测试、自验、PR</td><td><code>feature-REQ-xxx/</code></td><td>不合并、不改状态</td><td><span class="dim">✕</span></td></tr>
+        <tr><td><strong>QA</strong></td><td>验证、审查、出报告</td><td>feature / <code>code/</code></td><td>不改代码、不提交</td><td><span class="dim">✕</span></td></tr>
+        <tr><td><strong>Deploy</strong></td><td>部署配置、发布、回滚</td><td><code>Deploy/</code></td><td>不做构建、不改业务代码</td><td><span class="dim">✕</span></td></tr>
+        <tr><td><strong>Notifier</strong></td><td>读消息、整理摘要</td><td>只读</td><td>不回复、不 ack、不处理</td><td><span class="dim">✕</span></td></tr>
       </table>
-      <div class="quote" style="margin-top:18px;font-size:17px">
+      <p class="muted" style="margin-top:12px;font-size:13.5px">
+        bus 写 = <code>msg send</code> / <code>ack</code> / <code>flush</code>；子 agent 一律通过自己的 BA 转达。
+      </p>
+      <div class="quote" style="margin-top:14px;font-size:17px">
         Planner 是唯一<em>不参与 WIP 队列</em>的角色——它的产出是顺序，不是任务。
       </div>
     </div>
