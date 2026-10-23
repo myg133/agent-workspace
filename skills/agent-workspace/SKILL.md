@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.14.0
+  version: 1.14.1
 ---
 
 # Agent Workspace
@@ -107,6 +107,7 @@ python <skill-path>/scripts/aw.py audit
 | 发布 | `references/lifecycle/release.md` | `roles/deploy.md` |
 | 升级已运行的项目 | `references/lifecycle/upgrade.md` | `aw.py upgrade` |
 | BA 之间沟通 | `references/global/messaging.md` | `aw.py msg` |
+| 通过 MCP 调用 | `references/global/mcp.md` | 工具名见上表 |
 | 接口/契约对齐 | `references/global/contracts.md` | `aw.py contract check` |
 | 我是谁 / 没名字 | `references/global/identity.md` | `aw.py agent whoami` |
 | 代读消息 | `references/roles/notifier.md` | 只读子 agent |
@@ -127,9 +128,28 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 
 ## 如果客户端支持 MCP
 
-`scripts/aw_mcp.py` 是 stdio MCP 适配层：每个 agent 一个进程，`AW_AGENT_ID` 由启动环境注入，
-工具参数与 CLI 一一对应。配置与返回格式见 `references/global/mcp.md`。
-CLI 仍是唯一事实源，MCP 只做调用面。
+`scripts/aw_mcp.py` 是 stdio 适配层：**一个 agent 一个进程**，`AW_AGENT_ID` 由启动环境注入，
+不需要 `--agent`，也不依赖 session_id。配置见 `references/global/mcp.md`。
+
+| 组 | 工具 |
+|----|------|
+| 身份 / 名册 | `agent_whoami` `agent_roster` `agent_register` `agent_activate` `agent_deactivate` `agent_publish` `agent_exit` |
+| 认领 | `claim_next` `claim_take` `claim_release` `claim_list` `claim_doctor` |
+| 消息 | `msg_send` `msg_inbox` `msg_wait` `msg_show` `msg_ack` |
+| 门禁 | `contract_check` `verify` `audit` |
+| 队列 | `queue_add` `queue_list` `queue_sync` |
+
+返回统一为：
+
+```json
+{"ok": true, "exit_code": 0, "stdout": "...", "stderr": "", "agent": "pcA-ba-1"}
+```
+
+`0 / 3 / 4` 都是业务正常（成功 / 拒绝 / 未读门禁），只有真正失败才 `isError`。
+
+**能阻塞就不要轮询**：等消息用 `msg_wait`（≤120 秒），不要每 5 秒调一次 `msg_inbox`。
+
+MCP 与 CLI 等价；客户端不支持 MCP 时用 `aw.py` + `AW_AGENT_ID`。
 
 ## 脚本
 
