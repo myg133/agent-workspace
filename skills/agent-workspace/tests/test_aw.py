@@ -116,6 +116,16 @@ class WorkspaceCase(unittest.TestCase):
         finally:
             self._stop_mcp(proc)
 
+    def test_doctor_and_stats(self):
+        clean = run(["doctor"], self.repo, agent=None)
+        self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
+        run(["queue", "add", "REQ-001"], self.repo, agent="ba-1")
+        run(["claim", "next"], self.repo, agent="ba-1")
+        out = run(["stats", "--json"], self.repo, agent=None)
+        data = json.loads(out.stdout)
+        self.assertEqual(data["claims_active"], 1)
+        self.assertEqual(data["worktrees"], 5)
+
     def test_roster_mode_solo_and_team(self):
         run(["agent", "register", "ba-1", "--role", "ba"], self.repo / "BA", agent=None)
         solo = run(["agent", "roster", "--json"], self.repo, agent=None)

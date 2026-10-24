@@ -2,6 +2,21 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.19.0] - 2026-10-24
+
+### 新增：doctor / stats / CI 矩阵 / 抢占式 bootstrap
+
+- `aw.py doctor`：一页聚合 workspace、拓扑、认领、队列、契约、solo/team 模式；有 FAIL 时退出码 1
+- `aw.py stats [--json]`：active claims、最老认领/队列、session 存活、消息数、ack 中位数、worktree 数
+- `.github/workflows/test.yml`：Ubuntu / macOS / Windows 三平台跑 52 个测试
+- `agent bootstrap <name>`：名册为空时抢占式注册第一个 Planner（文件锁防并发）
+- `agent register`：名册里存在带令牌的 Planner 时，必须提供 Planner 令牌（`--agent-token`）
+
+### 说明
+
+- bootstrap 只在名册为空时可用；名册非空但没有 Planner 时不会自动放开
+- 名册里没有带令牌的 Planner 时，register 保持旧行为（向后兼容）
+
 ## [1.18.1] - 2026-10-24
 
 ### 文档：Planner 的启用与单人模式

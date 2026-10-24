@@ -847,6 +847,19 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def planner_token_ok(root: Path, token: str) -> bool:
+    """调用者是否持有任一 active Planner 的有效令牌。"""
+    if not token:
+        return False
+    digest = hash_token(token)
+    return any(
+        a.get("role") == "planner"
+        and a.get("status", "active") == "active"
+        and a.get("token_hash") == digest
+        for a in load_roster(root)
+    )
+
+
 def active_agents(root: Path) -> set[str]:
     return {a["id"] for a in load_roster(root) if a.get("status", "active") == "active"}
 
@@ -1342,7 +1355,7 @@ def cmd_agent(args) -> int:
                      "alive" if x["session_alive"] else "-"] for x in payload])
         return 0
 
-    if action in ("register", "activate", "deactivate"):
+    if action in ("register", "activate", "deactivate", "bootstrap"):
         cwd = Path.cwd().resolve()
         ba = (root / "BA").resolve()
         allowed = cwd == root.resolve() or cwd == ba or ba in cwd.parents
@@ -1355,7 +1368,43 @@ def cmd_agent(args) -> int:
             return 2
         agents = load_roster(root)
         by_id = {a["id"]: a for a in agents}
+        if action == "bootstrap":
+            if agents:
+                print("名册非空，禁止 bootstrap；请用 register + Planner 令牌", file=sys.stderr)
+                return 3
+            name = (args.name or "planner-1").strip()
+            with FileLock(aw_path(root, "locks", "roster.lock"), timeout=10):
+                if load_roster(root):
+                    print("名册已被其他进程初始化", file=sys.stderr)
+                    return 3
+                token = secrets.token_hex(12)
+                entry = {
+                    "id": name, "role": "planner", "host": args.host or socket.gethostname(),
+                    "status": "active", "registered_at": _now(), "updated_at": _now(),
+                    "token_hash": hash_token(token), "token_issued_at": _now(),
+                    "bootstrap": True,
+                }
+                save_roster(root, [entry])
+                write_json(aw_path(root, "bootstrap.json"), {
+                    "name": name, "host": socket.gethostname(), "at": _now(),
+                })
+            print("BOOTSTRAP %s" % name)
+            print("TOKEN %s %s" % (name, token))
+            print("⚠ 只允许在名册为空时执行一次；请立刻 agent publish 并保护 demand 分支。")
+            return 0
         if action == "register":
+            planners_with_token = [
+                a for a in agents
+                if a.get("role") == "planner" and a.get("status", "active") == "active"
+                and a.get("token_hash")
+            ]
+            if planners_with_token:
+                supplied = (getattr(args, "agent_token", None)
+                            or os.environ.get("AW_AGENT_TOKEN") or "").strip()
+                if not planner_token_ok(root, supplied):
+                    print("REGISTER_DENIED 需要 Planner 令牌（--agent-token 或 AW_AGENT_TOKEN）",
+                          file=sys.stderr)
+                    return 3
             entry = by_id.get(name) or {"id": name, "registered_at": _now()}
             entry["role"] = args.role or entry.get("role", "ba")
             entry["host"] = args.host or entry.get("host", socket.gethostname())
@@ -1981,6 +2030,181 @@ def cmd_msg(args) -> int:
     raise GitError("未知 msg 动作: %s" % action)
 
 
+# ---------------------------------------------------------------- doctor / stats
+
+def _age_seconds(iso: str) -> float | None:
+    try:
+        ts = _dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp()
+        return max(0.0, time.time() - ts)
+    except (TypeError, ValueError):
+        return None
+
+
+def _fmt_age(seconds: float | None) -> str:
+    if seconds is None:
+        return "-"
+    if seconds < 3600:
+        return "%dm" % int(seconds // 60)
+    if seconds < 86400:
+        return "%dh" % int(seconds // 3600)
+    return "%dd" % int(seconds // 86400)
+
+
+def cmd_doctor(args) -> int:
+    root = repo_root()
+    aw_init(root)
+    rows, fails, warns = [], [], []
+    branch = branch_of(root)
+    files = sorted(p for p in git_out("ls-files", cwd=root).splitlines() if p)
+
+    if branch == "workspace" and files == sorted(ROOT_FILES):
+        rows.append((OK, "workspace", "2 个跟踪文件"))
+    else:
+        rows.append((FAIL, "workspace", "%s / %d 个跟踪文件" % (branch, len(files))))
+        fails.append("workspace")
+
+    trees = worktrees(root)
+    nested = [e["path"].name for e in trees if e["path"] != root and e["path"].exists()
+              and e["path"].parent != root]
+    have = {e["path"].name for e in trees}
+    missing = [d for d in ("code", "BA", "Deploy") if d not in have]
+    if nested or missing:
+        rows.append((FAIL, "拓扑", "嵌套 %s / 缺 %s" % (nested, missing)))
+        fails.append("拓扑")
+    else:
+        rows.append((OK, "拓扑", "%d 个 worktree，全部平铺" % len(trees)))
+
+    claims = load_claims(root)
+    active = [c for c in claims if c.get("state") in CLAIM_STATES]
+    by_agent: dict[str, int] = {}
+    dead = 0
+    no_wt = 0
+    for c in active:
+        by_agent[c.get("agent_id", "?")] = by_agent.get(c.get("agent_id", "?"), 0) + 1
+        sess = read_json(aw_path(root, "sessions", "%s.json" % c.get("agent_id", "")), {})
+        if not _session_alive(sess):
+            dead += 1
+        if not (root / c.get("worktree", "")).exists():
+            no_wt += 1
+    multi = {a: n for a, n in by_agent.items() if n > 1}
+    if multi or no_wt:
+        rows.append((FAIL, "认领", "多领 %s / 缺 worktree %d" % (multi, no_wt)))
+        fails.append("认领")
+    elif dead:
+        rows.append((WARN, "认领", "%d active，其中 %d 个会话已退出" % (len(active), dead)))
+        warns.append("认领")
+    else:
+        rows.append((OK, "认领", "%d active，%d 个 agent" % (len(active), len(by_agent))))
+
+    queue = load_queue(root)
+    ages = [_age_seconds(q.get("added_at")) for q in queue]
+    oldest = max([a for a in ages if a is not None], default=None)
+    row = "队列 %d（最老 %s）" % (len(queue), _fmt_age(oldest))
+    if queue and oldest and oldest > 3 * 86400:
+        rows.append((WARN, "队列", row + "，积压超过 3 天"))
+        warns.append("队列")
+    else:
+        rows.append((OK, "队列", row))
+
+    contracts = load_contracts(root)
+    if contracts:
+        features = load_feature_pins(root)
+        bad = 0
+        for c in contracts:
+            if c.get("error"):
+                bad += 1
+                continue
+            for f in features:
+                if c["name"] in f["pins"] and f["pins"][c["name"]] < (c.get("current") or 0):
+                    bad += 1
+        if bad:
+            rows.append((FAIL, "契约", "%d 个契约，%d 个问题" % (len(contracts), bad)))
+            fails.append("契约")
+        else:
+            rows.append((OK, "契约", "%d 个契约，pin 一致" % len(contracts)))
+
+    roster = load_roster(root)
+    if roster:
+        active_planners = [a for a in roster
+                           if a.get("role") == "planner" and a.get("status", "active") == "active"]
+        mode = "team" if active_planners else "solo"
+        bas = [a for a in roster if a.get("role") == "ba" and a.get("status", "active") == "active"]
+        if mode == "solo" and len(bas) > 1:
+            rows.append((WARN, "模式", "solo，但有 %d 个 BA" % len(bas)))
+            warns.append("模式")
+        else:
+            rows.append((OK, "模式", mode))
+
+    _table(["级别", "检查", "结果"], [[r[0], r[1], r[2]] for r in rows])
+    print("\n结论: %s" % ("%d FAIL / %d WARN" % (len(fails), len(warns))
+                         if fails or warns else "正常"))
+    return 1 if fails else 0
+
+
+def cmd_stats(args) -> int:
+    root = repo_root()
+    aw_init(root)
+    now = time.time()
+
+    claims = [c for c in load_claims(root) if c.get("state") in CLAIM_STATES]
+    by_agent: dict[str, int] = {}
+    claim_ages = []
+    for c in claims:
+        by_agent[c.get("agent_id", "?")] = by_agent.get(c.get("agent_id", "?"), 0) + 1
+        age = _age_seconds(c.get("claimed_at"))
+        if age is not None:
+            claim_ages.append(age)
+
+    queue = load_queue(root)
+    queue_ages = [a for a in (_age_seconds(q.get("added_at")) for q in queue) if a is not None]
+
+    sessions = []
+    for p in aw_path(root, "sessions").glob("*.json"):
+        data = read_json(p, {})
+        if data.get("agent_id"):
+            sessions.append(data)
+    alive = sum(1 for s in sessions if _session_alive(s))
+
+    messages = load_bus_messages(root, fetch=not args.no_fetch)
+    by_id = {m.get("id"): m for m in messages if m.get("id")}
+    ack_latency = []
+    for m in messages:
+        if m.get("type") == "contract-ack" and m.get("re") and m["re"] in by_id:
+            t0 = _dt.datetime.fromisoformat(by_id[m["re"]]["at"].replace("Z", "+00:00")).timestamp()
+            t1 = _dt.datetime.fromisoformat(m["at"].replace("Z", "+00:00")).timestamp()
+            if t1 >= t0:
+                ack_latency.append(t1 - t0)
+    ack_latency.sort()
+    median_ack = ack_latency[len(ack_latency) // 2] if ack_latency else None
+
+    data = {
+        "claims_active": len(claims),
+        "claims_by_agent": by_agent,
+        "oldest_claim_seconds": max(claim_ages) if claim_ages else None,
+        "queue_length": len(queue),
+        "oldest_queue_seconds": max(queue_ages) if queue_ages else None,
+        "sessions_total": len(sessions),
+        "sessions_alive": alive,
+        "messages_total": len(messages),
+        "ack_samples": len(ack_latency),
+        "ack_latency_median_seconds": median_ack,
+        "worktrees": len(worktrees(root)),
+    }
+    if args.json:
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return 0
+    _table(["指标", "值"], [
+        ["active claims", data["claims_active"]],
+        ["oldest claim", _fmt_age(data["oldest_claim_seconds"])],
+        ["queue", "%d（最老 %s）" % (data["queue_length"], _fmt_age(data["oldest_queue_seconds"]))],
+        ["sessions", "%d / %d alive" % (data["sessions_alive"], data["sessions_total"])],
+        ["messages", data["messages_total"]],
+        ["ack median", _fmt_age(data["ack_latency_median_seconds"]) if data["ack_samples"] else "-"],
+        ["worktrees", data["worktrees"]],
+    ])
+    return 0
+
+
 # ---------------------------------------------------------------- mcp setup
 
 MCP_SERVER = Path(__file__).resolve().parent / "aw_mcp.py"
@@ -2487,7 +2711,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_agent = sub.add_parser("agent", help="查看/绑定当前 agent 身份")
     p_agent.add_argument("action",
                          choices=["whoami", "check", "bind", "unbind", "register", "roster",
-                                  "activate", "deactivate", "exit", "publish", "token"],
+                                  "activate", "deactivate", "exit", "publish", "token", "bootstrap"],
                          nargs="?", default="whoami")
     p_agent.add_argument("name", nargs="?", default="")
     p_agent.add_argument("--force", action="store_true", help="bind 强制改绑 / exit 强制退出")
@@ -2499,6 +2723,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_agent.add_argument("--token", default="", help="register 时指定 token（启用校验）")
     p_agent.add_argument("--issue-token", action="store_true", help="register 时自动生成 token")
     p_agent.set_defaults(func=cmd_agent)
+
+    p_doctor = sub.add_parser("doctor", help="一页巡检：workspace/拓扑/认领/队列/契约")
+    p_doctor.set_defaults(func=cmd_doctor)
+
+    p_stats = sub.add_parser("stats", help="运营指标（JSON / 表格）")
+    p_stats.add_argument("--json", action="store_true")
+    p_stats.add_argument("--no-fetch", action="store_true")
+    p_stats.set_defaults(func=cmd_stats)
 
     p_mcp = sub.add_parser("mcp", help="MCP 客户端配置：status / install / print")
     p_mcp.add_argument("action", choices=["status", "install", "ensure", "print"])

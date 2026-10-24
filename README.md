@@ -86,6 +86,8 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 | `aw.py upgrade` | 旧项目升级检查：补什么、清什么、改什么（只读） |
 | `aw.py msg` | BA 间消息：空 commit 走 `bus` 分支，带收件人与 ack |
 | `aw.py contract check` | 契约一致性：pin 落后、consumer 未声明、变更未 ack |
+| `aw.py doctor` | 一页巡检：workspace、拓扑、认领、队列、契约、模式 |
+| `aw.py stats` | 运营指标（JSON / 表格） |
 | `aw.py agent bind/roster/exit` | 终端绑定身份、维护名册、退出会话 |
 | `aw_mcp.py` | stdio MCP 适配层：每个 agent 一个进程，工具即 CLI |
 
