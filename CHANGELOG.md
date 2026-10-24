@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.20.1] - 2026-10-24
+
+### 文档：三个角色改为 MCP 工具调用
+
+- `roles/ba.md`、`roles/planner.md`、`roles/notifier.md` 的命令示例
+  从 `aw.py xxx` 改为 `工具名 {参数}` 形式
+- 覆盖 claim / msg / queue / contract / agent / audit / doctor / stats 全部调用
+- 唯一保留的 CLI：`agent register --issue-token`（bootstrap / token 是人类的系统外动作）
+- 每个文件顶部注明：agent 不要 shell 调 `aw.py`，CLI 等价命令见 mcp.md 对照表
+
 ## [1.20.0] - 2026-10-24
 
 ### MCP 工具面补齐 + 移除内置 bus-report

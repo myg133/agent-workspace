@@ -14,13 +14,15 @@
 
 ## 2. 每次启动必做
 
-```bash
-cd <repo-root>/BA
-git pull --rebase origin demand
-python <skill>/scripts/aw.py audit          # 只读巡检，输出表格
+> 本角色通过 MCP 调用工具，示例写作 `工具名 {参数}`。
+> CLI 等价命令见 `references/global/mcp.md`；agent 不要 shell 调 `aw.py`。
+
+```text
+git pull --rebase origin demand   # git 仍用命令行
+audit {}
 ```
 
-巡检项（`aw.py audit` 已覆盖，人工只需看结论）：
+巡检项（`audit` 已覆盖，人工只需看结论）：
 
 1. workspace 分支是否仍只跟踪 2 个文件；
 2. worktree 拓扑是否合规（无中间层、无嵌套）；
@@ -35,7 +37,7 @@ python <skill>/scripts/aw.py audit          # 只读巡检，输出表格
 ```text
 1. 与用户对齐：目标、边界、验收标准（不懂就先派 Explore 摸底）
 2. 读 BA/.ba/session.md，没有则生成 session_id
-3. 认领编号：aw.py next-req → 写 req-registry.md → commit+push
+3. 认领编号：next_req {} → 写 req-registry.md → commit+push
 4. 建目录：demands/REQ-xxx-{slug}/（你在 BA/ 里，相对路径即可）
    demand.md（模板 demand.md.tpl）
    acceptance.md（模板 acceptance.md.tpl，每条 AC 可测）
@@ -48,11 +50,11 @@ python <skill>/scripts/aw.py audit          # 只读巡检，输出表格
 
 **不要手工 `git worktree add`。** 认领是唯一入口，worktree 是它的副产物。
 
-```bash
-# AW_AGENT_ID 在启动时注入，整个会话不变
-export AW_AGENT_ID=ba-slot-1
-python <skill>/scripts/aw.py claim next
+```text
+claim_next {}
 ```
+
+身份来自 MCP 调用的 `agent_id` + `token`（桌面端每次带；终端启动可继承 `AW_AGENT_ID`）。
 
 输出只有几种，按返回值分支：
 
@@ -69,14 +71,14 @@ python <skill>/scripts/aw.py claim next
 
 配套命令：
 
-```bash
-aw.py claim whoami                 # 我是谁、我拿着什么
-aw.py claim list                   # 谁在做什么
-aw.py claim release REQ-003        # 交回（worktree 保留）
-aw.py claim release REQ-003 --remove-worktree   # 交回并回收
-aw.py claim doctor [--repair]      # 查一人多单 / 死会话 / 孤儿 worktree
-aw.py queue add REQ-004 --title "..."   # 入队
-aw.py queue sync                   # 从 BA/demands 扫"已就绪"
+```text
+agent_whoami {}
+claim_list {}
+claim_release {"req": "REQ-003"}
+claim_release {"req": "REQ-003", "remove_worktree": true}
+claim_doctor {"repair": false}
+queue_add {"req": "REQ-004", "title": "..."}
+queue_sync {}
 ```
 
 > `BA/dispatch/req-registry.md` 和 `agent-registry.md` 现在是**只读快照**，
@@ -86,12 +88,13 @@ aw.py queue sync                   # 从 BA/demands 扫"已就绪"
 
 消息只走 `bus` 分支的空 commit，不进 demand：
 
-```bash
-aw.py msg send --to pcB-ba-1 --type contract-change \
-  --contract user-api --version 3 --body "增加 mfaToken" --ref "BA/contracts/user-api/v3.md"
-aw.py msg inbox          # 只显示发给我的增量
-aw.py msg list --all     # 看全队，输出会标 → me / → 别人
-aw.py msg ack <id> --ok  # 契约回执
+```text
+msg_send {"to": "pcB-ba-1", "type": "contract-change",
+          "contract": "user-api", "version": "3",
+          "body": "增加 mfaToken", "ref": "BA/contracts/user-api/v3.md"}
+msg_inbox {}
+msg_list {"all": true}
+msg_ack {"id": "<id>"}
 ```
 
 同步点：**认领前、派单前、合并前、完成时**各读一次 inbox。
@@ -134,9 +137,8 @@ git push origin demand
 
 ## 6. 回收
 
-```bash
-cd <repo-root>
-python <skill>/scripts/aw.py claim release REQ-003 --remove-worktree
+```text
+claim_release {"req": "REQ-003", "remove_worktree": true}
 git branch -d feature/REQ-003
 git push origin --delete feature/REQ-003
 ```

@@ -1,5 +1,9 @@
 # Planner（总规划 / 设计 / 协调）
 
+> 本角色通过 MCP 调用工具，示例写作 `工具名 {参数}`。
+> CLI 等价命令见 `references/global/mcp.md`；agent 不要 shell 调 `aw.py`。
+> 例外：`bootstrap` / `token` 是人类的运维动作，只能 CLI。
+
 ## 0. 启用（含第一个 Planner）
 
 Planner 不是常驻服务，就是一个以 `planner` 角色启动的 agent。
@@ -8,13 +12,17 @@ Planner 不是常驻服务，就是一个以 `planner` 角色启动的 agent。
 
 `agent register` 本身不需要身份，所以名册为空时也能执行：
 
-```bash
-cd BA
+```text
+# 人类执行，仅 CLI（bootstrap 需要系统外信任）
 aw.py agent register planner-1 --role planner --issue-token
 # REGISTERED planner-1 (planner)
 # TOKEN planner-1 3f9c...
+```
 
-aw.py agent publish        # 推送名册到 demand
+之后的发布用 MCP：
+
+```text
+agent_publish {}
 ```
 
 启动 Planner 的进程：
@@ -29,8 +37,8 @@ MCP 模式下则每次调用带 `agent_id` + `token`。
 
 验证：
 
-```bash
-aw.py agent roster
+```text
+agent_roster {}
 # mode: team（Planner: planner-1）
 ```
 
@@ -48,7 +56,7 @@ mode: solo（没有 active Planner；BA 可代行规划）
 规则：
 
 - BA 可以代行规划，写 `BA/plan/`（这是唯一例外）；
-- 不需要队列竞争，直接 `aw.py claim take REQ-xxx`；
+- 不需要队列竞争，直接 `claim_take {"req": "REQ-xxx"}`；
 - 一旦登记了 active Planner，BA **停止写** `plan/`，交回规划权。
 
 ### 0.3 从 solo 切到 team
@@ -101,7 +109,7 @@ BA/
 
 | 频率 | 动作 |
 |------|------|
-| 每周 | 更新 `roadmap.md` / `queue-policy.md`；跑 `aw.py claim list` 与 `audit` 看容量 |
+| 每周 | 更新 `roadmap.md` / `queue-policy.md`；跑 `claim_list {}` 与 `audit {}` 看容量 |
 | 每日 | 读 bus 摘要（可让 Notifier 代读），清 blocker，必要时调序 |
 | 里程碑 | 复盘 ADR：哪些决策被推翻、为什么 |
 | 随时 | 跨 BA 冲突升级时拍板，并落 ADR |
@@ -110,12 +118,12 @@ BA/
 
 `BA/plan/agents.json` 是"谁有资格收消息"的唯一依据，由 Planner 维护：
 
-```bash
-aw.py agent register pcA-ba-1 --role ba
-aw.py agent register pcB-ba-2 --role ba
-aw.py agent roster                 # 对照本地会话看谁真正在线
-aw.py agent deactivate pcC-ba-2    # 长期离岗
-aw.py agent publish                # 推送到 demand，其他机器可见
+```text
+agent_register {"name": "pcA-ba-1", "role": "ba"}   # 需带 Planner token
+agent_register {"name": "pcB-ba-2", "role": "ba"}
+agent_roster {}                                     # 对照本地会话看谁在线
+agent_deactivate {"name": "pcC-ba-2"}               # 长期离岗
+agent_publish {}                                    # 推送到 demand，其他机器可见
 ```
 
 规则：
@@ -144,12 +152,16 @@ aw.py agent publish                # 推送到 demand，其他机器可见
 
 没有 Planner 专属命令，用同一套：
 
-```bash
-aw.py --agent pcA-planner claim list      # 看谁在做什么
-aw.py --agent pcA-planner contract check  # 看契约是否对齐
-aw.py --agent pcA-planner audit           # 看拓扑与僵尸
-aw.py --agent pcA-planner msg inbox       # 看跨 BA 消息
-aw.py --agent pcA-planner msg send --to role:ba --type decision --body "..."
+所有调用都带 `agent_id` 与 `token`：
+
+```text
+claim_list {}
+contract_check {}
+audit {}
+msg_inbox {}
+msg_send {"to": "role:ba", "type": "decision", "body": "..."}
+doctor {}
+stats {}
 ```
 
 ## 8. 8 个 BA 的容量管理

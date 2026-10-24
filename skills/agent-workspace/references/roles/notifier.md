@@ -17,26 +17,27 @@ BA 不会主动读 bus。靠"记得去读"是不可靠的，所以拆成两层�
 |----|----|
 | 生命周期 | 一次性：spawn → 读 → 报告 → 退出 |
 | 写入能力 | **无** |
-| 可执行命令 | `msg inbox --json`、`msg show <id>`、`msg list --all` |
-| 禁止命令 | `msg send` / `msg ack` / `msg flush` / `claim` / `git` / 任何写文件 |
+| 可用 MCP 工具 | `msg_inbox`、`msg_show`、`msg_list` |
+| 禁止 | `msg_send` / `msg_ack` / `msg_flush` / `claim_*` / `git` / 任何写文件 |
 | 输出 | 结构化摘要，不含处置动作 |
 
 ## 3. 硬限制（写进 prompt）
 
 ```text
-你是 Notifier，只读。允许的命令只有：
-  aw.py --agent <me> msg inbox --json --no-advance
-  aw.py --agent <me> msg show <id>
-  aw.py --agent <me> msg list --all --json
-禁止：msg send / ack / flush、claim、git、写文件、改状态、代替 BA 回复。
-读消息必须带 --no-advance（不推进游标）——你只读，不消费。
+你是 Notifier，只读。允许的 MCP 工具只有：
+  msg_inbox {"no_advance": true, "json": true}
+  msg_show  {"id": "<id>"}
+  msg_list  {"all": true}
+
+禁止：msg_send / msg_ack / msg_flush / claim_* / git / 写文件 / 改状态 / 代替 BA 回复。
+msg_inbox 必须带 no_advance: true（不推进已读）——你只读，不消费。
 你只负责"把消息整理出来"，任何决策交回 BA。
 ```
 
 > 光靠 prompt 不够。落地时还要在平台侧给这个子 agent **只读沙箱**（不挂 write_roots、不开放写工具）。
 
-**bus 写权限只给 BA / Planner**：Notifier 可以 `msg inbox` / `msg wait` / `msg show`，
-但 `msg send` / `msg ack` 会被工具直接拒绝（角色不是 ba/planner）。
+**bus 写权限只给 BA / Planner**：Notifier 可以 `msg_inbox` / `msg_wait` / `msg_show`，
+但 `msg_send` / `msg_ack` 会被工具直接拒绝（角色不是 ba/planner）。
 
 ## 4. 输出格式
 
@@ -66,8 +67,8 @@ BA 不会主动读 bus。靠"记得去读"是不可靠的，所以拆成两层�
 
 拿到摘要后，BA 自己决定：
 
-- 要不要 `msg ack`；
-- 要不要看 `msg show <id>` 的全文；
+- 要不要 `msg_ack`；
+- 要不要看 `msg_show {"id": "<id>"}` 的全文；
 - 要不要调整当前任务。
 
 ## 6. 触发时机
@@ -81,9 +82,9 @@ BA 不会主动读 bus。靠"记得去读"是不可靠的，所以拆成两层�
 
 ## 6.1 游标：读但不算已读
 
-Notifier 用 `--no-advance`，所以它跑多少次都不会消耗消息。
-游标只由 BA 自己跑 `msg inbox` 时推进——这样即使 Notifier 中途失败，消息也不会丢。
-代价：BA 看到摘要后仍需跑一次 `msg inbox`（可加 `--limit 0` 只看计数）来放行门禁。
+Notifier 用 `no_advance: true`，所以它跑多少次都不会消耗消息。
+已读只由 BA 自己调 `msg_inbox` 时推进——这样即使 Notifier 中途失败，消息也不会丢。
+代价：BA 看到摘要后仍需调一次 `msg_inbox`（可加 `{"limit": 0}` 只看计数）来放行门禁。
 
 ## 7. 为什么不做长驻
 
