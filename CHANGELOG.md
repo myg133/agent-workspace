@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.19.1] - 2026-10-24
+
+### 文档：消息面板 bus-report
+
+- 新增 `references/global/bus-report.md`：三种形态（build / serve / watch）、
+  `--remote` 零 clone、产出文件、时间口径、只读边界
+- SKILL 路由表新增「看消息 / 沟通报告」
+- `aw.py stats` 末尾提示用 bus-report 看消息
+- 不重复实现 HTML 面板：数字归 `stats`，消息归 `bus-report`
+
 ## [1.19.0] - 2026-10-24
 
 ### 新增：doctor / stats / CI 矩阵 / 抢占式 bootstrap

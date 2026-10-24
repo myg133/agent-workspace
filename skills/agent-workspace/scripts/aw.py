@@ -2141,11 +2141,7 @@ def cmd_doctor(args) -> int:
     return 1 if fails else 0
 
 
-def cmd_stats(args) -> int:
-    root = repo_root()
-    aw_init(root)
-    now = time.time()
-
+def collect_stats(root: Path, no_fetch: bool = False) -> tuple[dict, list[dict]]:
     claims = [c for c in load_claims(root) if c.get("state") in CLAIM_STATES]
     by_agent: dict[str, int] = {}
     claim_ages = []
@@ -2165,7 +2161,7 @@ def cmd_stats(args) -> int:
             sessions.append(data)
     alive = sum(1 for s in sessions if _session_alive(s))
 
-    messages = load_bus_messages(root, fetch=not args.no_fetch)
+    messages = load_bus_messages(root, fetch=not no_fetch)
     by_id = {m.get("id"): m for m in messages if m.get("id")}
     ack_latency = []
     for m in messages:
@@ -2190,9 +2186,18 @@ def cmd_stats(args) -> int:
         "ack_latency_median_seconds": median_ack,
         "worktrees": len(worktrees(root)),
     }
+    return data, messages
+
+
+def cmd_stats(args) -> int:
+    root = repo_root()
+    aw_init(root)
+    data, _messages = collect_stats(root, args.no_fetch)
+
     if args.json:
         print(json.dumps(data, ensure_ascii=False, indent=2))
         return 0
+
     _table(["指标", "值"], [
         ["active claims", data["claims_active"]],
         ["oldest claim", _fmt_age(data["oldest_claim_seconds"])],
@@ -2202,6 +2207,7 @@ def cmd_stats(args) -> int:
         ["ack median", _fmt_age(data["ack_latency_median_seconds"]) if data["ack_samples"] else "-"],
         ["worktrees", data["worktrees"]],
     ])
+    print("\n消息可视化：用 bus-report（见 references/global/bus-report.md）")
     return 0
 
 
