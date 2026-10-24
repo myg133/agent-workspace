@@ -1,5 +1,63 @@
 # Planner（总规划 / 设计 / 协调）
 
+## 0. 启用（含第一个 Planner）
+
+Planner 不是常驻服务，就是一个以 `planner` 角色启动的 agent。
+
+### 0.1 第一个 Planner 怎么注册
+
+`agent register` 本身不需要身份，所以名册为空时也能执行：
+
+```bash
+cd BA
+aw.py agent register planner-1 --role planner --issue-token
+# REGISTERED planner-1 (planner)
+# TOKEN planner-1 3f9c...
+
+aw.py agent publish        # 推送名册到 demand
+```
+
+启动 Planner 的进程：
+
+```bash
+export AW_AGENT_ID=planner-1
+export AW_ROLE=planner
+export AW_AGENT_TOKEN=3f9c...
+```
+
+MCP 模式下则每次调用带 `agent_id` + `token`。
+
+验证：
+
+```bash
+aw.py agent roster
+# mode: team（Planner: planner-1）
+```
+
+> 如果以后给 `register` 加了鉴权，bootstrap 规则应当是：
+> **名册为空时允许注册第一个 planner**，否则会死锁。
+
+### 0.2 单人 / 单 BA 模式
+
+大部分时间只有一个 BA 在本地开发，**不需要 Planner**：
+
+```text
+mode: solo（没有 active Planner；BA 可代行规划）
+```
+
+规则：
+
+- BA 可以代行规划，写 `BA/plan/`（这是唯一例外）；
+- 不需要队列竞争，直接 `aw.py claim take REQ-xxx`；
+- 一旦登记了 active Planner，BA **停止写** `plan/`，交回规划权。
+
+### 0.3 从 solo 切到 team
+
+1. 注册 Planner + `agent publish`；
+2. Planner 接管 `plan/roadmap.md`、`queue-policy.md`；
+3. BA 不再写 `plan/`，只从队列 `claim next`；
+4. 需要多 BA 时再拆槽位（pcA-ba-2 …）。
+
 ## 1. 定位
 
 Planner 在 BA 之上，回答三个问题：**做什么、先做什么、边界在哪**。

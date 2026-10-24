@@ -1325,9 +1325,18 @@ def cmd_agent(args) -> int:
                 "host": a.get("host", ""),
                 "session_alive": bool(_session_alive(sess)),
             })
+        active_planners = [x for x in payload
+                           if x["role"] == "planner" and x["status"] == "active"]
+        mode = "team" if active_planners else "solo"
         if getattr(args, "json", False):
-            print(json.dumps({"agents": payload}, ensure_ascii=False, indent=2))
+            print(json.dumps({"mode": mode, "agents": payload}, ensure_ascii=False, indent=2))
         else:
+            if mode == "solo":
+                print("mode: solo（没有 active Planner；BA 可代行规划）")
+                if len([x for x in payload if x["role"] == "ba" and x["status"] == "active"]) > 1:
+                    print("提示: 已有多个 BA，但没有 Planner；建议登记一个 planner 或指定一个 BA 兼规划。")
+            else:
+                print("mode: team（Planner: %s）" % ", ".join(x["id"] for x in active_planners))
             _table(["agent", "role", "status", "host", "session"],
                    [[x["id"], x["role"], x["status"], x["host"] or "-",
                      "alive" if x["session_alive"] else "-"] for x in payload])

@@ -116,6 +116,15 @@ class WorkspaceCase(unittest.TestCase):
         finally:
             self._stop_mcp(proc)
 
+    def test_roster_mode_solo_and_team(self):
+        run(["agent", "register", "ba-1", "--role", "ba"], self.repo / "BA", agent=None)
+        solo = run(["agent", "roster", "--json"], self.repo, agent=None)
+        self.assertEqual(json.loads(solo.stdout)["mode"], "solo")
+        run(["agent", "register", "planner-1", "--role", "planner"],
+            self.repo / "BA", agent=None)
+        team = run(["agent", "roster", "--json"], self.repo, agent=None)
+        self.assertEqual(json.loads(team.stdout)["mode"], "team")
+
     def test_agent_register_issues_token(self):
         out = run(["agent", "register", "ba-1", "--issue-token"], self.repo / "BA", agent=None)
         self.assertEqual(out.returncode, 0, out.stderr)

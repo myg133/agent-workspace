@@ -2,6 +2,17 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.18.1] - 2026-10-24
+
+### 文档：Planner 的启用与单人模式
+
+- `planner.md` 新增 §0：
+  - 第一个 Planner 的注册方式（名册为空也能注册）
+  - 单人 / 单 BA 模式：没有 active Planner 时 BA 可代行规划、直接 `claim take`
+  - 从 solo 切到 team 的四步
+- `agent roster` 增加 `mode: solo|team` 判定；多个 BA 但没有 Planner 时给出提示
+- `agent roster --json` 返回 `{"mode": ..., "agents": [...]}`
+
 ## [1.18.0] - 2026-10-24
 
 ### 新增：agent 令牌，防止 MCP 冒名
