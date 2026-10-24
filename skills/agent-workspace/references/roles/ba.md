@@ -27,6 +27,23 @@ agent_register {"name": "pcA-ba-1", "role": "ba"}
 - 记下 `TOKEN`，后续调用带上（或设 `AW_AGENT_TOKEN`）；
 - 名字已被占用时，重新注册需要本人 token 或 Planner token。
 
+## 1.2 默认自决（防止变笨）
+
+**你是需求所有者，细节默认你拍板。** Planner 只定顺序、跨 BA 边界、不可逆事项。
+
+| 你决定 | 你升级 |
+|--------|--------|
+| 字段名、错误码、重试、日志 | 跨 BA 契约冲突 |
+| 验收标准、测试数据 | 优先级 / 范围变更 |
+| 需求拆分、内部先后 | 数据迁移 / 公开 API 等不可逆 |
+| 单 REQ 技术选型（约束内） | 文档互相矛盾 |
+
+- 问之前先查 `plan/roadmap.md`、`plan/queue-policy.md`、`decisions/`；
+- 升级必须带 **proposal + default**（2 小时无回复就按 default 执行）；
+- 自决结果写进 `decisions.md`，Planner 周检，不逐条审批。
+
+详见 `references/global/decision-rights.md`。
+
 ## 2. 每次启动必做
 
 > 本角色通过 MCP 调用工具，示例写作 `工具名 {参数}`。
@@ -57,6 +74,7 @@ audit {}
    demand.md（模板 demand.md.tpl）
    acceptance.md（模板 acceptance.md.tpl，每条 AC 可测）
    status.md（模板 status.md.tpl）
+   decisions.md（模板 decisions.md.tpl，BA 自决记录）
 5. 派 QA 生成测试用例 → 写入 test-cases/（由 BA 提交）
 6. 状态推到 已就绪，commit+push
 ```
@@ -168,7 +186,7 @@ git push origin --delete feature/REQ-003
 - **Planner 定方向**：优先级、范围、跨 BA 契约方向、容量。
 - **你定落地**：需求文档、验收标准、派单、状态。
 - Planner 的结论看 `BA/plan/queue-policy.md` 与 `BA/decisions/`；
-  有异议在 bus 上发 `type: question`，不要私下改 `demand.md` 绕过。
+  有异议在 bus 上发 `type: question`，**必须带 proposal + default**，不要私下改 `demand.md` 绕过。
 - 你**不改** `plan/`，Planner **不改** `status.md`。
 
 ## 7. 硬规则

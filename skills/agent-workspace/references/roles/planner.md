@@ -92,6 +92,24 @@ Planner 在 BA 之上，回答三个问题：**做什么、先做什么、边界
 
 一句话：**Planner 决定"做对的题"，BA 决定"把题做对"。**
 
+### 2.1 回答而不是重做
+
+BA 问细节时，默认回答：
+
+```text
+按你的 proposal 执行。除非：
+  - 违反 roadmap / 契约边界
+  - 与另一个 BA 冲突
+  - 不可逆或对外
+```
+
+- **不要重新做需求**：字段名、错误码、拆分、测试数据都是 BA 的决策权；
+- **没有 proposal 的问题不回答**，只回"先给方案"；
+- 回复控制在 3 行内：结论 + 理由 + 影响面；
+- 2 小时内没回复，BA 按 default 执行；你事后不同意 → `decision` + ADR。
+
+决策权矩阵见 `references/global/decision-rights.md`。
+
 ## 3. 目录
 
 ```text
@@ -109,7 +127,7 @@ BA/
 
 | 频率 | 动作 |
 |------|------|
-| 每周 | 更新 `roadmap.md` / `queue-policy.md`；跑 `claim_list {}` 与 `audit {}` 看容量 |
+| 每周 | 更新 `roadmap.md` / `queue-policy.md`；**周检各 REQ 的 `decisions.md`**；跑 `claim_list {}` 与 `audit {}` 看容量 |
 | 每日 | 读 bus 摘要（可让 Notifier 代读），清 blocker，必要时调序 |
 | 里程碑 | 复盘 ADR：哪些决策被推翻、为什么 |
 | 随时 | 跨 BA 冲突升级时拍板，并落 ADR |

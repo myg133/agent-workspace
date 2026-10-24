@@ -2,6 +2,20 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.22.0] - 2026-10-24
+
+### 新增：决策权与升级协议（解决 BA 过度依赖 Planner）
+
+- 新增 `references/global/decision-rights.md`：
+  - 决策权矩阵：细节归 BA、顺序归 Planner、范围归用户
+  - 只有四种情况可以升级：跨 BA 冲突 / 优先级 / 不可逆 / 文档矛盾
+  - 提问必须带 `proposal + default`；没有提案不回答
+  - 沉默即同意：Planner 2 小时不回复，BA 按 default 执行
+  - 每个 REQ 的 `decisions.md` + Planner 周检
+- `roles/ba.md` 新增「默认自决」；需求目录增加 `decisions.md`
+- `roles/planner.md` 新增「回答而不是重做」：默认批准 BA 的提案，只在四种情况否决
+- 模板：`assets/templates/decisions.md.tpl`
+
 ## [1.21.0] - 2026-10-24
 
 ### 改为 BA 自注册 + Planner 审批
