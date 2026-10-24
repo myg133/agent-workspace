@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+<defs>
+  <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L9,3 z" fill="#8b98b8"/>
+  </marker>
+  <marker id="r" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L9,3 z" fill="#ff8f8f"/>
+  </marker>
+  <radialGradient id="glow" cx="12%" cy="0%" r="60%">
+    <stop offset="0%" stop-color="#3ee0c2" stop-opacity=".10"/>
+    <stop offset="100%" stop-color="#3ee0c2" stop-opacity="0"/>
+  </radialGradient>
+</defs>
+<rect width="1600" height="1000" fill="#070b16"/>
+<rect width="1600" height="1000" fill="url(#glow)"/>
+
+<text x="60" y="64" fill="#e9eefc" font-size="30" font-weight="700">三个角色，一条总线</text>
+<text x="60" y="94" fill="#8b98b8" font-size="14">Planner 定方向 · BA 执行 · Notifier 只读；Dev/QA 等子 agent 只跟自己的 BA 交互</text>
+
+<g font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif">
+  <rect x="60" y="120" width="10" height="10" rx="2" fill="#9d8cff"/><text x="80" y="130" fill="#9d8cff" font-size="15" font-weight="600">PLANNER</text>
+  <rect x="560" y="120" width="10" height="10" rx="2" fill="#3ee0c2"/><text x="580" y="130" fill="#3ee0c2" font-size="15" font-weight="600">BA</text>
+  <rect x="1120" y="120" width="10" height="10" rx="2" fill="#ffb86b"/><text x="1140" y="130" fill="#ffb86b" font-size="15" font-weight="600">NOTIFIER</text>
+
+  
+<g>
+  <rect x="60" y="160" width="400" height="70" rx="12" fill="#0e1526" stroke="#9d8cff40"/>
+  <rect x="60" y="160" width="4" height="70" rx="2" fill="#9d8cff"/>
+  <text x="80" y="188" fill="#e9eefc" font-size="16" font-weight="600">① 抢占 bootstrap</text>
+  <text x="80" y="210" fill="#8b98b8" font-size="12.5">名册为空时执行一次，拿 Planner token</text>
+</g>
+  
+<g>
+  <rect x="60" y="260" width="400" height="70" rx="12" fill="#0e1526" stroke="#9d8cff40"/>
+  <rect x="60" y="260" width="4" height="70" rx="2" fill="#9d8cff"/>
+  <text x="80" y="288" fill="#e9eefc" font-size="16" font-weight="600">② 定方向</text>
+  <text x="80" y="310" fill="#8b98b8" font-size="12.5">roadmap · queue-policy · ADR</text>
+</g>
+  
+<g>
+  <rect x="60" y="360" width="400" height="70" rx="12" fill="#0e1526" stroke="#9d8cff40"/>
+  <rect x="60" y="360" width="4" height="70" rx="2" fill="#9d8cff"/>
+  <text x="80" y="388" fill="#e9eefc" font-size="16" font-weight="600">③ 审批名册</text>
+  <text x="80" y="410" fill="#8b98b8" font-size="12.5">agent_activate · agent_publish</text>
+</g>
+  
+<g>
+  <rect x="60" y="460" width="400" height="70" rx="12" fill="#0e1526" stroke="#9d8cff40"/>
+  <rect x="60" y="460" width="4" height="70" rx="2" fill="#9d8cff"/>
+  <text x="80" y="488" fill="#e9eefc" font-size="16" font-weight="600">④ 发决策</text>
+  <text x="80" y="510" fill="#8b98b8" font-size="12.5">msg_send: decision / contract-change</text>
+</g>
+
+  
+<g>
+  <rect x="560" y="160" width="440" height="70" rx="12" fill="#0e1526" stroke="#3ee0c240"/>
+  <rect x="560" y="160" width="4" height="70" rx="2" fill="#3ee0c2"/>
+  <text x="580" y="188" fill="#e9eefc" font-size="16" font-weight="600">① 自注册</text>
+  <text x="580" y="210" fill="#8b98b8" font-size="12.5">agent_register → 拿到自己的 token</text>
+</g>
+  
+<g>
+  <rect x="560" y="260" width="440" height="70" rx="12" fill="#0e1526" stroke="#3ee0c240"/>
+  <rect x="560" y="260" width="4" height="70" rx="2" fill="#3ee0c2"/>
+  <text x="580" y="288" fill="#e9eefc" font-size="16" font-weight="600">② 等审批 / 直接可用</text>
+  <text x="580" y="310" fill="#8b98b8" font-size="12.5">team: pending → activate；solo: 直接 active</text>
+</g>
+  
+<g>
+  <rect x="560" y="360" width="440" height="70" rx="12" fill="#0e1526" stroke="#3ee0c240"/>
+  <rect x="560" y="360" width="4" height="70" rx="2" fill="#3ee0c2"/>
+  <text x="580" y="388" fill="#e9eefc" font-size="16" font-weight="600">③ 读消息</text>
+  <text x="580" y="410" fill="#8b98b8" font-size="12.5">msg_inbox，或让 Notifier 代读</text>
+</g>
+  <g>
+    <polygon points="780,435 890,480 780,525 670,480" fill="#0e1526" stroke="#3ee0c240"/>
+    <text x="780" y="485" text-anchor="middle" fill="#e9eefc" font-size="14">还有未读？</text>
+    <text x="636" y="505" text-anchor="middle" fill="#ff8f8f" font-size="11">有 → 回 ③</text>
+    <text x="800" y="548" text-anchor="middle" fill="#8b98b8" font-size="11">无 → ⑤</text>
+  </g>
+  
+<g>
+  <rect x="560" y="560" width="440" height="70" rx="12" fill="#0e1526" stroke="#3ee0c240"/>
+  <rect x="560" y="560" width="4" height="70" rx="2" fill="#3ee0c2"/>
+  <text x="580" y="588" fill="#e9eefc" font-size="16" font-weight="600">④ claim_next</text>
+  <text x="580" y="610" fill="#8b98b8" font-size="12.5">建 worktree · WIP=1 · 未读门禁</text>
+</g>
+  
+<g>
+  <rect x="560" y="660" width="440" height="70" rx="12" fill="#0e1526" stroke="#3ee0c240"/>
+  <rect x="560" y="660" width="4" height="70" rx="2" fill="#3ee0c2"/>
+  <text x="580" y="688" fill="#e9eefc" font-size="16" font-weight="600">⑤ 派单 + 实现</text>
+  <text x="580" y="710" fill="#8b98b8" font-size="12.5">Dev / QA 直接对话，不走 bus</text>
+</g>
+  
+<g>
+  <rect x="560" y="760" width="440" height="70" rx="12" fill="#0e1526" stroke="#3ee0c240"/>
+  <rect x="560" y="760" width="4" height="70" rx="2" fill="#3ee0c2"/>
+  <text x="580" y="788" fill="#e9eefc" font-size="16" font-weight="600">⑥ 收尾</text>
+  <text x="580" y="810" fill="#8b98b8" font-size="12.5">status · contract_ack · claim_release</text>
+</g>
+
+  
+<g>
+  <rect x="1120" y="160" width="400" height="70" rx="12" fill="#0e1526" stroke="#ffb86b40"/>
+  <rect x="1120" y="160" width="4" height="70" rx="2" fill="#ffb86b"/>
+  <text x="1140" y="188" fill="#e9eefc" font-size="16" font-weight="600">① 被 BA spawn</text>
+  <text x="1140" y="210" fill="#8b98b8" font-size="12.5">一次性、只读、不处理</text>
+</g>
+  
+<g>
+  <rect x="1120" y="260" width="400" height="70" rx="12" fill="#0e1526" stroke="#ffb86b40"/>
+  <rect x="1120" y="260" width="4" height="70" rx="2" fill="#ffb86b"/>
+  <text x="1140" y="288" fill="#e9eefc" font-size="16" font-weight="600">② msg_inbox</text>
+  <text x="1140" y="310" fill="#8b98b8" font-size="12.5">no_advance: true（不消费）</text>
+</g>
+  
+<g>
+  <rect x="1120" y="360" width="400" height="70" rx="12" fill="#0e1526" stroke="#ffb86b40"/>
+  <rect x="1120" y="360" width="4" height="70" rx="2" fill="#ffb86b"/>
+  <text x="1140" y="388" fill="#e9eefc" font-size="16" font-weight="600">③ msg_show / msg_list</text>
+  <text x="1140" y="410" fill="#8b98b8" font-size="12.5">看全文 / 看全队</text>
+</g>
+  
+<g>
+  <rect x="1120" y="460" width="400" height="70" rx="12" fill="#0e1526" stroke="#ffb86b40"/>
+  <rect x="1120" y="460" width="4" height="70" rx="2" fill="#ffb86b"/>
+  <text x="1140" y="488" fill="#e9eefc" font-size="16" font-weight="600">④ 摘要交回 BA</text>
+  <text x="1140" y="510" fill="#8b98b8" font-size="12.5">不回复、不 ack、不决定</text>
+</g>
+
+  <rect x="560" y="860" width="440" height="80" rx="12" fill="#0e1526" stroke="#8b98b840"/>
+  <text x="580" y="892" fill="#e9eefc" font-size="15" font-weight="600">Dev / QA / Deploy / Explore</text>
+  <text x="580" y="916" fill="#8b98b8" font-size="12.5">由 BA 直接派单与收报；不发 bus</text>
+
+  <path d="M260,230 L260,260" fill="none" stroke="#6f7d9e" stroke-width="1.6"  marker-end="url(#a)"/>
+  <path d="M260,330 L260,360" fill="none" stroke="#6f7d9e" stroke-width="1.6"  marker-end="url(#a)"/>
+  <path d="M260,430 L260,460" fill="none" stroke="#6f7d9e" stroke-width="1.6"  marker-end="url(#a)"/>
+
+  <path d="M460,395 L510,395 L510,295 L560,295" fill="none" stroke="#6f7d9e" stroke-width="1.6"  marker-end="url(#a)"/>
+  <text x="466" y="382" fill="#9d8cff" font-size="11">activate</text>
+
+  <path d="M460,495 L530,495 L530,420 L560,420" fill="none" stroke="#6f7d9e" stroke-width="1.6" stroke-dasharray="6 6" marker-end="url(#a)"/>
+  <text x="492" y="512" fill="#8b98b8" font-size="11">bus</text>
+
+  <path d="M780,230 L780,260" fill="none" stroke="#6f7d9e" stroke-width="1.6"  marker-end="url(#a)"/>
+  <path d="M780,330 L780,360" fill="none" stroke="#6f7d9e" stroke-width="1.6"  marker-end="url(#a)"/>
+  <path d="M780,430 L780,435" fill="none" stroke="#6f7d9e" stroke-width="1.6"  marker-end="url(#a)"/>
+
+  <path d="M670,480 L620,480 L620,432" fill="none" stroke="#ff8f8f" stroke-width="1.4" marker-end="url(#r)"/>
+  <path d="M780,525 L780,560" fill="none" stroke="#6f7d9e" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M780,630 L780,660" fill="none" stroke="#6f7d9e" stroke-width="1.6"  marker-end="url(#a)"/>
+  <path d="M780,730 L780,760" fill="none" stroke="#6f7d9e" stroke-width="1.6"  marker-end="url(#a)"/>
+
+  <path d="M1000,795 L1040,795 L1040,595 L1000,595" fill="none" stroke="#8b98b8" stroke-width="1.6" stroke-dasharray="6 6" marker-end="url(#a)"/>
+  <text transform="rotate(-90 1052 700)" x="1052" y="700" text-anchor="middle" fill="#8b98b8" font-size="11">下一个</text>
+
+  <path d="M1000,395 L1060,395 L1060,195 L1120,195" fill="none" stroke="#ffb86b" stroke-width="1.6" stroke-dasharray="6 6" marker-end="url(#a)"/>
+  <text transform="rotate(-90 1050 300)" x="1050" y="300" text-anchor="middle" fill="#ffb86b" font-size="11">spawn</text>
+
+  <path d="M1120,495 L1090,495 L1090,410 L1000,410" fill="none" stroke="#ffb86b" stroke-width="1.6" stroke-dasharray="6 6" marker-end="url(#a)"/>
+  <text transform="rotate(-90 1102 455)" x="1102" y="455" text-anchor="middle" fill="#ffb86b" font-size="11">摘要</text>
+
+  <path d="M560,695 L520,695 L520,900 L560,900" fill="none" stroke="#3ee0c2" stroke-width="1.6" stroke-dasharray="6 6" marker-end="url(#a)"/>
+  <text transform="rotate(-90 512 800)" x="512" y="800" text-anchor="middle" fill="#3ee0c2" font-size="11">派单</text>
+
+  <path d="M560,925 L540,925 L540,715 L560,715" fill="none" stroke="#3ee0c2" stroke-width="1.6" stroke-dasharray="6 6" marker-end="url(#a)"/>
+  <text transform="rotate(-90 552 820)" x="552" y="820" text-anchor="middle" fill="#3ee0c2" font-size="11">回报</text>
+
+  <line x1="60" y1="965" x2="100" y2="965" stroke="#6f7d9e" stroke-width="1.6"/>
+  <text x="108" y="969" fill="#8b98b8" font-size="12">流程 / 调用</text>
+  <line x1="210" y1="965" x2="250" y2="965" stroke="#6f7d9e" stroke-width="1.6" stroke-dasharray="6 6"/>
+  <text x="258" y="969" fill="#8b98b8" font-size="12">消息 / bus</text>
+  <text x="380" y="969" fill="#8b98b8" font-size="12">bus 写权限仅 BA / Planner</text>
+</g>
+</svg>
