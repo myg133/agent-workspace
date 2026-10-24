@@ -524,7 +524,144 @@ aw.py mcp install --client claude|cursor|vscode
     </div>
   </section>
 
-  <!-- 9 前置条件 -->
+  <!-- 11 三角色 -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">协作</div>
+      <h2>三个角色，一条总线</h2>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 520" style="width:112%;margin-left:-6%;height:auto;display:block" font-family="PingFang SC, Microsoft YaHei, system-ui, sans-serif">
+<defs>
+  <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+    <path d="M0,0 L0,6 L8,3 z" fill="#8b98b8"/>
+  </marker>
+</defs>
+
+<rect x="20" y="12" width="9" height="9" rx="2" fill="#9d8cff"/><text x="37" y="21" fill="#9d8cff" font-size="14" font-weight="600">PLANNER</text>
+<rect x="440" y="12" width="9" height="9" rx="2" fill="#3ee0c2"/><text x="457" y="21" fill="#3ee0c2" font-size="14" font-weight="600">BA</text>
+<rect x="860" y="12" width="9" height="9" rx="2" fill="#ffb86b"/><text x="877" y="21" fill="#ffb86b" font-size="14" font-weight="600">NOTIFIER</text>
+
+
+<g>
+  <rect x="20" y="36" width="340" height="70" rx="10" fill="#0e1526" stroke="#9d8cff40"/>
+  <rect x="20" y="36" width="4" height="70" rx="2" fill="#9d8cff"/>
+  <text x="38" y="63" fill="#e9eefc" font-size="15" font-weight="600">① 抢占 bootstrap</text>
+  <text x="38" y="84" fill="#8b98b8" font-size="11.5">名册为空时一次 · 拿 Planner token</text>
+</g>
+
+<g>
+  <rect x="20" y="131" width="340" height="70" rx="10" fill="#0e1526" stroke="#9d8cff40"/>
+  <rect x="20" y="131" width="4" height="70" rx="2" fill="#9d8cff"/>
+  <text x="38" y="158" fill="#e9eefc" font-size="15" font-weight="600">② 定方向</text>
+  <text x="38" y="179" fill="#8b98b8" font-size="11.5">roadmap · queue-policy · ADR</text>
+</g>
+
+<g>
+  <rect x="20" y="226" width="340" height="70" rx="10" fill="#0e1526" stroke="#9d8cff40"/>
+  <rect x="20" y="226" width="4" height="70" rx="2" fill="#9d8cff"/>
+  <text x="38" y="253" fill="#e9eefc" font-size="15" font-weight="600">③ 审批名册</text>
+  <text x="38" y="274" fill="#8b98b8" font-size="11.5">agent_activate · agent_publish</text>
+</g>
+
+<g>
+  <rect x="20" y="321" width="340" height="70" rx="10" fill="#0e1526" stroke="#9d8cff40"/>
+  <rect x="20" y="321" width="4" height="70" rx="2" fill="#9d8cff"/>
+  <text x="38" y="348" fill="#e9eefc" font-size="15" font-weight="600">④ 发决策</text>
+  <text x="38" y="369" fill="#8b98b8" font-size="11.5">msg_send: decision / contract</text>
+</g>
+
+
+<g>
+  <rect x="440" y="36" width="340" height="70" rx="10" fill="#0e1526" stroke="#3ee0c240"/>
+  <rect x="440" y="36" width="4" height="70" rx="2" fill="#3ee0c2"/>
+  <text x="458" y="63" fill="#e9eefc" font-size="15" font-weight="600">① 自注册</text>
+  <text x="458" y="84" fill="#8b98b8" font-size="11.5">solo: active · team: pending</text>
+</g>
+
+<g>
+  <rect x="440" y="131" width="340" height="70" rx="10" fill="#0e1526" stroke="#3ee0c240"/>
+  <rect x="440" y="131" width="4" height="70" rx="2" fill="#3ee0c2"/>
+  <text x="458" y="158" fill="#e9eefc" font-size="15" font-weight="600">② 读消息</text>
+  <text x="458" y="179" fill="#8b98b8" font-size="11.5">msg_inbox / Notifier 摘要</text>
+</g>
+
+<g>
+  <rect x="440" y="226" width="340" height="70" rx="10" fill="#0e1526" stroke="#3ee0c240"/>
+  <rect x="440" y="226" width="4" height="70" rx="2" fill="#3ee0c2"/>
+  <text x="458" y="253" fill="#e9eefc" font-size="15" font-weight="600">③ claim_next</text>
+  <text x="458" y="274" fill="#8b98b8" font-size="11.5">worktree · WIP=1 · 未读门禁</text>
+</g>
+
+<g>
+  <rect x="440" y="321" width="340" height="70" rx="10" fill="#0e1526" stroke="#3ee0c240"/>
+  <rect x="440" y="321" width="4" height="70" rx="2" fill="#3ee0c2"/>
+  <text x="458" y="348" fill="#e9eefc" font-size="15" font-weight="600">④ 派单 → 收尾</text>
+  <text x="458" y="369" fill="#8b98b8" font-size="11.5">Dev/QA 直接 · claim_release</text>
+</g>
+
+
+<g>
+  <rect x="860" y="36" width="340" height="70" rx="10" fill="#0e1526" stroke="#ffb86b40"/>
+  <rect x="860" y="36" width="4" height="70" rx="2" fill="#ffb86b"/>
+  <text x="878" y="63" fill="#e9eefc" font-size="15" font-weight="600">① 被 spawn</text>
+  <text x="878" y="84" fill="#8b98b8" font-size="11.5">一次性 · 只读</text>
+</g>
+
+<g>
+  <rect x="860" y="131" width="340" height="70" rx="10" fill="#0e1526" stroke="#ffb86b40"/>
+  <rect x="860" y="131" width="4" height="70" rx="2" fill="#ffb86b"/>
+  <text x="878" y="158" fill="#e9eefc" font-size="15" font-weight="600">② msg_inbox</text>
+  <text x="878" y="179" fill="#8b98b8" font-size="11.5">no_advance: true</text>
+</g>
+
+<g>
+  <rect x="860" y="226" width="340" height="70" rx="10" fill="#0e1526" stroke="#ffb86b40"/>
+  <rect x="860" y="226" width="4" height="70" rx="2" fill="#ffb86b"/>
+  <text x="878" y="253" fill="#e9eefc" font-size="15" font-weight="600">③ show / list</text>
+  <text x="878" y="274" fill="#8b98b8" font-size="11.5">全文 / 全队</text>
+</g>
+
+<g>
+  <rect x="860" y="321" width="340" height="70" rx="10" fill="#0e1526" stroke="#ffb86b40"/>
+  <rect x="860" y="321" width="4" height="70" rx="2" fill="#ffb86b"/>
+  <text x="878" y="348" fill="#e9eefc" font-size="15" font-weight="600">④ 摘要回 BA</text>
+  <text x="878" y="369" fill="#8b98b8" font-size="11.5">不回复 · 不 ack</text>
+</g>
+
+<rect x="440" y="411" width="340" height="58" rx="10" fill="#0e1526" stroke="#8b98b840"/>
+<text x="458" y="437" fill="#e9eefc" font-size="13.5" font-weight="600">Dev / QA / Deploy / Explore</text>
+<text x="458" y="456" fill="#8b98b8" font-size="11">只与自己的 BA 交互 · 不发 bus</text>
+
+<path d="M190,106 L190,131" fill="none" stroke="#6f7d9e" stroke-width="1.5"  marker-end="url(#a)"/>
+<path d="M190,201 L190,226" fill="none" stroke="#6f7d9e" stroke-width="1.5"  marker-end="url(#a)"/>
+<path d="M190,296 L190,321" fill="none" stroke="#6f7d9e" stroke-width="1.5"  marker-end="url(#a)"/>
+<path d="M610,106 L610,131" fill="none" stroke="#6f7d9e" stroke-width="1.5"  marker-end="url(#a)"/>
+<path d="M610,201 L610,226" fill="none" stroke="#6f7d9e" stroke-width="1.5"  marker-end="url(#a)"/>
+<path d="M610,296 L610,321" fill="none" stroke="#6f7d9e" stroke-width="1.5"  marker-end="url(#a)"/>
+<path d="M1030,106 L1030,131" fill="none" stroke="#6f7d9e" stroke-width="1.5"  marker-end="url(#a)"/>
+<path d="M1030,201 L1030,226" fill="none" stroke="#6f7d9e" stroke-width="1.5"  marker-end="url(#a)"/>
+<path d="M1030,296 L1030,321" fill="none" stroke="#6f7d9e" stroke-width="1.5"  marker-end="url(#a)"/>
+
+<path d="M360,261 L400,261 L400,166 L440,166" fill="none" stroke="#6f7d9e" stroke-width="1.5"  marker-end="url(#a)"/>
+<text x="398" y="250" fill="#9d8cff" font-size="10">activate</text>
+
+<path d="M360,356 L420,356 L420,188 L440,188" fill="none" stroke="#6f7d9e" stroke-width="1.5" stroke-dasharray="6 6" marker-end="url(#a)"/>
+<text x="398" y="405" fill="#8b98b8" font-size="10">bus</text>
+
+<path d="M780,166 L820,166 L820,71 L860,71" fill="none" stroke="#ffb86b" stroke-width="1.5" stroke-dasharray="6 6" marker-end="url(#a)"/>
+<text x="828" y="112" fill="#ffb86b" font-size="10">spawn</text>
+
+<path d="M860,356 L820,356 L820,188 L780,188" fill="none" stroke="#ffb86b" stroke-width="1.5" stroke-dasharray="6 6" marker-end="url(#a)"/>
+<text x="800" y="405" fill="#ffb86b" font-size="10">摘要</text>
+
+<path d="M610,391 L610,411" fill="none" stroke="#3ee0c2" stroke-width="1.5"  marker-end="url(#a)"/>
+<text x="618" y="405" fill="#3ee0c2" font-size="10.5">派单 / 收报</text>
+
+<text x="20" y="505" fill="#8b98b8" font-size="11">bus 写权限仅 BA / Planner · 未读时 claim 被门禁拒绝（exit 4）</text>
+</svg>
+    </div>
+  </section>
+
+  <!-- 12 前置条件 -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker">前置条件</div>
@@ -1046,7 +1183,7 @@ POST /login 增加可选 mfaToken</pre>
 </div>
 
 <div class="hud">
-  <div class="num" id="num">01 / 28</div>
+  <div class="num" id="num">01 / 29</div>
   <div class="bar"><i id="bar"></i></div>
   <div class="num" id="pct">6%</div>
 </div>
