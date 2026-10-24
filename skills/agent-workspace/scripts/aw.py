@@ -2207,7 +2207,6 @@ def cmd_stats(args) -> int:
         ["ack median", _fmt_age(data["ack_latency_median_seconds"]) if data["ack_samples"] else "-"],
         ["worktrees", data["worktrees"]],
     ])
-    print("\n消息可视化：用 bus-report（见 references/global/bus-report.md）")
     return 0
 
 

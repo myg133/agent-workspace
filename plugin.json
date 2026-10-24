@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "agent-workspace",
-  "version": "1.19.1",
+  "version": "1.20.0",
   "description": "Git worktree based multi-agent collaboration workspace: flat worktree layout, orphan root container, role workflows (BA / Dev / QA / Deploy / Explore), requirement state machine, worktree lifecycle, and a verify/audit/init CLI.",
   "author": {
     "name": "myg133"

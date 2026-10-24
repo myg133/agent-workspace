@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.20.0] - 2026-10-24
+
+### MCP 工具面补齐 + 移除内置 bus-report
+
+- 新增 MCP 工具：`next_req` `msg_list` `msg_flush` `doctor` `stats` `agent_check`
+- `mcp.md` 新增「CLI → MCP 对照」：覆盖全部 agent 运行命令，并标注仅 CLI 的人类运维命令
+- SKILL 明确：**agent 运行时一律走 MCP**；CLI 只用于 init/migrate/upgrade/bootstrap/token/mcp install
+- 移除 `references/global/bus-report.md` 及 SKILL/README 中的 bus-report 条目：
+  外部工具不内置进 skill
+
 ## [1.19.1] - 2026-10-24
 
 ### 文档：消息面板 bus-report

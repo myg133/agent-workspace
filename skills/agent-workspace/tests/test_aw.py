@@ -107,6 +107,9 @@ class WorkspaceCase(unittest.TestCase):
             self.assertIn("claim_next", names)
             self.assertIn("msg_send", names)
             self.assertIn("msg_wait", names)
+            self.assertIn("msg_list", names)
+            self.assertIn("doctor", names)
+            self.assertIn("stats", names)
             call = mcp_exchange(proc, {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                                        "params": {"name": "agent_whoami", "arguments": {}}})
             payload = json.loads(call["result"]["content"][0]["text"])
@@ -163,6 +166,16 @@ class WorkspaceCase(unittest.TestCase):
             payload = json.loads(good["result"]["content"][0]["text"])
             self.assertEqual(payload["exit_code"], 0, payload)
             self.assertFalse(good["result"]["isError"])
+        finally:
+            self._stop_mcp(proc)
+
+    def test_mcp_doctor_tool(self):
+        proc = self._mcp()
+        try:
+            call = self._mcp_tool(proc, "doctor", {})
+            payload = json.loads(call["result"]["content"][0]["text"])
+            self.assertEqual(payload["exit_code"], 0, payload)
+            self.assertIn("workspace", payload["stdout"])
         finally:
             self._stop_mcp(proc)
 

@@ -90,6 +90,7 @@ TOOLS = [
          {"message": STR}),
     tool("agent_exit", "退出：session 置 offline、解绑终端",
          {"force": BOOL, "keep_binding": BOOL}),
+    tool("next_req", "取下一个待认领需求（等价 claim next）", {}),
     tool("claim_next", "原子认领队首需求；已有认领或存在未读消息时拒绝",
          {"ignore_unread": {**BOOL, "description": "忽略未读消息强制认领"}}),
     tool("claim_take", "认领指定需求（同样受 WIP=1 限制）", {"req": STR}, ["req"]),
@@ -114,9 +115,15 @@ TOOLS = [
           "sender": STR, "consume": BOOL, "json": BOOL}),
     tool("msg_show", "按 id 查看单条消息", {"id": STR}, ["id"]),
     tool("msg_ack", "对契约变更回执", {"id": STR, "reject": BOOL, "note": STR}, ["id"]),
+    tool("msg_list", "列出 bus 上的消息（含已读，用于审计）",
+         {"all": BOOL, "limit": INT, "json": BOOL}),
+    tool("msg_flush", "把离线队列推到 bus 分支", {}),
     tool("contract_check", "检查契约版本 pin、consumer 覆盖与未 ack 变更",
          {"strict": BOOL, "no_fetch": BOOL, "json": BOOL}),
     tool("verify", "校验 workspace 硬约束", {"strict": BOOL, "json": BOOL}),
+    tool("doctor", "一页巡检：workspace / 拓扑 / 认领 / 队列 / 契约", {}),
+    tool("stats", "运营指标（JSON）：WIP、队列年龄、ack 中位数", {}),
+    tool("agent_check", "检查当前身份、绑定与工作区是否一致", {}),
     tool("audit", "只读巡检：拓扑、僵尸 worktree、stale session",
          {"stale_minutes": INT}),
     tool("queue_add", "把需求加入待认领队列", {"req": STR, "title": STR}, ["req"]),
@@ -152,6 +159,8 @@ def build_argv(name: str, args: dict) -> list[str]:
         if a.get("keep_binding"):
             argv.append("--keep-binding")
         return argv
+    if name == "next_req":
+        return ["next-req"]
     if name == "claim_next":
         return ["claim", "next"] + (["--ignore-unread"] if a.get("ignore_unread") else [])
     if name == "claim_take":
@@ -198,6 +207,16 @@ def build_argv(name: str, args: dict) -> list[str]:
         return argv
     if name == "msg_show":
         return ["msg", "show", a["id"], "--json"]
+    if name == "msg_list":
+        argv = ["msg", "list"]
+        if a.get("all"):
+            argv.append("--all")
+        if a.get("limit"):
+            argv += ["--limit", str(a["limit"])]
+        argv.append("--json")
+        return argv
+    if name == "msg_flush":
+        return ["msg", "flush"]
     if name == "msg_ack":
         argv = ["msg", "ack", a["id"]]
         if a.get("reject"):
@@ -211,6 +230,12 @@ def build_argv(name: str, args: dict) -> list[str]:
             if a.get(key):
                 argv.append("--" + key.replace("_", "-"))
         return argv
+    if name == "doctor":
+        return ["doctor"]
+    if name == "stats":
+        return ["stats", "--json"]
+    if name == "agent_check":
+        return ["agent", "check"]
     if name == "verify":
         argv = ["verify"]
         for key in ("strict", "json"):

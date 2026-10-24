@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.19.1
+  version: 1.20.0
 ---
 
 # Agent Workspace
@@ -110,7 +110,7 @@ python <skill-path>/scripts/aw.py audit
 | 升级已运行的项目 | `references/lifecycle/upgrade.md` | `aw.py upgrade` |
 | BA 之间沟通 | `references/global/messaging.md` | `aw.py msg` |
 | 通过 MCP 调用 | `references/global/mcp.md` | 工具名见上表 |
-| 看消息 / 沟通报告 | `references/global/bus-report.md` | 外部工具 `bus-report` |
+
 | 接口/契约对齐 | `references/global/contracts.md` | `aw.py contract check` |
 | 我是谁 / 没名字 | `references/global/identity.md` | `aw.py agent whoami` |
 | 代读消息 | `references/roles/notifier.md` | 只读子 agent |
@@ -162,7 +162,11 @@ ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
 
 **能阻塞就不要轮询**：等消息用 `msg_wait`（≤120 秒），不要每 5 秒调一次 `msg_inbox`。
 
-MCP 与 CLI 等价；客户端不支持 MCP 时用 `aw.py` + `AW_AGENT_ID`。
+**agent 运行时一律走 MCP**。CLI 只用于人类/CI 的运维命令：
+`init` / `migrate` / `upgrade` / `agent bootstrap` / `agent token` / `mcp install`。
+
+文档里的 `aw.py xxx` 是等价形式；MCP 工具名与参数映射见
+`references/global/mcp.md` 的「CLI → MCP 对照」。
 
 ### 使用策略（硬规则）
 
