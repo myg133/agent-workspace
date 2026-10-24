@@ -2198,6 +2198,27 @@ def collect_stats(root: Path, no_fetch: bool = False) -> tuple[dict, list[dict]]
     ack_latency.sort()
     median_ack = ack_latency[len(ack_latency) // 2] if ack_latency else None
 
+    question_total = 0
+    question_recent = 0
+    question_by_req: dict[str, int] = {}
+    cutoff = time.time() - 7 * 86400
+    for m in messages:
+        if m.get("type") != "question":
+            continue
+        question_total += 1
+        found = re.search(r"REQ-[0-9]+", m.get("ref") or "")
+        key = found.group(0) if found else "(no-ref)"
+        question_by_req[key] = question_by_req.get(key, 0) + 1
+        try:
+            ts = _dt.datetime.fromisoformat(m["at"].replace("Z", "+00:00")).timestamp()
+            if ts >= cutoff:
+                question_recent += 1
+        except (KeyError, ValueError):
+            pass
+    tracked = {c.get("req") for c in claims if c.get("req")}
+    tracked |= {q.get("req") for q in queue if q.get("req")}
+    tracked |= {k for k in question_by_req if k != "(no-ref)"}
+
     data = {
         "claims_active": len(claims),
         "claims_by_agent": by_agent,
@@ -2210,6 +2231,11 @@ def collect_stats(root: Path, no_fetch: bool = False) -> tuple[dict, list[dict]]
         "ack_samples": len(ack_latency),
         "ack_latency_median_seconds": median_ack,
         "worktrees": len(worktrees(root)),
+        "questions_total": question_total,
+        "questions_last_7d": question_recent,
+        "questions_by_req": dict(sorted(question_by_req.items(), key=lambda kv: -kv[1])[:20]),
+        "reqs_tracked": len(tracked),
+        "questions_per_req": round(question_total / max(1, len(tracked)), 2),
     }
     return data, messages
 
@@ -2231,6 +2257,8 @@ def cmd_stats(args) -> int:
         ["messages", data["messages_total"]],
         ["ack median", _fmt_age(data["ack_latency_median_seconds"]) if data["ack_samples"] else "-"],
         ["worktrees", data["worktrees"]],
+        ["questions", "%d（7d %d · %.2f/REQ）" % (
+            data["questions_total"], data["questions_last_7d"], data["questions_per_req"])],
     ])
     return 0
 

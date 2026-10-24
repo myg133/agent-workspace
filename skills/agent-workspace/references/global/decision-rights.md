@@ -88,10 +88,18 @@ deadline:    需要答复的时间
 
 每周看三个数：
 
-| 指标 | 目标 |
-|------|------|
-| 每个 REQ 升级问题数 | < 1 |
-| 问题平均答复时间 | < 2 小时 |
-| 因"等 Planner"导致的阻塞 | 0 |
+| 指标 | 目标 | 从哪看 |
+|------|------|--------|
+| 每个 REQ 升级问题数 | < 1 | `stats --json` 的 `questions_per_req` |
+| 近 7 天提问数 | 下降趋势 | `questions_last_7d` |
+| 问题集中在哪个 REQ | 定位需求质量问题 | `questions_by_req` |
+| 因"等 Planner"导致的阻塞 | 0 | 人工观察 |
+
+```bash
+aw.py stats --json | jq '{questions_total, questions_last_7d, questions_per_req, questions_by_req}'
+```
+
+口径：只统计 bus 上 `type: question` 的消息，按 `ref` 里的 `REQ-xxx` 归组；
+分母是当前有认领、在队列、或被提问过的 REQ 数。
 
 高于目标，先改文档和决策权，不要先怪模型。

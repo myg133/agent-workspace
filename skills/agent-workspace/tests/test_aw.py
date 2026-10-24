@@ -125,10 +125,15 @@ class WorkspaceCase(unittest.TestCase):
         self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
         run(["queue", "add", "REQ-001"], self.repo, agent="ba-1")
         run(["claim", "next"], self.repo, agent="ba-1")
+        run(["msg", "send", "--to", "all", "--type", "question",
+             "--ref", "REQ-001", "--body", "这样拆行不行？"], self.repo, agent="ba-1")
         out = run(["stats", "--json"], self.repo, agent=None)
         data = json.loads(out.stdout)
         self.assertEqual(data["claims_active"], 1)
         self.assertEqual(data["worktrees"], 5)
+        self.assertEqual(data["questions_total"], 1)
+        self.assertEqual(data["questions_by_req"]["REQ-001"], 1)
+        self.assertEqual(data["questions_per_req"], 1.0)
 
     def test_roster_mode_solo_and_team(self):
         run(["agent", "register", "ba-1", "--role", "ba"], self.repo / "BA", agent=None)

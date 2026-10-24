@@ -2,6 +2,17 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.23.0] - 2026-10-24
+
+### 新增：stats 统计"每个 REQ 的升级问题数"
+
+- `collect_stats` 解析 bus 上 `type: question` 的消息，按 `ref` 中的 `REQ-xxx` 归组
+- 新增字段：`questions_total`、`questions_last_7d`、`questions_by_req`、
+  `reqs_tracked`、`questions_per_req`
+- 表格输出新增一行 `questions`（总数 / 7 天 / 每 REQ）
+- 口径：分母 = 有认领 + 在队列 + 被提问过的 REQ 数
+- 文档：`decision-rights.md` §8 度量改为可直接对照 stats 字段
+
 ## [1.22.0] - 2026-10-24
 
 ### 新增：决策权与升级协议（解决 BA 过度依赖 Planner）
