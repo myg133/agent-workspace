@@ -114,23 +114,23 @@ BA/
 | 里程碑 | 复盘 ADR：哪些决策被推翻、为什么 |
 | 随时 | 跨 BA 冲突升级时拍板，并落 ADR |
 
-## 4.1 名册管理（Planner 专属）
+## 4.1 名册审批（不代注册）
 
-`BA/plan/agents.json` 是"谁有资格收消息"的唯一依据，由 Planner 维护：
+`BA/plan/agents.json` 是"谁有资格收消息"的唯一依据。**BA 自己注册，Planner 审批**：
 
 ```text
-agent_register {"name": "pcA-ba-1", "role": "ba"}   # 需带 Planner token
-agent_register {"name": "pcB-ba-2", "role": "ba"}
-agent_roster {}                                     # 对照本地会话看谁在线
+agent_roster {}                                     # 看谁注册了、谁 pending
+agent_activate {"name": "pcA-ba-1"}                 # 通过，变成 active
 agent_deactivate {"name": "pcC-ba-2"}               # 长期离岗
 agent_publish {}                                    # 推送到 demand，其他机器可见
 ```
 
 规则：
 
-- 新成员先注册，再让他 `agent bind`；
+- 自注册在 team 模式下是 `pending`，必须由 Planner 激活才能收发消息；
+- 激活/停用需要 Planner 令牌（team 模式下强制）；
 - 离岗 / 换人 → `deactivate`，不要直接删（历史消息要能解析）；
-- 每周对照 `agent roster` 与 `claim list`，清理"名册 active 但从未上线"的名字。
+- 每周对照 `agent roster` 与 `claim_list`，清理"名册 active 但从未上线"的名字。
 
 ## 5. 优先级从哪来
 

@@ -12,6 +12,21 @@
 | 派单对象 | Dev / QA / Deploy / Explore 子 Agent |
 | 状态权 | **独占** `status.md` |
 
+## 1.1 注册自己（每个 agent 第一次启动）
+
+BA **自己注册**，不需要 Planner 代劳：
+
+```text
+agent_register {"name": "pcA-ba-1", "role": "ba"}
+# REGISTERED pcA-ba-1 (ba, pending)
+# TOKEN pcA-ba-1 3f9c...
+```
+
+- **solo 模式**（没有 active Planner）：直接 `active`；
+- **team 模式**：先 `pending`，Planner 执行 `agent_activate` 后才能收发消息；
+- 记下 `TOKEN`，后续调用带上（或设 `AW_AGENT_TOKEN`）；
+- 名字已被占用时，重新注册需要本人 token 或 Planner token。
+
 ## 2. 每次启动必做
 
 > 本角色通过 MCP 调用工具，示例写作 `工具名 {参数}`。

@@ -2,6 +2,19 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.21.0] - 2026-10-24
+
+### 改为 BA 自注册 + Planner 审批
+
+- `agent register` 不再要求 Planner 令牌：**BA 自己注册自己**
+- team 模式（存在带令牌的 active Planner）下，自注册为 `pending`；
+  Planner 执行 `agent_activate` 后才 `active`
+- solo 模式（无 Planner）直接 `active`
+- 重新注册已有名字：需要本人 token 或 Planner token，防止被顶替
+- `agent activate/deactivate` 在 team 模式下需要 Planner 令牌
+- 发送消息前检查发送者状态：`pending` 直接拒绝
+- 文档：BA 增加「注册自己」，Planner §4.1 改为「名册审批（不代注册）」
+
 ## [1.20.1] - 2026-10-24
 
 ### 文档：三个角色改为 MCP 工具调用

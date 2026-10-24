@@ -912,6 +912,11 @@ def _assert_bus_writer(root: Path, ident: dict) -> None:
     roster = load_roster(root)
     if roster:
         entry = next((a for a in roster if a["id"] == ident["agent_id"]), None)
+        if entry and entry.get("status", "active") != "active":
+            raise GitError(
+                "agent %s 尚未激活（%s）；请让 Planner 执行 agent_activate。"
+                % (ident["agent_id"], entry.get("status"))
+            )
         if entry and (entry.get("role") or "ba").strip().lower() not in ("ba", "planner"):
             raise GitError(
                 "已注册角色 %s 不能使用 bus；子 agent 请与你的 BA 交互。"
@@ -1393,22 +1398,31 @@ def cmd_agent(args) -> int:
             print("⚠ 只允许在名册为空时执行一次；请立刻 agent publish 并保护 demand 分支。")
             return 0
         if action == "register":
+            supplied = (getattr(args, "agent_token", None)
+                        or os.environ.get("AW_AGENT_TOKEN") or "").strip()
             planners_with_token = [
                 a for a in agents
                 if a.get("role") == "planner" and a.get("status", "active") == "active"
                 and a.get("token_hash")
             ]
-            if planners_with_token:
-                supplied = (getattr(args, "agent_token", None)
-                            or os.environ.get("AW_AGENT_TOKEN") or "").strip()
-                if not planner_token_ok(root, supplied):
-                    print("REGISTER_DENIED 需要 Planner 令牌（--agent-token 或 AW_AGENT_TOKEN）",
+            is_planner = planner_token_ok(root, supplied)
+            existing = by_id.get(name)
+            if existing is not None:
+                own = bool(existing.get("token_hash")) and hash_token(supplied) == existing["token_hash"]
+                if existing.get("token_hash") and not (own or is_planner):
+                    print("REGISTER_DENIED 该名字已存在；需要本人 token 或 Planner token",
                           file=sys.stderr)
                     return 3
-            entry = by_id.get(name) or {"id": name, "registered_at": _now()}
+                entry = existing
+                if is_planner:
+                    entry["status"] = "active"
+            else:
+                entry = {"id": name, "registered_at": _now()}
+                # 团队模式（有带令牌的 Planner）下，自注册先 pending，由 Planner 激活
+                entry["status"] = ("active" if (not planners_with_token or is_planner)
+                                   else "pending")
             entry["role"] = args.role or entry.get("role", "ba")
             entry["host"] = args.host or entry.get("host", socket.gethostname())
-            entry["status"] = "active"
             entry["updated_at"] = _now()
             token = (args.token or "").strip()
             if not token and getattr(args, "issue_token", False) and not entry.get("token_hash"):
@@ -1419,7 +1433,7 @@ def cmd_agent(args) -> int:
             if name not in by_id:
                 agents.append(entry)
             save_roster(root, agents)
-            print("REGISTERED %s (%s)" % (name, entry["role"]))
+            print("REGISTERED %s (%s, %s)" % (name, entry["role"], entry["status"]))
             if token:
                 print("TOKEN %s %s" % (name, token))
                 print("请把 token 只交给对应的 agent（写进它的提示或私有配置），不要提交到仓库。")
@@ -1434,6 +1448,17 @@ def cmd_agent(args) -> int:
             save_roster(root, agents)
             print("TOKEN %s %s" % (name, token))
             return 0
+        planners_with_token = [
+            a for a in agents
+            if a.get("role") == "planner" and a.get("status", "active") == "active"
+            and a.get("token_hash")
+        ]
+        if planners_with_token:
+            supplied = (getattr(args, "agent_token", None)
+                        or os.environ.get("AW_AGENT_TOKEN") or "").strip()
+            if not planner_token_ok(root, supplied):
+                print("需要 Planner 令牌才能 %s" % action, file=sys.stderr)
+                return 3
         by_id[name]["status"] = "active" if action == "activate" else "inactive"
         by_id[name]["updated_at"] = _now()
         save_roster(root, agents)

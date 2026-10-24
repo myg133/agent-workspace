@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -137,6 +138,21 @@ class WorkspaceCase(unittest.TestCase):
             self.repo / "BA", agent=None)
         team = run(["agent", "roster", "--json"], self.repo, agent=None)
         self.assertEqual(json.loads(team.stdout)["mode"], "team")
+
+    def test_self_register_pending_until_activated(self):
+        boot = run(["agent", "bootstrap", "planner-1"], self.repo / "BA", agent=None)
+        token = re.search(r"TOKEN planner-1 ([0-9a-f]+)", boot.stdout).group(1)
+        reg = run(["agent", "register", "ba-1", "--role", "ba"],
+                  self.repo / "BA", agent=None)
+        self.assertIn("pending", reg.stdout)
+        blocked = run(["msg", "send", "--to", "all", "--body", "x"], self.repo, agent="ba-1")
+        self.assertEqual(blocked.returncode, 1)
+        self.assertIn("尚未激活", blocked.stderr)
+        act = run(["agent", "activate", "ba-1", "--agent-token", token],
+                  self.repo / "BA", agent=None)
+        self.assertEqual(act.returncode, 0, act.stderr)
+        ok = run(["msg", "send", "--to", "all", "--body", "x"], self.repo, agent="ba-1")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
 
     def test_agent_register_issues_token(self):
         out = run(["agent", "register", "ba-1", "--issue-token"], self.repo / "BA", agent=None)
