@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.23.1] - 2026-10-24
+
+### 消息发送体验
+
+- body 超限报错改为：**当前字数 + 具体落盘建议**（`BA/demands/<REQ>/notes.md`）
+- 绝对路径检查跳过 fenced code block，避免日志/代码示例里的 `C:\` 误伤
+- `messaging.md` 同步：body 上限、code fence 豁免、名册改为 BA 自注册 + Planner 审批
+
 ## [1.23.0] - 2026-10-24
 
 ### 新增：stats 统计"每个 REQ 的升级问题数"

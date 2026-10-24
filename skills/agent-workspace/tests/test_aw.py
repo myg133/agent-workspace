@@ -522,6 +522,17 @@ class WorkspaceCase(unittest.TestCase):
         out = run(["msg", "list", "--all", "--json"], self.repo, agent="ba-1")
         self.assertIn('"ref": "BA/contracts/a.md"', out.stdout)
 
+    def test_msg_body_too_large_hint(self):
+        bad = run(["msg", "send", "--to", "all", "--body", "x" * 2001], self.repo, agent="ba-1")
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("2001", bad.stderr)
+        self.assertIn("BA/demands", bad.stderr)
+
+    def test_msg_body_ignores_fenced_paths(self):
+        body = "看日志：\n\n```text\nC:\\Users\\me\\a.txt\n```\n\n是啥问题？"
+        out = run(["msg", "send", "--to", "all", "--body", body], self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 0, out.stderr)
+
     def test_msg_body_rejects_abs_path(self):
         bad = run(["msg", "send", "--to", "all",
                    "--body", "见 C:\\Users\\me\\proj\\a.md"], self.repo, agent="ba-1")

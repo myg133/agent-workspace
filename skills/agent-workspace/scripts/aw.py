@@ -1622,6 +1622,14 @@ ABS_PATH_PATTERNS = (
 )
 
 
+_CODE_FENCE = re.compile(r"```.*?```", re.S)
+
+
+def _strip_code_fences(text: str) -> str:
+    """检查绝对路径时跳过 fenced code block（日志/示例里常有本机路径）。"""
+    return _CODE_FENCE.sub("", text or "")
+
+
 def _has_abs_path(text: str) -> bool:
     return any(p.search(text or "") for p in ABS_PATH_PATTERNS)
 
@@ -1905,9 +1913,13 @@ def cmd_msg(args) -> int:
         if not body:
             raise GitError("--body 不能为空")
         if len(body) > 2000:
-            raise GitError("body 超过 2000 字符，请把正文放进 BA/contracts/ 或 BA/decisions/")
+            raise GitError(
+                "body %d 字符，超过 2000 上限。\n"
+                "请把正文写到 BA/demands/<REQ>/notes.md 或 BA/contracts/，\n"
+                "消息里只保留 3 行摘要 + ref。" % len(body)
+            )
         ref = normalize_ref(args.ref)
-        if _has_abs_path(body):
+        if _has_abs_path(_strip_code_fences(body)):
             raise GitError(
                 "消息正文里不要放本机绝对路径（跨机器不可读，也会泄露目录结构）。\n"
                 "用仓库相对路径，例如：BA/contracts/user-api/v3.md"

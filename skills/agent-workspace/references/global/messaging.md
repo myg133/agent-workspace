@@ -80,7 +80,7 @@ deadline: 2026-10-22T00:00:00Z
 | `deadline` | — | 超时未 ack 由巡检提醒 |
 | `thread` | — | 话题 id |
 | `re`/`result` | ack 时 | 被回执的消息 id + ok/no |
-| body | ✅ | ≤ 2000 字符，契约正文放 `BA/contracts/` |
+| body | ✅ | ≤ 2000 字符；超限报错会给出当前长度，契约正文放 `BA/contracts/` |
 
 类型：`fyi` `question` `blocker` `handoff` `contract-change` `contract-ack` `decision`。
 
@@ -95,7 +95,7 @@ deadline: 2026-10-22T00:00:00Z
 | `role:ba` | 至少一个该角色 active |
 
 未注册 → 拒绝并列出可用名字。应急可 `--force`，但会在日志里留下痕迹。
-名册由 Planner 用 `aw.py agent register/deactivate` 维护。
+名册由 BA 自注册、Planner 审批（`agent_activate`）；详见 `references/global/identity.md`。
 
 ### 路径约定（重要）
 
@@ -112,6 +112,9 @@ deadline: 2026-10-22T00:00:00Z
 
 1. **跨机不可读**：Mac / Linux 上没有 `C:\`；
 2. **泄露目录结构**：用户目录、机器名、项目布局都会进入 bus 历史，且无法撤回。
+
+> `body` 里的 **fenced code block**（```...```）不参与路径检查，方便贴日志/示例；
+> 但这是豁免，不是鼓励——能在贴之前删掉的路径，仍然应该删。
 
 同理，`.feature/manifest.json` 的 `demand_dir` 也存仓库相对路径，不存本机路径。
 
