@@ -1,5 +1,7 @@
 # Planner（总规划 / 设计 / 协调）
 
+> 层级：**主 Agent**（人启动）｜可直接对用户｜可写 bus
+
 > 本角色通过 MCP 调用工具，示例写作 `工具名 {参数}`。
 > CLI 等价命令见 `references/global/mcp.md`；agent 不要 shell 调 `aw.py`。
 > 例外：`bootstrap` / `token` 是人类的运维动作，只能 CLI。

@@ -2,6 +2,18 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.26.0] - 2026-10-25
+
+### 新增：角色层级（主 Agent / 子 Agent）
+
+- README 角色表、SKILL 路由表增加「层级」列
+- SKILL 新增「角色层级（硬规则）」：
+  - 只有 Planner / BA 是主 Agent，由人启动
+  - Dev / QA / Deploy / Explore / Notifier 必须由 BA spawn
+  - 子 Agent 不直接对用户、不写 bus
+  - **BA 不自己实现/测试/部署**（单 BA 模式可兼规划，但不能兼实现）
+- 六个角色文档开头加层级声明；BA 硬规则首条明确禁止自己实现
+
 ## [1.25.1] - 2026-10-25
 
 ### 文档：README 增加 bus 可视化配套仓库

@@ -1,5 +1,7 @@
 # Dev Agent 工作流
 
+> 层级：**子 Agent**（BA spawn）｜不直接对用户｜不写 bus
+
 你是执行者：在一个 `feature-REQ-xxx` worktree 里完成**一个**需求。
 
 ## 1. 定位

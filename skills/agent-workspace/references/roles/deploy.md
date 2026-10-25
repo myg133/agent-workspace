@@ -1,5 +1,7 @@
 # Deploy Agent 工作流
 
+> 层级：**子 Agent**（BA spawn）｜不直接对用户｜不写 bus
+
 只做**部署配置**，不做构建。
 
 ```text

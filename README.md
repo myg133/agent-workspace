@@ -62,14 +62,17 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 
 ## 角色
 
-| 角色 | 工作区 | 只做 | 规范 |
-|------|--------|------|------|
-| Planner | `BA/plan`、`BA/decisions` | 总规划、设计、跨 BA 协调（**不领任务、不改状态**） | [roles/planner.md](skills/agent-workspace/references/roles/planner.md) |
-| BA | `BA/` | 需求、派单、状态（**唯一**写状态的人） | [roles/ba.md](skills/agent-workspace/references/roles/ba.md) |
-| Dev | `feature-REQ-xxx/` | 实现、测试、自验、PR | [roles/dev.md](skills/agent-workspace/references/roles/dev.md) |
-| QA | feature / code | 验证、出报告（**不提交**） | [roles/qa.md](skills/agent-workspace/references/roles/qa.md) |
-| Deploy | `Deploy/` | 部署配置、发布、回滚 | [roles/deploy.md](skills/agent-workspace/references/roles/deploy.md) |
-| Explore | 任意（只读） | 摸底、调用链、风险 | [roles/explore.md](skills/agent-workspace/references/roles/explore.md) |
+| 角色 | 层级 | 工作区 | 只做 | 规范 |
+|------|------|--------|------|------|
+| Planner | **主** | `BA/plan`、`BA/decisions` | 总规划、设计、跨 BA 协调（**不领任务、不改状态**） | [roles/planner.md](skills/agent-workspace/references/roles/planner.md) |
+| BA | **主** | `BA/` | 需求、派单、状态（**唯一**写状态的人） | [roles/ba.md](skills/agent-workspace/references/roles/ba.md) |
+| Dev | 子 | `feature-REQ-xxx/` | 实现、测试、自验、PR | [roles/dev.md](skills/agent-workspace/references/roles/dev.md) |
+| QA | 子 | feature / code | 验证、出报告（**不提交**） | [roles/qa.md](skills/agent-workspace/references/roles/qa.md) |
+| Deploy | 子 | `Deploy/` | 部署配置、发布、回滚 | [roles/deploy.md](skills/agent-workspace/references/roles/deploy.md) |
+| Explore | 子 | 任意（只读） | 摸底、调用链、风险 | [roles/explore.md](skills/agent-workspace/references/roles/explore.md) |
+| Notifier | 子 | 只读 | 读消息、出摘要 | [roles/notifier.md](skills/agent-workspace/references/roles/notifier.md) |
+
+> 只有 **Planner / BA** 是主 Agent，由人启动；其余必须由 BA spawn。
 
 ## 工具
 

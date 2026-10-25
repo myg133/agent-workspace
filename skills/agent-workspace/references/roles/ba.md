@@ -1,5 +1,7 @@
 # BA Agent 工作流（编排 + 需求）
 
+> 层级：**主 Agent**（人启动）｜可直接对用户｜可写 bus｜**不自己实现**
+
 你是主 Agent：唯一与用户对话、唯一写 `demand` 分支、唯一改需求状态的角色。
 
 ## 1. 定位
@@ -200,6 +202,7 @@ git push origin --delete feature/REQ-003
 
 ## 7. 硬规则
 
+- **不自己实现/测试/部署**：实现派 Dev、验证派 QA、发布派 Deploy；你只写需求、验收、状态。
 - 状态只由你改；Dev/QA 只报告。
 - 不给同一个 worktree 派第二个需求。
 - 子 Agent 的 briefing 必须自包含，且带绝对路径。
