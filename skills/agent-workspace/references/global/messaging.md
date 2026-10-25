@@ -79,10 +79,38 @@ deadline: 2026-10-22T00:00:00Z
 | `contract`/`version` | contract-* 必填 | 与 `BA/contracts/INDEX.md` 对齐 |
 | `deadline` | — | 超时未 ack 由巡检提醒 |
 | `thread` | — | 话题 id |
+| `expect` | 按 type | `none` / `ack` / `reply` |
+| `reply_by` | — | 期望回复时间（自由文本） |
 | `re`/`result` | ack 时 | 被回执的消息 id + ok/no |
 | body | ✅ | ≤ 2000 字符；超限报错会给出当前长度，契约正文放 `BA/contracts/` |
 
 类型：`fyi` `question` `blocker` `handoff` `contract-change` `contract-ack` `decision`。
+
+### 反馈义务（expect）
+
+每条消息都要说明**要不要反馈**；不写则按 type 推导：
+
+| type | 默认 expect | 含义 |
+|------|-------------|------|
+| `fyi` / `decision` / `contract-ack` | `none` | 知会，不用回 |
+| `question` / `blocker` / `handoff` | `reply` | 必须回一条消息 |
+| `contract-change` | `ack` | 必须回执 |
+
+可用 `--expect none|ack|reply` 覆盖，`--reply-by` 写期望时间。
+
+规则：
+
+- `expect=reply/ack` 的消息会进入对方的 `msg pending`；
+- 对方用 `msg reply <id>` 或 `msg ack <id>` 结清；
+- **发送方不要原地干等**：用 `msg_wait` 等 ≤120 秒，超时按 `default` 继续；
+- Planner 每天跑 `msg pending`，欠回复优先于新任务。
+
+```text
+msg_send {"to": "pcB-ba-1", "type": "question", "expect": "reply",
+          "reply_by": "2026-10-25T18:00Z", "body": "..."}
+msg_pending {}
+msg_reply {"id": "a1b2", "body": "..."}
+```
 
 ### 收件人校验
 

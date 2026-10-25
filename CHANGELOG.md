@@ -2,6 +2,18 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.24.0] - 2026-10-25
+
+### 新增：消息反馈义务（expect / pending / reply）
+
+- 消息新增 `expect` 字段：`none` / `ack` / `reply`，默认按 type 推导
+- 新增 `reply_by` 可选字段
+- 新增 `msg pending`：列出等我还账的消息（expect 非 none 且未回复）
+- 新增 `msg reply <id> --body`：自动带 `re` / `thread` / 收件人 / 契约版本
+- `msg inbox` / `msg list` / `msg wait` 输出标记 `↩reply` / `↩ack`
+- MCP 新增 `msg_pending` / `msg_reply`，`msg_send` 支持 `expect` / `reply_by`
+- 文档：messaging.md「反馈义务」、BA 不发呆、Planner 每日清 pending
+
 ## [1.23.1] - 2026-10-24
 
 ### 消息发送体验

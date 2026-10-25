@@ -128,7 +128,7 @@ BA/
 | 频率 | 动作 |
 |------|------|
 | 每周 | 更新 `roadmap.md` / `queue-policy.md`；**周检各 REQ 的 `decisions.md`**；跑 `claim_list {}` 与 `audit {}` 看容量 |
-| 每日 | 读 bus 摘要（可让 Notifier 代读），清 blocker，必要时调序 |
+| 每日 | 读 bus 摘要（可让 Notifier 代读），跑 `msg_pending {}` 清欠回复，清 blocker，必要时调序 |
 | 里程碑 | 复盘 ADR：哪些决策被推翻、为什么 |
 | 随时 | 跨 BA 冲突升级时拍板，并落 ADR |
 

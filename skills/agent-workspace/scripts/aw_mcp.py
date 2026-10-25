@@ -105,6 +105,8 @@ TOOLS = [
                                                 "contract-change", "contract-ack", "decision"]},
           "cc": STR, "subject": STR, "ref": STR, "contract": STR, "version": STR,
           "deadline": STR, "thread": STR, "priority": STR,
+          "expect": {**STR, "enum": ["none", "ack", "reply"]},
+          "reply_by": STR,
           "force": {**BOOL, "description": "跳过收件人注册校验"}},
          ["to", "body"]),
     tool("msg_inbox", "读取发给我的未读消息", {"all": BOOL, "limit": INT, "full": BOOL,
@@ -117,6 +119,9 @@ TOOLS = [
     tool("msg_ack", "对契约变更回执", {"id": STR, "reject": BOOL, "note": STR}, ["id"]),
     tool("msg_list", "列出 bus 上的消息（含已读，用于审计）",
          {"all": BOOL, "limit": INT, "json": BOOL}),
+    tool("msg_pending", "列出等我还账的消息（expect=ack/reply 且尚未回复）", {}),
+    tool("msg_reply", "回复某条消息；自动带 re / thread / 收件人",
+         {"id": STR, "body": STR, "type": STR}, ["id", "body"]),
     tool("msg_flush", "把离线队列推到 bus 分支", {}),
     tool("contract_check", "检查契约版本 pin、consumer 覆盖与未 ack 变更",
          {"strict": BOOL, "no_fetch": BOOL, "json": BOOL}),
@@ -180,9 +185,12 @@ def build_argv(name: str, args: dict) -> list[str]:
         argv = ["msg", "send", "--to", a["to"], "--body", a["body"]]
         if a.get("type"):
             argv += ["--type", a["type"]]
-        for key in ("cc", "subject", "ref", "contract", "version", "deadline", "thread", "priority"):
+        for key in ("cc", "subject", "ref", "contract", "version", "deadline",
+                    "thread", "priority", "reply_by"):
             if a.get(key):
                 argv += ["--" + key, str(a[key])]
+        if a.get("expect"):
+            argv += ["--expect", a["expect"]]
         if a.get("force"):
             argv.append("--force")
         return argv
@@ -214,6 +222,13 @@ def build_argv(name: str, args: dict) -> list[str]:
         if a.get("limit"):
             argv += ["--limit", str(a["limit"])]
         argv.append("--json")
+        return argv
+    if name == "msg_pending":
+        return ["msg", "pending", "--json"]
+    if name == "msg_reply":
+        argv = ["msg", "reply", a["id"], "--body", a["body"]]
+        if a.get("type"):
+            argv += ["--type", a["type"]]
         return argv
     if name == "msg_flush":
         return ["msg", "flush"]

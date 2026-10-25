@@ -1605,6 +1605,16 @@ def cmd_queue(args) -> int:
 BUS_BRANCH = "bus"
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 MSG_TYPES = ("fyi", "question", "blocker", "handoff", "contract-change", "contract-ack", "decision")
+EXPECTS = ("none", "ack", "reply")
+EXPECT_DEFAULT = {
+    "fyi": "none",
+    "decision": "none",
+    "contract-ack": "none",
+    "question": "reply",
+    "blocker": "reply",
+    "handoff": "reply",
+    "contract-change": "ack",
+}
 
 
 def _now_utc() -> str:
@@ -1695,7 +1705,8 @@ def render_message(meta: dict) -> str:
         head.append("cc: [%s]" % ", ".join(cc))
     head.append("at: %s" % meta["at"])
     head.append("type: %s" % meta["type"])
-    for key in ("ref", "contract", "version", "deadline", "thread", "priority", "re", "result"):
+    for key in ("ref", "contract", "version", "deadline", "thread", "priority",
+                "expect", "reply_by", "re", "result"):
         if meta.get(key):
             head.append("%s: %s" % (key, meta[key]))
     head += ["---", meta.get("body", "")]
@@ -1842,6 +1853,8 @@ def _msg_line(meta: dict, ident: dict, full: bool = False) -> str:
     line = "%s %-20s %-14s %-18s %s" % (
         (meta.get("at") or "")[:19], meta.get("from", "?"), label,
         meta.get("type", "?"), extra)
+    if meta.get("expect") in ("ack", "reply"):
+        line += "  ↩%s" % meta["expect"]
     if full:
         line += "\n    id=%s ref=%s\n    %s" % (
             meta.get("id"), meta.get("ref", "-"), meta.get("body", "").replace("\n", "\n    "))
@@ -1912,6 +1925,11 @@ def cmd_msg(args) -> int:
         body = (args.body or "").strip()
         if not body:
             raise GitError("--body 不能为空")
+        expect = (getattr(args, "expect", "") or "").strip()
+        if expect and expect not in EXPECTS:
+            raise GitError("expect 必须是: %s" % " / ".join(EXPECTS))
+        if not expect:
+            expect = EXPECT_DEFAULT.get(args.type, "none")
         if len(body) > 2000:
             raise GitError(
                 "body %d 字符，超过 2000 上限。\n"
@@ -1939,17 +1957,20 @@ def cmd_msg(args) -> int:
             "version": args.version or "", "deadline": args.deadline or "",
             "thread": args.thread or "", "priority": args.priority or "p2",
             "subject": args.subject or (args.contract or ""),
+            "expect": expect, "reply_by": getattr(args, "reply_by", "") or "",
         }
         text = render_message(meta)
         path = aw_path(root, "outbox", "%s-%s.md" % (meta["at"].replace(":", "").replace("-", ""), meta["id"]))
         write_text(path, text)
         state = bus_flush(root)
+        suffix = " expect=%s%s" % (
+            expect, (" by " + meta["reply_by"]) if meta.get("reply_by") else "")
         if state == "ok":
-            print("SENT %s" % meta["id"])
+            print("SENT %s%s" % (meta["id"], suffix))
         elif state == "local":
-            print("SENT_LOCAL %s（仓库没有 remote，消息只在本地 bus 上）" % meta["id"])
+            print("SENT_LOCAL %s%s（仓库没有 remote，消息只在本地 bus 上）" % (meta["id"], suffix))
         else:
-            print("QUEUED %s" % meta["id"])
+            print("QUEUED %s%s" % (meta["id"], suffix))
         return 0 if state == "ok" else (0 if state == "local" else 3)
 
     if action == "flush":
@@ -1980,7 +2001,8 @@ def cmd_msg(args) -> int:
             show = messages[-args.limit:] if args.limit else messages
         if args.json:
             fields = ("id", "from", "to", "cc", "at", "type", "subject", "contract",
-                      "version", "ref", "deadline", "thread", "priority", "re", "result", "body")
+                      "version", "ref", "deadline", "thread", "priority",
+                      "expect", "reply_by", "re", "result", "body")
             payload = [{k: m.get(k) for k in fields if m.get(k)} for m in show]
             print(json.dumps({"count": len(payload), "messages": payload},
                              ensure_ascii=False, indent=2))
@@ -2010,7 +2032,7 @@ def cmd_msg(args) -> int:
             if candidates:
                 if args.json:
                     fields = ("id", "from", "to", "at", "type", "subject", "contract",
-                              "version", "ref", "thread", "body")
+                              "version", "ref", "thread", "expect", "reply_by", "body")
                     print(json.dumps({"found": True, "count": len(candidates),
                                       "messages": [{k: m.get(k) for k in fields if m.get(k)}
                                                    for m in candidates]},
@@ -2032,6 +2054,31 @@ def cmd_msg(args) -> int:
                     print("WAIT_TIMEOUT")
                 return 3
             time.sleep(min(interval, remaining))
+
+    if action == "pending":
+        messages = load_bus_messages(root, fetch=not args.no_fetch)
+        answered = {m.get("re") for m in messages if m.get("re")}
+        pending = [
+            m for m in messages
+            if _is_mine(m, ident) and m.get("from") != ident["agent_id"]
+            and m.get("expect") in ("ack", "reply") and m.get("id") not in answered
+        ]
+        pending.sort(key=lambda m: m.get("_seq", 0))
+        if args.json:
+            fields = ("id", "from", "at", "type", "subject", "contract", "version",
+                      "expect", "reply_by", "ref", "thread")
+            print(json.dumps({"count": len(pending),
+                              "messages": [{k: m.get(k) for k in fields if m.get(k)}
+                                           for m in pending]},
+                             ensure_ascii=False, indent=2))
+        else:
+            if not pending:
+                print("PENDING 0")
+            for m in pending:
+                print(_msg_line(m, ident, full=True))
+                if m.get("reply_by"):
+                    print("    reply_by=%s" % m["reply_by"])
+        return 0
 
     if action == "show":
         target = next((m for m in load_bus_messages(root, fetch=not args.no_fetch)
@@ -2063,6 +2110,34 @@ def cmd_msg(args) -> int:
         state = bus_flush(root)
         print("ACK %s -> %s %s" % (meta["id"], target.get("id"), "ok" if ok else "no"))
         return 0 if state == "ok" else 3
+
+    if action == "reply":
+        _assert_bus_writer(root, ident)
+        target = next((m for m in load_bus_messages(root, fetch=not args.no_fetch)
+                       if m.get("id") == args.id), None)
+        if not target:
+            print("NOT_FOUND %s" % args.id)
+            return 3
+        body = (args.body or args.note or "").strip()
+        if not body:
+            raise GitError("--body 不能为空（回复内容）")
+        meta = {
+            "id": _msg_id(), "from": ident["agent_id"], "to": [target.get("from", "")],
+            "cc": target.get("cc") or [], "at": _now_utc(), "type": args.type,
+            "body": body, "re": target.get("id"),
+            "thread": target.get("thread") or target.get("id"),
+            "contract": target.get("contract", ""), "version": target.get("version", ""),
+            "ref": args.ref or target.get("ref", ""),
+            "subject": "re: %s" % (target.get("subject") or target.get("id")),
+            "expect": "none",
+        }
+        text = render_message(meta)
+        path = aw_path(root, "outbox", "%s-%s.md" % (
+            meta["at"].replace(":", "").replace("-", ""), meta["id"]))
+        write_text(path, text)
+        state = bus_flush(root)
+        print("REPLIED %s -> %s" % (meta["id"], target.get("id")))
+        return 0 if state in ("ok", "local") else 3
 
     raise GitError("未知 msg 动作: %s" % action)
 
@@ -2818,12 +2893,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_contract.set_defaults(func=cmd_contract)
 
     p_msg = sub.add_parser("msg", help="BA 间消息（空 commit 走 bus 分支）")
-    p_msg.add_argument("action", choices=["send", "inbox", "list", "ack", "flush", "show", "wait"])
+    p_msg.add_argument("action", choices=["send", "inbox", "list", "pending", "reply",
+                                          "ack", "flush", "show", "wait"])
     p_msg.add_argument("--json", action="store_true", help="机器可读输出")
     p_msg.add_argument("id", nargs="?", default="")
     p_msg.add_argument("--to", default="", help="收件人，逗号分隔；支持 all / role:ba / agent_id")
     p_msg.add_argument("--cc", default="")
     p_msg.add_argument("--type", default="fyi", choices=list(MSG_TYPES))
+    p_msg.add_argument("--expect", default="", choices=["", *EXPECTS],
+                       help="是否需要反馈（默认按 type 推导）")
+    p_msg.add_argument("--reply-by", default="", help="期望回复时间（自由文本，如 2026-10-25T18:00Z）")
     p_msg.add_argument("--body", default="")
     p_msg.add_argument("--subject", default="")
     p_msg.add_argument("--ref", default="")

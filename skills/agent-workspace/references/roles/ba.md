@@ -128,7 +128,15 @@ msg_send {"to": "pcB-ba-1", "type": "contract-change",
 msg_inbox {}
 msg_list {"all": true}
 msg_ack {"id": "<id>"}
+msg_pending {}
+msg_reply {"id": "<id>", "body": "..."}
 ```
+
+发完不要干等：
+
+- 需要对方回 → `expect: "reply"`，然后 `msg_wait` 等 ≤120 秒；
+- 超时按 default 继续，不要原地卡住；
+- 自己欠别人的，用 `msg_pending` 查。
 
 同步点：**认领前、派单前、合并前、完成时**各读一次 inbox。
 契约正文进 `BA/contracts/`，消息只做通知与回执。
