@@ -97,13 +97,39 @@ Windows 直接用 `aw.cmd verify` 或 `.\aw.ps1 verify`（自动选择 `py` / `p
 Linux / macOS 用 `./scripts/aw verify`。中文输出、盘符、长路径等细节见
 [platform-notes.md](skills/agent-workspace/references/global/platform-notes.md)。
 
+## 配套：bus 消息可视化
+
+bus 上的消息是空 commit，直接 `git log` 很难读。配套仓库：
+
+**[agent-workspace-bus-viewer](https://github.com/myg133/agent-workspace-bus-viewer)**
+
+- 只读 bus，不写任何 ref，不替代 `aw.py msg`；
+- 生成自包含 HTML，或起本地服务实时刷新；
+- 支持按 thread 聚合、全量视角、跨代（`--all-generations`）；
+- 对齐消息格式 v2（`expect` / `reply_by` / `re` / `result`）。
+
+```bash
+git clone https://github.com/myg133/agent-workspace-bus-viewer
+cd agent-workspace-bus-viewer
+
+# 有本地 clone
+bun run bus-report.ts serve --repo /path/to/your-workspace --out ./out --port 8787
+
+# 没有 clone：只拉 bus 分支，不检出工作区
+bun run bus-report.ts serve --remote git@github.com:you/your-repo.git --out ./out --port 8787
+```
+
+打开 <http://127.0.0.1:8787>。Bun / Deno / Node 任一即可。
+
+> 这是独立仓库，不属于本 skill；本仓库只负责写 bus，它负责读 bus。
+
 ## 自测
 
 ```bash
 python -m unittest discover -s skills/agent-workspace/tests -v
 ```
 
-42 个用例覆盖：布局、巡检、认领并发、消息寻址/游标/回执/离线队列/阻塞等待、契约检查、升级检查、身份绑定与 MCP 握手。
+61 个用例覆盖：布局、巡检、认领并发、消息寻址/游标/回执/离线队列/阻塞等待、反馈义务与欠回复门禁、契约检查、升级检查、身份绑定与令牌、MCP 握手。
 全部在临时目录运行，不碰当前仓库。
 
 ## 升级已有项目

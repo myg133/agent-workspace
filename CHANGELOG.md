@@ -2,6 +2,15 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.25.1] - 2026-10-25
+
+### 文档：README 增加 bus 可视化配套仓库
+
+- 新增「配套：bus 消息可视化」：指向
+  [agent-workspace-bus-viewer](https://github.com/myg133/agent-workspace-bus-viewer)
+- 说明 build / serve / `--remote` 三种用法，以及"只读 bus、不替代 aw.py msg"的边界
+- 自测用例数从 42 更新为 61
+
 ## [1.25.0] - 2026-10-25
 
 ### 新增：欠回复强制门禁
