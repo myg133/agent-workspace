@@ -91,9 +91,11 @@ TOOLS = [
     tool("agent_exit", "退出：session 置 offline、解绑终端",
          {"force": BOOL, "keep_binding": BOOL}),
     tool("next_req", "取下一个待认领需求（等价 claim next）", {}),
-    tool("claim_next", "原子认领队首需求；已有认领或存在未读消息时拒绝",
-         {"ignore_unread": {**BOOL, "description": "忽略未读消息强制认领"}}),
-    tool("claim_take", "认领指定需求（同样受 WIP=1 限制）", {"req": STR}, ["req"]),
+    tool("claim_next", "原子认领队首需求；已有认领、未读或欠回复时拒绝",
+         {"ignore_unread": {**BOOL, "description": "忽略未读消息强制认领"},
+          "ignore_pending": {**BOOL, "description": "忽略未回复消息强制认领"}}),
+    tool("claim_take", "认领指定需求（同样受 WIP=1 限制）",
+         {"req": STR, "ignore_pending": BOOL}, ["req"]),
     tool("claim_release", "释放认领；可选回收 worktree",
          {"req": STR, "remove_worktree": BOOL, "force": BOOL}, ["req"]),
     tool("claim_list", "列出当前所有认领", {}),
@@ -167,9 +169,17 @@ def build_argv(name: str, args: dict) -> list[str]:
     if name == "next_req":
         return ["next-req"]
     if name == "claim_next":
-        return ["claim", "next"] + (["--ignore-unread"] if a.get("ignore_unread") else [])
+        argv = ["claim", "next"]
+        if a.get("ignore_unread"):
+            argv.append("--ignore-unread")
+        if a.get("ignore_pending"):
+            argv.append("--ignore-pending")
+        return argv
     if name == "claim_take":
-        return ["claim", "take", a["req"]]
+        argv = ["claim", "take", a["req"]]
+        if a.get("ignore_pending"):
+            argv.append("--ignore-pending")
+        return argv
     if name == "claim_release":
         argv = ["claim", "release", a["req"]]
         if a.get("remove_worktree"):

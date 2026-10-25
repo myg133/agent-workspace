@@ -1138,6 +1138,9 @@ def cmd_claim(args) -> int:
         return 0
 
     if action == "next":
+        blocked = _gate_pending(root, ident, getattr(args, "ignore_pending", False))
+        if blocked:
+            return blocked
         if not getattr(args, "ignore_unread", False):
             unread = _unread_for(root, ident)
             if unread:
@@ -1178,6 +1181,9 @@ def cmd_claim(args) -> int:
         return _finish_claim(root, req, ident)
 
     if action == "take":
+        blocked = _gate_pending(root, ident, getattr(args, "ignore_pending", False))
+        if blocked:
+            return blocked
         req = args.req.upper()
         with FileLock(aw_path(root, "locks", "claims.lock")):
             claims = load_claims(root)
@@ -1502,6 +1508,13 @@ def cmd_agent(args) -> int:
             print("还有认领未释放: %s" % ", ".join(c["req"] for c in claims), file=sys.stderr)
             print("先 claim release，或加 --force 强制退出（认领会变成死会话）", file=sys.stderr)
             return 3
+        if not args.force:
+            pending = _pending_messages(root, ident)
+            if pending:
+                print("还有 %d 条消息未回复：%s" % (
+                    len(pending), ", ".join(m.get("id", "?") for m in pending[:5])), file=sys.stderr)
+                print("先 msg_reply / msg_ack，或加 --force 强制退出", file=sys.stderr)
+                return 3
         sess_path = aw_path(root, "sessions", "%s.json" % ident["agent_id"])
         sess = read_json(sess_path, {})
         sess["status"] = "offline"
@@ -1861,6 +1874,30 @@ def _msg_line(meta: dict, ident: dict, full: bool = False) -> str:
     return line
 
 
+def _pending_messages(root: Path, ident: dict, fetch: bool = False) -> list[dict]:
+    """发给我的、要求反馈、且还没有 re 回复的消息。"""
+    messages = load_bus_messages(root, fetch=fetch)
+    answered = {m.get("re") for m in messages if m.get("re")}
+    return [
+        m for m in messages
+        if _is_mine(m, ident) and m.get("from") != ident["agent_id"]
+        and m.get("expect") in ("ack", "reply") and m.get("id") not in answered
+    ]
+
+
+def _gate_pending(root: Path, ident: dict, ignore: bool) -> int:
+    if ignore:
+        return 0
+    pending = _pending_messages(root, ident)
+    if not pending:
+        return 0
+    print("PENDING_REPLIES %d" % len(pending))
+    for m in pending[:5]:
+        print("  " + _msg_line(m, ident))
+    print("先 msg_reply / msg_ack 结清，或加 --ignore-pending 跳过。")
+    return 4
+
+
 def _read_ids(root: Path, agent_id: str, messages: list[dict]) -> set[str]:
     """已读集合（按消息 id，而不是时间戳）。
 
@@ -2056,13 +2093,7 @@ def cmd_msg(args) -> int:
             time.sleep(min(interval, remaining))
 
     if action == "pending":
-        messages = load_bus_messages(root, fetch=not args.no_fetch)
-        answered = {m.get("re") for m in messages if m.get("re")}
-        pending = [
-            m for m in messages
-            if _is_mine(m, ident) and m.get("from") != ident["agent_id"]
-            and m.get("expect") in ("ack", "reply") and m.get("id") not in answered
-        ]
+        pending = _pending_messages(root, ident, fetch=not args.no_fetch)
         pending.sort(key=lambda m: m.get("_seq", 0))
         if args.json:
             fields = ("id", "from", "at", "type", "subject", "contract", "version",
@@ -2302,6 +2333,11 @@ def collect_stats(root: Path, no_fetch: bool = False) -> tuple[dict, list[dict]]
                 question_recent += 1
         except (KeyError, ValueError):
             pass
+    answered_ids = {m.get("re") for m in messages if m.get("re")}
+    obligations = [
+        m for m in messages
+        if m.get("expect") in ("ack", "reply") and m.get("id") not in answered_ids
+    ]
     tracked = {c.get("req") for c in claims if c.get("req")}
     tracked |= {q.get("req") for q in queue if q.get("req")}
     tracked |= {k for k in question_by_req if k != "(no-ref)"}
@@ -2323,6 +2359,7 @@ def collect_stats(root: Path, no_fetch: bool = False) -> tuple[dict, list[dict]]
         "questions_by_req": dict(sorted(question_by_req.items(), key=lambda kv: -kv[1])[:20]),
         "reqs_tracked": len(tracked),
         "questions_per_req": round(question_total / max(1, len(tracked)), 2),
+        "obligations_pending": len(obligations),
     }
     return data, messages
 
@@ -2346,6 +2383,7 @@ def cmd_stats(args) -> int:
         ["worktrees", data["worktrees"]],
         ["questions", "%d（7d %d · %.2f/REQ）" % (
             data["questions_total"], data["questions_last_7d"], data["questions_per_req"])],
+        ["pending replies", data["obligations_pending"]],
     ])
     return 0
 
@@ -2851,6 +2889,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_claim.add_argument("--remove-worktree", action="store_true")
     p_claim.add_argument("--repair", action="store_true")
     p_claim.add_argument("--ignore-unread", action="store_true", help="忽略未读消息强制认领")
+    p_claim.add_argument("--ignore-pending", action="store_true", help="忽略未回复消息强制认领")
     p_claim.set_defaults(func=cmd_claim)
 
     p_agent = sub.add_parser("agent", help="查看/绑定当前 agent 身份")

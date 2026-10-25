@@ -136,7 +136,8 @@ msg_reply {"id": "<id>", "body": "..."}
 
 - 需要对方回 → `expect: "reply"`，然后 `msg_wait` 等 ≤120 秒；
 - 超时按 default 继续，不要原地卡住；
-- 自己欠别人的，用 `msg_pending` 查。
+- 自己欠别人的，用 `msg_pending` 查；
+- **欠回复会挡住 `claim_next`**（exit 4）和 `agent exit`（exit 3）——先结清再拿新活。
 
 同步点：**认领前、派单前、合并前、完成时**各读一次 inbox。
 契约正文进 `BA/contracts/`，消息只做通知与回执。

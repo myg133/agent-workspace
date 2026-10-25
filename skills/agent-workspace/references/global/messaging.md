@@ -105,6 +105,24 @@ deadline: 2026-10-22T00:00:00Z
 - **发送方不要原地干等**：用 `msg_wait` 等 ≤120 秒，超时按 `default` 继续；
 - Planner 每天跑 `msg pending`，欠回复优先于新任务。
 
+#### 强制门禁
+
+欠回复不是“建议”，会挡住下一步：
+
+| 动作 | 有欠回复时 |
+|------|-----------|
+| `claim next` / `claim take` | 拒绝，exit 4，列出前 5 条 |
+| `agent exit` | 拒绝，exit 3（`--force` 可强退） |
+| 发新消息 | 不挡（回复本身就是发消息） |
+
+跳过：
+
+```text
+claim_next {"ignore_pending": true}
+```
+
+只在确认对方不需要回复、或已经线下对齐时使用。
+
 ```text
 msg_send {"to": "pcB-ba-1", "type": "question", "expect": "reply",
           "reply_by": "2026-10-25T18:00Z", "body": "..."}

@@ -2,6 +2,17 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.25.0] - 2026-10-25
+
+### 新增：欠回复强制门禁
+
+- `claim next` / `claim take`：有 `expect=ack/reply` 未回复时拒绝，exit 4，列出前 5 条
+- `agent exit`：有欠回复时拒绝，exit 3；`--force` 可强退
+- 新增 `--ignore-pending`（claim）作为显式逃生口
+- `stats` 新增 `obligations_pending`（全局未结清消息数）
+- MCP：`claim_next` / `claim_take` 支持 `ignore_pending`
+- 文档：messaging.md「强制门禁」、BA 硬规则、SKILL 全局规则
+
 ## [1.24.0] - 2026-10-25
 
 ### 新增：消息反馈义务（expect / pending / reply）

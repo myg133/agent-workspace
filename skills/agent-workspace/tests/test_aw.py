@@ -522,6 +522,27 @@ class WorkspaceCase(unittest.TestCase):
         out = run(["msg", "list", "--all", "--json"], self.repo, agent="ba-1")
         self.assertIn('"ref": "BA/contracts/a.md"', out.stdout)
 
+    def test_claim_blocked_by_pending_reply(self):
+        run(["msg", "send", "--to", "ba-2", "--type", "question",
+             "--body", "行不行"], self.repo, agent="ba-1")
+        run(["queue", "add", "REQ-001"], self.repo, agent="ba-1")
+        blocked = run(["claim", "next"], self.repo, agent="ba-2")
+        self.assertEqual(blocked.returncode, 4)
+        self.assertIn("PENDING_REPLIES", blocked.stdout)
+        run(["msg", "inbox"], self.repo, agent="ba-2")
+        ok = run(["claim", "next", "--ignore-pending"], self.repo, agent="ba-2")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        self.assertIn("CLAIMED", ok.stdout)
+
+    def test_exit_blocked_by_pending_reply(self):
+        run(["msg", "send", "--to", "ba-2", "--type", "question",
+             "--body", "行不行"], self.repo, agent="ba-1")
+        blocked = run(["agent", "exit"], self.repo, agent="ba-2")
+        self.assertEqual(blocked.returncode, 3)
+        self.assertIn("未回复", blocked.stderr)
+        forced = run(["agent", "exit", "--force"], self.repo, agent="ba-2")
+        self.assertEqual(forced.returncode, 0, forced.stderr)
+
     def test_msg_expect_pending_reply(self):
         sent = run(["msg", "send", "--to", "ba-2", "--type", "question",
                     "--body", "这样拆行不行？"], self.repo, agent="ba-1")
