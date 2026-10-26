@@ -2,6 +2,20 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.28.0] - 2026-10-26
+
+### 修复：next-req 跨机撞号
+
+- `next-req` 不再只读本地 `req-registry.md`：
+  - 先 `git fetch origin demand`
+  - 合并本地 registry、`BA/demands/REQ-*`、`feature-REQ-*`、feature 分支，
+    以及 `origin/demand` 的目录树与 registry
+  - 过滤模板里的示例行（`| _（示例）`）
+- 新增 `next-req --reserve`：在 demand 上追加占位行并 push；
+  非快进自动 fetch 重算，最多重试 3 次
+- MCP `next_req` 新增 `reserve` 参数
+- 文档：BA 取号改为 `next_req {"reserve": true}`，跨机必须 reserve
+
 ## [1.27.0] - 2026-10-26
 
 ### 新增：Guide（向导）角色

@@ -84,7 +84,7 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 | `aw.py migrate --main <branch>` | 原地迁移已有仓库（保历史、不改 hash） |
 | `aw.py verify [--strict]` | 校验硬约束，可挂 CI / pre-commit |
 | `aw.py audit` | 只读巡检：拓扑、僵尸 worktree、stale session |
-| `aw.py next-req` | 计算下一个可用 REQ 编号 |
+| `aw.py next-req [--reserve]` | 计算编号；`--reserve` 在 demand 占位并 push |
 | `aw.py queue add/list/sync` | 维护待认领队列 |
 | `aw.py claim next` | 原子认领（**一个 agent 同时只能持 1 个**） |
 | `aw.py claim doctor` | 查一人多单 / 死会话 / 孤儿 worktree |

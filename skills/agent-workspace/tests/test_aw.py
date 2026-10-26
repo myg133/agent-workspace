@@ -522,6 +522,36 @@ class WorkspaceCase(unittest.TestCase):
         out = run(["msg", "list", "--all", "--json"], self.repo, agent="ba-1")
         self.assertIn('"ref": "BA/contracts/a.md"', out.stdout)
 
+    def _with_remote(self):
+        bare = self.tmp / "origin.git"
+        git(["init", "--bare", "-q", str(bare)], self.repo)
+        git(["remote", "add", "origin", str(bare)], self.repo)
+        git(["push", "-q", "origin", "--all"], self.repo)
+        return bare
+
+    def test_next_req_sees_remote_demand(self):
+        bare = self._with_remote()
+        other = self.tmp / "other"
+        git(["clone", "-q", str(bare), str(other)], self.repo)
+        git(["checkout", "-q", "demand"], other)
+        (other / "demands" / "REQ-007-x").mkdir(parents=True)
+        (other / "demands" / "REQ-007-x" / "demand.md").write_text("# x", encoding="utf-8")
+        git(["add", "."], other)
+        git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "REQ-007"], other)
+        git(["push", "-q", "origin", "demand"], other)
+        out = run(["next-req"], self.repo, agent="ba-1")
+        self.assertEqual(out.stdout.strip(), "REQ-008", out.stderr)
+
+    def test_next_req_reserve_remote(self):
+        self._with_remote()
+        first = run(["next-req", "--reserve"], self.repo, agent="ba-1")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(first.stdout.strip(), "REQ-001")
+        reg = git(["show", "origin/demand:dispatch/req-registry.md"], self.repo).stdout
+        self.assertIn("REQ-001 | _reserved_", reg)
+        second = run(["next-req", "--reserve"], self.repo, agent="ba-1")
+        self.assertEqual(second.stdout.strip(), "REQ-002", second.stderr)
+
     def test_claim_blocked_by_pending_reply(self):
         run(["msg", "send", "--to", "ba-2", "--type", "question",
              "--body", "行不行"], self.repo, agent="ba-1")

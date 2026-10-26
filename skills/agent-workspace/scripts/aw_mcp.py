@@ -90,7 +90,8 @@ TOOLS = [
          {"message": STR}),
     tool("agent_exit", "退出：session 置 offline、解绑终端",
          {"force": BOOL, "keep_binding": BOOL}),
-    tool("next_req", "取下一个待认领需求（等价 claim next）", {}),
+    tool("next_req", "计算下一个 REQ 编号；reserve=true 时在 demand 上占位",
+         {"reserve": BOOL}),
     tool("claim_next", "原子认领队首需求；已有认领、未读或欠回复时拒绝",
          {"ignore_unread": {**BOOL, "description": "忽略未读消息强制认领"},
           "ignore_pending": {**BOOL, "description": "忽略未回复消息强制认领"}}),
@@ -167,7 +168,7 @@ def build_argv(name: str, args: dict) -> list[str]:
             argv.append("--keep-binding")
         return argv
     if name == "next_req":
-        return ["next-req"]
+        return ["next-req"] + (["--reserve"] if a.get("reserve") else [])
     if name == "claim_next":
         argv = ["claim", "next"]
         if a.get("ignore_unread"):

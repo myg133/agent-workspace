@@ -71,7 +71,8 @@ audit {}
 ```text
 1. 与用户对齐：目标、边界、验收标准（不懂就先派 Explore 摸底）
 2. 读 BA/.ba/session.md，没有则生成 session_id
-3. 认领编号：next_req {} → 写 req-registry.md → commit+push
+3. 认领编号：next_req {"reserve": true} → 已在 demand 上占位并 push
+   （跨机必须 reserve；只算不占会在并发时撞号）
 4. 建目录：demands/REQ-xxx-{slug}/（你在 BA/ 里，相对路径即可）
    demand.md（模板 demand.md.tpl）
    acceptance.md（模板 acceptance.md.tpl，每条 AC 可测）

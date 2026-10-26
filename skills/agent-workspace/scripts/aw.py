@@ -408,16 +408,122 @@ def cmd_audit(args) -> int:
 
 # ---------------------------------------------------------------- next-req
 
+def _used_req_numbers(root: Path) -> set[int]:
+    used: set[int] = set()
+
+    def add_from_text(text: str) -> None:
+        # 模板里的示例行以 "| _（示例）" 开头，不参与编号计算
+        clean = "\n".join(line for line in (text or "").splitlines()
+                           if not line.lstrip().startswith("| _"))
+        used.update(int(x) for x in re.findall(r"REQ-(\d{3})", clean))
+
+    registry = root / "BA" / "dispatch" / "req-registry.md"
+    if registry.exists():
+        add_from_text(registry.read_text(encoding="utf-8"))
+
+    demands = root / "BA" / "demands"
+    if demands.is_dir():
+        for d in demands.glob("REQ-*"):
+            m = re.match(r"REQ-(\d{3})", d.name)
+            if m:
+                used.add(int(m.group(1)))
+
+    for d in root.glob("feature-REQ-*"):
+        m = re.match(r"feature-REQ-(\d{3})", d.name)
+        if m:
+            used.add(int(m.group(1)))
+
+    branches = git("for-each-ref", "--format=%(refname:short)",
+                   "refs/heads/feature/REQ-*", cwd=root, check=False).stdout
+    for line in branches.splitlines():
+        m = re.search(r"REQ-(\d{3})", line)
+        if m:
+            used.add(int(m.group(1)))
+
+    if git("rev-parse", "-q", "--verify", "origin/demand", cwd=root, check=False).returncode == 0:
+        tree = git("ls-tree", "-r", "--name-only", "origin/demand",
+                   cwd=root, check=False).stdout
+        for line in tree.splitlines():
+            m = re.search(r"(?:^|/)demands/REQ-(\d{3})", line)
+            if m:
+                used.add(int(m.group(1)))
+        remote_reg = git("show", "origin/demand:dispatch/req-registry.md",
+                         cwd=root, check=False).stdout
+        add_from_text(remote_reg)
+    return used
+
+
+def _append_registry_row(text: str, row: str) -> str:
+    lines = (text or "").rstrip("\n").splitlines()
+    last = -1
+    for i, line in enumerate(lines):
+        if line.startswith("|"):
+            last = i
+    if last >= 0:
+        lines.insert(last + 1, row)
+    else:
+        lines.append(row)
+    return "\n".join(lines) + "\n"
+
+
+def _reserve_req(root: Path, number: int, agent: str) -> bool:
+    """在 demand 上追加一行占位并 push；非快进则返回 False 由调用方重试。"""
+    if not _has_remote(root):
+        return True
+    tmp = Path(tempfile.mkdtemp(prefix="aw-req-"))
+    try:
+        added = git("worktree", "add", "--detach", "--quiet", str(tmp),
+                    "origin/demand", cwd=root, check=False)
+        if added.returncode != 0:
+            return False
+        reg = tmp / "dispatch" / "req-registry.md"
+        text = reg.read_text(encoding="utf-8") if reg.exists() else (
+            "# REQ 编号认领表（只读快照）\n\n"
+            "| REQ | 名称 | owner (session) | 认领时间 | 状态 |\n"
+            "|-----|------|-----------------|----------|------|\n"
+        )
+        row = "| REQ-%03d | _reserved_ | %s | %s | 草稿 |" % (
+            number, agent, _dt.datetime.now().strftime("%Y-%m-%d %H:%M"))
+        write_text(reg, _append_registry_row(text, row))
+        ident = ensure_identity(tmp)
+        git(*ident, "add", "dispatch/req-registry.md", cwd=tmp)
+        git(*ident, "commit", "-q", "-m", "[BA] reserve REQ-%03d %s" % (number, agent), cwd=tmp)
+        pushed = git("push", "-q", "origin", "HEAD:refs/heads/demand",
+                     cwd=tmp, check=False, timeout=30)
+        return pushed.returncode == 0
+    except (GitError, OSError):
+        return False
+    finally:
+        git("worktree", "remove", "--force", str(tmp), cwd=root, check=False)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def cmd_next_req(args) -> int:
     root = repo_root()
-    registry = root / "BA" / "dispatch" / "req-registry.md"
-    raw = registry.read_text(encoding="utf-8") if registry.exists() else ""
-    # 模板里的示例行以 "| _（示例）" 开头，不参与编号计算
-    text = "\n".join(line for line in raw.splitlines() if not line.lstrip().startswith("| _"))
-    used = [int(m) for m in re.findall(r"REQ-(\d{3})", text)]
-    nxt = (max(used) + 1) if used else 1
-    print("REQ-%03d" % nxt)
-    return 0
+    ident = None
+    if getattr(args, "reserve", False):
+        ident = resolve_identity(root)
+    if not getattr(args, "no_fetch", False):
+        git("fetch", "-q", "origin", "demand", cwd=root, check=False, timeout=20)
+
+    if not getattr(args, "reserve", False):
+        used = _used_req_numbers(root)
+        nxt = (max(used) + 1) if used else 1
+        print("REQ-%03d" % nxt)
+        return 0
+
+    for _ in range(3):
+        used = _used_req_numbers(root)
+        nxt = (max(used) + 1) if used else 1
+        if _reserve_req(root, nxt, ident["agent_id"]):
+            print("REQ-%03d" % nxt)
+            return 0
+        git("fetch", "-q", "origin", "demand", cwd=root, check=False, timeout=20)
+        time.sleep(0.5)
+    print("RESERVE_FAILED 连试 3 次都被人抢先；先 git pull --rebase origin demand 再试。",
+          file=sys.stderr)
+    return 3
+
 
 
 # ---------------------------------------------------------------- init
@@ -2878,7 +2984,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_aud.add_argument("--stale-minutes", type=int, default=120)
     p_aud.set_defaults(func=cmd_audit)
 
-    p_req = sub.add_parser("next-req", help="计算下一个可用 REQ 编号")
+    p_req = sub.add_parser("next-req", help="计算/预留下一个可用 REQ 编号")
+    p_req.add_argument("--reserve", action="store_true",
+                       help="在 demand 上占位并 push（跨机安全，冲突自动重试）")
+    p_req.add_argument("--no-fetch", action="store_true", help="不 fetch origin/demand")
     p_req.set_defaults(func=cmd_next_req)
 
     p_claim = sub.add_parser("claim", help="任务认领（每个 agent 同时只允许 1 个）")
