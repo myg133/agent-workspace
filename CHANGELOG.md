@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.27.0] - 2026-10-26
+
+### 新增：Guide（向导）角色
+
+- 主 Agent，独立于 team 之外：**不注册、不写 bus、不编辑任何文件**
+- 面向用户解释：项目现状、进度、功能位置、设计取舍
+- 只回答"现在是什么"，不回答"要不要做/先做哪个"
+- 新增 `references/roles/guide.md` 与 `com.anspire-open.agents/anspire-open-guide.md`
+- README / SKILL 角色表与层级规则同步：主 Agent = Planner / BA / Guide
+
 ## [1.26.0] - 2026-10-25
 
 ### 新增：角色层级（主 Agent / 子 Agent）

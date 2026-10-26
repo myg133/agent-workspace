@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.26.0
+  version: 1.27.0
 ---
 
 # Agent Workspace
@@ -101,6 +101,7 @@ python <skill-path>/scripts/aw.py audit
 | **Planner** | 主 | `references/roles/planner.md` | `global/state-machine.md`、`global/messaging.md` |
 | **单人 / 单 BA** | 主 | `references/roles/planner.md` §0.2 | 无需 Planner，BA 可代行规划 |
 | **BA** | 主 | `references/roles/ba.md` | `global/concurrency.md`、`global/state-machine.md` |
+| **Guide** | 主 | `references/roles/guide.md` | `global/messaging.md`（只读） |
 | **Dev** | 子 | `references/roles/dev.md` | `global/paths.md` |
 | **QA** | 子 | `references/roles/qa.md` | `global/state-machine.md`（写入权） |
 | **Deploy** | 子 | `references/roles/deploy.md` | `lifecycle/release.md` |
@@ -126,17 +127,20 @@ python <skill-path>/scripts/aw.py audit
 |------|------|--------|-----------|--------|
 | Planner | **主** | 人 | ✅ | ✅ |
 | BA | **主** | 人 | ✅ | ✅ |
+| Guide | **主** | 人 | ✅ | ❌（不写） |
 | Dev | 子 | BA | ❌ | ❌ |
 | QA | 子 | BA | ❌ | ❌ |
 | Deploy | 子 | BA | ❌ | ❌ |
 | Explore | 子 | BA | ❌ | ❌ |
 | Notifier | 子 | BA | ❌ | ❌（只读） |
 
-1. **只有 Planner / BA 是主 Agent**，由人启动；其余必须由 BA spawn。
+1. **只有 Planner / BA / Guide 是主 Agent**，由人启动；其余必须由 BA spawn。
 2. **子 Agent 不直接对用户**：结论交回父 Agent，由父 Agent 决定是否上报。
 3. **子 Agent 不写 bus**：需要外发由父 Agent 转达。
 4. **BA 不自己实现/测试/部署**：那是 Dev / QA / Deploy 的活；BA 只做需求、验收、派单、状态。
    单 BA 模式可以兼规划，**但不能兼实现**——否则 WIP=1 和可追溯都失效。
+5. **Guide 不进 team**：不注册、不写 bus、不编辑任何文件；只回答用户"现在是什么"，
+   不回答"要不要做/先做哪个"。
 
 ## 路径基准
 
