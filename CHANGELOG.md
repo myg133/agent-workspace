@@ -2,6 +2,15 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.31.0] - 2026-10-29
+
+### 让 agent 能自己装 hook
+
+- `aw.py doctor` 增加 hook 检查：未安装时 WARN
+- MCP 新增 `hook_install` / `hook_status`，桌面端 agent 可以直接调
+- `aw.py hook install` 幂等：已安装输出 `ALREADY`
+- 旧版 hook（把 `"$@"` 传给 aw.py）会被自动升级
+
 ## [1.30.0] - 2026-10-29
 
 ### 修复：bus 审计报告里的写入 / 消费 / 重试问题

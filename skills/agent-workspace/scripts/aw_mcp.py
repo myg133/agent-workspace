@@ -133,6 +133,9 @@ TOOLS = [
     tool("doctor", "一页巡检：workspace / 拓扑 / 认领 / 队列 / 契约", {}),
     tool("stats", "运营指标（JSON）：WIP、队列年龄、ack 中位数", {}),
     tool("agent_check", "检查当前身份、绑定与工作区是否一致", {}),
+    tool("hook_install", "安装 pre-push 校验（bus 消息格式；本机一次即可）",
+         {"force": BOOL}),
+    tool("hook_status", "查看 pre-push 是否已安装", {}),
     tool("audit", "只读巡检：拓扑、僵尸 worktree、stale session",
          {"stale_minutes": INT}),
     tool("queue_add", "把需求加入待认领队列", {"req": STR, "title": STR}, ["req"]),
@@ -266,6 +269,10 @@ def build_argv(name: str, args: dict) -> list[str]:
         return ["stats", "--json"]
     if name == "agent_check":
         return ["agent", "check"]
+    if name == "hook_install":
+        return ["hook", "install"] + (["--force"] if a.get("force") else [])
+    if name == "hook_status":
+        return ["hook", "status"]
     if name == "verify":
         argv = ["verify"]
         for key in ("strict", "json"):

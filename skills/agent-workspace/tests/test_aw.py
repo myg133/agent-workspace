@@ -636,6 +636,8 @@ class WorkspaceCase(unittest.TestCase):
     def test_hook_install(self):
         out = run(["hook", "install"], self.repo, agent=None)
         self.assertEqual(out.returncode, 0, out.stderr)
+        status = run(["hook", "status"], self.repo, agent=None)
+        self.assertEqual(status.returncode, 0, status.stdout + status.stderr)
         rel = git(["rev-parse", "--git-path", "hooks/pre-push"], self.repo).stdout.strip()
         hook = Path(rel)
         if not hook.is_absolute():

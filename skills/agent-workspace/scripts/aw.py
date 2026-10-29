@@ -2119,35 +2119,53 @@ def _scan_bus(root: Path) -> tuple[list[dict], list[tuple[str, str]]]:
     return good, bad
 
 
-def cmd_hook(args) -> int:
-    root = repo_root()
-    common = _to_path(git_out("rev-parse", "--git-common-dir", cwd=root))
-    hooks = common / "hooks"
-    path = hooks / "pre-push"
-    marker = "agent-workspace pre-push"
-    if args.action == "status":
-        if path.exists() and marker in path.read_text(encoding="utf-8", errors="replace"):
-            print("INSTALLED %s" % path)
-            return 0
-        print("MISSING %s" % path)
-        return 3
-    if path.exists() and not args.force:
-        print("已存在 %s；用 --force 覆盖" % path, file=sys.stderr)
-        return 3
-    hooks.mkdir(parents=True, exist_ok=True)
+HOOK_MARKER = "agent-workspace pre-push"
+
+
+def _pre_push_path(root: Path) -> Path:
+    common = _to_path(git_out("rev-parse", "--git-common-dir", cwd=root), base=root)
+    return common / "hooks" / "pre-push"
+
+
+def _install_pre_push(root: Path, force: bool = False) -> tuple[Path, bool]:
+    path = _pre_push_path(root)
+    if path.exists():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if HOOK_MARKER in text and not force and '"$@"' not in text:
+            return path, False
+        if not force and HOOK_MARKER not in text:
+            raise GitError("已存在 %s；用 --force 覆盖" % path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     aw_py = Path(__file__).resolve()
     script = (
         "#!/bin/sh\n"
         "# %s\n"
-        'exec "%s" "%s" msg pre-push-hook "$@"\n'
-        % (marker, sys.executable, aw_py)
+        'exec "%s" "%s" msg pre-push-hook\n'
+        % (HOOK_MARKER, sys.executable, aw_py)
     )
     write_text(path, script)
     try:
         os.chmod(path, 0o755)
     except OSError:
         pass
-    print("INSTALLED %s" % path)
+    return path, True
+
+
+def cmd_hook(args) -> int:
+    root = repo_root()
+    path = _pre_push_path(root)
+    if args.action == "status":
+        if path.exists() and HOOK_MARKER in path.read_text(encoding="utf-8", errors="replace"):
+            print("INSTALLED %s" % path)
+            return 0
+        print("MISSING %s" % path)
+        return 3
+    try:
+        path, changed = _install_pre_push(root, force=args.force)
+    except GitError as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+    print("%s %s" % ("INSTALLED" if changed else "ALREADY", path))
     return 0
 
 
@@ -2478,6 +2496,17 @@ def cmd_doctor(args) -> int:
     else:
         rows.append((FAIL, "workspace", "%s / %d 个跟踪文件" % (branch, len(files))))
         fails.append("workspace")
+
+    try:
+        hook = _pre_push_path(root)
+        if hook.exists() and HOOK_MARKER in hook.read_text(encoding="utf-8", errors="replace"):
+            rows.append((OK, "hook", "pre-push 已安装"))
+        else:
+            rows.append((WARN, "hook", "未安装；运行 aw.py hook install"))
+            warns.append("hook")
+    except (GitError, OSError):
+        rows.append((WARN, "hook", "无法检查"))
+        warns.append("hook")
 
     trees = worktrees(root)
     nested = [e["path"].name for e in trees if e["path"] != root and e["path"].exists()

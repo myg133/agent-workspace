@@ -133,6 +133,7 @@ aw.py agent register pcA-ba-1 --role ba --issue-token
 | 工具 | 作用 |
 |------|------|
 | `agent_whoami` / `agent_check` / `agent_roster` | 身份、一致性与名册 |
+| `hook_install` / `hook_status` | pre-push 校验（本机一次） |
 | `agent_register` / `agent_activate` / `agent_deactivate` | 注册与启停 |
 | `agent_publish` | 把名册提交并推送到 demand，其他机器可见 |
 | `next_req` / `claim_next` / `claim_take` / `claim_release` / `claim_list` / `claim_doctor` | 认领 |
