@@ -2779,6 +2779,47 @@ def _watch_loop(root: Path, state_path: Path, args) -> int:
             return 0
         time.sleep(max(1, args.interval))
 
+# ---------------------------------------------------------------- schema
+
+CLI_ONLY = [
+    {"name": "init", "summary": "建 workspace 项目", "audience": "human"},
+    {"name": "migrate", "summary": "迁移已有仓库", "audience": "human"},
+    {"name": "upgrade", "summary": "旧项目升级检查（只读）", "audience": "human"},
+    {"name": "hook install", "summary": "安装 pre-push 校验", "audience": "human"},
+    {"name": "watch", "summary": "bus 监听，新消息唤醒 agent（supervisor）", "audience": "supervisor"},
+    {"name": "mcp", "summary": "检测 / 安装 MCP 配置", "audience": "human"},
+    {"name": "agent bootstrap", "summary": "名册为空时抢占第一个 Planner", "audience": "human"},
+    {"name": "agent token", "summary": "轮换 agent 令牌", "audience": "human"},
+    {"name": "schema", "summary": "输出本清单（机器可读）", "audience": "any"},
+]
+
+
+def cmd_schema(args) -> int:
+    tools: list[dict] = []
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("aw_mcp_schema", MCP_SERVER)
+        module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        tools = module.TOOLS
+    except Exception as exc:  # schema 本身不能因为 MCP 缺失而失败
+        tools = [{"error": "无法读取 aw_mcp.py: %s" % exc}]
+    data = {
+        "version": skill_version(),
+        "mcp_tools": tools,
+        "cli_only": CLI_ONLY,
+        "rules": [
+            "agent 运行时用 MCP 工具；不要 shell 调 aw.py",
+            "init / migrate / upgrade / hook / watch / bootstrap / token 由人或 supervisor 执行",
+            "不要读 aw.py 源码来实现功能；先看本清单或 --help",
+            "bus watchdog 用 aw.py watch，不要自己写轮询",
+        ],
+    }
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    return 0
+
+
 # ---------------------------------------------------------------- mcp setup
 
 MCP_SERVER = Path(__file__).resolve().parent / "aw_mcp.py"
@@ -3304,6 +3345,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_doctor = sub.add_parser("doctor", help="一页巡检：workspace/拓扑/认领/队列/契约")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_schema = sub.add_parser("schema", help="输出工具清单（JSON）：MCP 工具 + 仅 CLI 命令")
+    p_schema.set_defaults(func=cmd_schema)
 
     p_hook = sub.add_parser("hook", help="安装/查看 git hooks（pre-push 校验 bus 格式）")
     p_hook.add_argument("action", choices=["install", "status"])

@@ -2,6 +2,17 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.32.0] - 2026-10-29
+
+### 新增：aw.py schema，阻止 agent 读源码重造 watchdog
+
+- 新增 `aw.py schema`：输出 JSON
+  - `mcp_tools`：33+ 个 MCP 工具及参数 schema
+  - `cli_only`：init / migrate / upgrade / hook / watch / bootstrap / token 等
+  - `rules`：agent 运行时用 MCP、watch 不要自己写
+- MCP 新增 `schema` 工具，桌面端 agent 可直接查
+- SKILL / README / trigger.md 明确：**不要读 aw.py 源码**，先看 schema
+
 ## [1.31.0] - 2026-10-29
 
 ### 让 agent 能自己装 hook

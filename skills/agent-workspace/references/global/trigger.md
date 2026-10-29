@@ -17,6 +17,11 @@
 
 ## 2. watcher：每台机器一个
 
+> 不要自己读 `aw.py` 源码写 watchdog。先 `aw.py schema` 看有没有现成命令；
+> `watch` 就是为此准备的。
+
+
+
 ```bash
 aw.py watch --interval 5 --json
 ```

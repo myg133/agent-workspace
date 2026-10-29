@@ -111,6 +111,7 @@ class WorkspaceCase(unittest.TestCase):
             self.assertIn("msg_list", names)
             self.assertIn("doctor", names)
             self.assertIn("stats", names)
+            self.assertIn("schema", names)
             call = mcp_exchange(proc, {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                                        "params": {"name": "agent_whoami", "arguments": {}}})
             payload = json.loads(call["result"]["content"][0]["text"])
@@ -119,6 +120,16 @@ class WorkspaceCase(unittest.TestCase):
             self.assertFalse(call["result"]["isError"])
         finally:
             self._stop_mcp(proc)
+
+    def test_schema_lists_tools(self):
+        out = run(["schema"], self.repo, agent=None)
+        data = json.loads(out.stdout)
+        self.assertIn("version", data)
+        names = {t["name"] for t in data["mcp_tools"]}
+        self.assertIn("claim_next", names)
+        self.assertIn("schema", names)
+        cli = {c["name"] for c in data["cli_only"]}
+        self.assertIn("watch", cli)
 
     def test_doctor_and_stats(self):
         clean = run(["doctor"], self.repo, agent=None)

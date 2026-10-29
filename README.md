@@ -94,6 +94,7 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 | `aw.py doctor` | 一页巡检：workspace、拓扑、认领、队列、契约、模式 |
 | `aw.py stats` | 运营指标（JSON / 表格） |
 | `aw.py watch` | bus 监听：新消息唤醒 agent（替代定时轮询） |
+| `aw.py schema` | 机器可读工具清单（MCP + CLI），避免读源码 |
 | `aw.py hook install` | pre-push 校验 bus 消息格式 |
 | `aw.py msg doctor` | 扫描 bus 历史的消息质量问题 |
 | `aw.py agent bind/roster/exit` | 终端绑定身份、维护名册、退出会话 |
