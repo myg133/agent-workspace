@@ -605,6 +605,43 @@ class WorkspaceCase(unittest.TestCase):
         show = json.loads(run(["msg", "show", mid], self.repo, agent="ba-1").stdout)
         self.assertEqual(show["expect"], "none")
 
+    def test_msg_doctor_and_lint_bad(self):
+        run(["msg", "send", "--to", "ba-2", "--type", "fyi", "--body", "ok"],
+            self.repo, agent="ba-1")
+        tip = git(["rev-parse", "bus"], self.repo).stdout.strip()
+        bad = ("id: deadbeef\nfrom: x\nto: [y]\nat: 2026-10-29T00:00:00Z\n"
+               "type: status\n---\nbody")
+        sha = git(["commit-tree", "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+                   "-p", tip, "-m", bad], self.repo).stdout.strip()
+        git(["update-ref", "refs/heads/bus", sha], self.repo)
+        doctor = run(["msg", "doctor"], self.repo, agent=None)
+        self.assertEqual(doctor.returncode, 1)
+        self.assertIn("invalid", doctor.stdout)
+        lint = run(["msg", "lint", "--rev", sha], self.repo, agent=None)
+        self.assertEqual(lint.returncode, 1)
+        self.assertIn("INVALID", lint.stdout)
+
+    def test_msg_flush_idempotent(self):
+        run(["msg", "send", "--to", "ba-2", "--type", "fyi", "--body", "x"],
+            self.repo, agent="ba-1")
+        text = git(["log", "-1", "bus", "--format=%B"], self.repo).stdout
+        outbox = self.repo / ".aw" / "outbox"
+        outbox.mkdir(parents=True, exist_ok=True)
+        (outbox / "dup.md").write_text(text, encoding="utf-8")
+        out = run(["msg", "flush"], self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        count = git(["rev-list", "--count", "bus"], self.repo).stdout.strip()
+        self.assertEqual(count, "1")
+
+    def test_hook_install(self):
+        out = run(["hook", "install"], self.repo, agent=None)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        rel = git(["rev-parse", "--git-path", "hooks/pre-push"], self.repo).stdout.strip()
+        hook = Path(rel)
+        if not hook.is_absolute():
+            hook = self.repo / hook
+        self.assertTrue(hook.exists())
+
     def test_msg_body_too_large_hint(self):
         bad = run(["msg", "send", "--to", "all", "--body", "x" * 2001], self.repo, agent="ba-1")
         self.assertEqual(bad.returncode, 1)

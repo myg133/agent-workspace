@@ -2,6 +2,20 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.30.0] - 2026-10-29
+
+### 修复：bus 审计报告里的写入 / 消费 / 重试问题
+
+- 新增 `hook install/status`：写 `.git/hooks/pre-push`，校验 bus 消息格式
+  （无头、缺 expect、超长、绝对路径、坏 id、非法 type）
+- 新增 `msg lint --rev` 与 `msg doctor`：单条 / 全量校验，doctor 有坏消息时 exit 1
+- `load_bus_messages` 不再静默丢弃：解析失败时输出告警并指向 `msg doctor`
+- `bus_flush` 幂等：push 失败重试前先查 id 是否已落地，避免重复 id
+- `msg pending` 增加 `--overdue N` 与 `age` 列；MCP `msg_pending` 支持 `overdue`
+- `msg ack` 自动继承 `thread`（与 reply 一致）
+- 文档修正：DSH 新增 MCP 插件必须用 `insert:`，否则 patch 不生效
+- messaging.md 增加「写入端校验」
+
 ## [1.29.1] - 2026-10-29
 
 ### 修复：watch --exec 非阻塞 + 多 agent 说明

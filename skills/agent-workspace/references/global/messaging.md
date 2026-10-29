@@ -105,6 +105,18 @@ deadline: 2026-10-22T00:00:00Z
 - **发送方不要原地干等**：用 `msg_wait` 等 ≤120 秒，超时按 `default` 继续；
 - Planner 每天跑 `msg pending`，欠回复优先于新任务。
 
+#### 写入端校验（推荐）
+
+```bash
+aw.py hook install      # 写 .git/hooks/pre-push
+aw.py msg doctor        # 扫描历史：无头 / 缺 expect / 超长 / 绝对路径
+aw.py msg lint --rev <sha>
+```
+
+- pre-push 只校验 bus 提交，不干扰其它分支；
+- 可被 `git push --no-verify` 绕过，服务端仍需 CI / pre-receive 兜底；
+- `msg doctor` 出现即告警，不要等审计才发现。
+
 #### 强制门禁
 
 欠回复不是“建议”，会挡住下一步：

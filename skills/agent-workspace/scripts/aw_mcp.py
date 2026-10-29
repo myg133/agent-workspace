@@ -122,7 +122,8 @@ TOOLS = [
     tool("msg_ack", "对契约变更回执", {"id": STR, "reject": BOOL, "note": STR}, ["id"]),
     tool("msg_list", "列出 bus 上的消息（含已读，用于审计）",
          {"all": BOOL, "limit": INT, "json": BOOL}),
-    tool("msg_pending", "列出等我还账的消息（expect=ack/reply 且尚未回复）", {}),
+    tool("msg_pending", "列出等我还账的消息（expect=ack/reply 且尚未回复）",
+         {"overdue": {**INT, "description": "只看超过 N 小时的消息"}}),
     tool("msg_reply", "回复某条消息；自动带 re / thread / 收件人",
          {"id": STR, "body": STR, "type": STR}, ["id", "body"]),
     tool("msg_flush", "把离线队列推到 bus 分支", {}),
@@ -235,7 +236,10 @@ def build_argv(name: str, args: dict) -> list[str]:
         argv.append("--json")
         return argv
     if name == "msg_pending":
-        return ["msg", "pending", "--json"]
+        argv = ["msg", "pending", "--json"]
+        if a.get("overdue"):
+            argv += ["--overdue", str(a["overdue"])]
+        return argv
     if name == "msg_reply":
         argv = ["msg", "reply", a["id"], "--body", a["body"]]
         if a.get("type"):

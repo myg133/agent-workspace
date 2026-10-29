@@ -374,20 +374,24 @@ aw verify
 追加到 `~/.dsh/profiles/<profile>/cordis.patch.yml`：
 
 ```yaml
-- id: mcp-aw
-  name: "@deepseek-ai/dsh-mcp-client"
-  config:
-    serverName: aw
-    transport: stdio
-    command: python
-    args:
-      - /path/to/aw_mcp.py
-    cwd: /path/to/repo
-    env:
-      AW_AGENT_ID: !!js process.env.AW_AGENT_ID
-    toolCallTimeoutMs: 180000
-    failOnStartupError: false
+- insert:
+    - id: mcp-aw
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: aw
+        transport: stdio
+        command: python
+        args:
+          - /path/to/aw_mcp.py
+        cwd: /path/to/repo
+        env:
+          AW_AGENT_ID: !!js process.env.AW_AGENT_ID
+        toolCallTimeoutMs: 180000
+        failOnStartupError: false
 ```
+
+> 新增插件必须用 `insert:`；只写 `- id: mcp-aw` 会被当成"覆盖已有条目"，
+> 目标不存在时只打一行 warning 就跳过（日志：`patch: entry "mcp-aw" not found`）。
 
 - DSH 会清洗环境变量，必须用 `!!js process.env.AW_AGENT_ID` 转发；
 - 工具名带前缀：`mcp__aw__claim_next`、`mcp__aw__msg_wait`；

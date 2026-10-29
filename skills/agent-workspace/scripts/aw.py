@@ -1724,6 +1724,7 @@ def cmd_queue(args) -> int:
 BUS_BRANCH = "bus"
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 MSG_TYPES = ("fyi", "question", "blocker", "handoff", "contract-change", "contract-ack", "decision")
+_BUS_WARNED = False
 EXPECTS = ("none", "ack", "reply")
 EXPECT_DEFAULT = {
     "fyi": "none",
@@ -1880,6 +1881,12 @@ def bus_flush(root: Path, quiet: bool = False) -> str:
     if not pending:
         return "ok"
     if not _has_remote(root):
+        landed = {m.get("id") for m in load_bus_messages(root, fetch=False)}
+        pending = [p for p in pending
+                   if (parse_message(p.read_text(encoding="utf-8")) or {}).get("id")
+                   not in landed]
+        if not pending:
+            return "ok"
         base = _bus_tip(root)
         for path in pending:
             meta = parse_message(path.read_text(encoding="utf-8")) or {}
@@ -1888,27 +1895,37 @@ def bus_flush(root: Path, quiet: bool = False) -> str:
         git("update-ref", "refs/heads/%s" % BUS_BRANCH, base, cwd=root, check=False)
         return "local"
 
+    last_err = ""
     for attempt in range(4):
         try:
             _bus_fetch(root)
+            landed = {m.get("id") for m in load_bus_messages(root, fetch=False)}
+            pending = [p for p in pending
+                       if (parse_message(p.read_text(encoding="utf-8")) or {}).get("id")
+                       not in landed]
+            if not pending:
+                return "ok"
             base = _bus_tip(root)
             created = base
             for path in pending:
                 text = path.read_text(encoding="utf-8")
                 meta = parse_message(text) or {}
                 created = _commit_message(root, text, created, meta.get("at", ""))
-            git("update-ref", "refs/heads/%s" % BUS_BRANCH, created, cwd=root, check=False)
-            pushed = git("push", "-q", "origin", "%s:%s" % (BUS_BRANCH, BUS_BRANCH),
+            pushed = git("push", "-q", "origin", "%s:refs/heads/%s" % (created, BUS_BRANCH),
                          cwd=root, check=False, timeout=30)
             if pushed.returncode == 0:
+                git("update-ref", "refs/heads/%s" % BUS_BRANCH, created, cwd=root, check=False)
                 for path in pending:
                     path.unlink(missing_ok=True)
                 return "ok"
+            last_err = pushed.stderr.strip()
         except (GitError, OSError):
             pass
         time.sleep(0.4 * (2 ** attempt))
     if not quiet:
         print("推送失败，消息已排队（下次 send/inbox 会自动重试）", file=sys.stderr)
+        if last_err:
+            print(last_err, file=sys.stderr)
     return "queued"
 
 
@@ -1928,6 +1945,7 @@ def load_bus_messages(root: Path, fetch: bool = True) -> list[dict]:
     out = git("log", ref, "--format=%H%x1f%B%x1f", cwd=root, check=False).stdout
     chunks = out.split("\x1f")
     messages = []
+    bad = 0
     for i in range(0, len(chunks) - 1, 2):
         sha = chunks[i].strip().splitlines()[-1] if chunks[i].strip() else ""
         text = chunks[i + 1]
@@ -1935,6 +1953,13 @@ def load_bus_messages(root: Path, fetch: bool = True) -> list[dict]:
         if meta and meta.get("id"):
             meta["_sha"] = sha
             messages.append(meta)
+        else:
+            bad += 1
+    global _BUS_WARNED
+    if bad and not _BUS_WARNED:
+        _BUS_WARNED = True
+        print("警告：%d 条 bus 消息无法解析（缺首行 --- 或字段不完整），已忽略；"
+              "运行 aw.py msg doctor 查看" % bad, file=sys.stderr)
     # git log 是「新 → 旧」，反转成「旧 → 新」：消息顺序等于提交顺序，不受时钟影响
     messages.reverse()
     for idx, meta in enumerate(messages):
@@ -2051,11 +2076,143 @@ def _write_cursor(root: Path, agent_id: str, at: str, mid: str) -> None:
     write_json(path, data)
 
 
+def _validate_message(meta: dict) -> list[str]:
+    errors: list[str] = []
+    for field in ("id", "from", "to", "at", "type"):
+        if not meta.get(field):
+            errors.append("缺 %s" % field)
+    if meta.get("id") and not re.fullmatch(r"[0-9a-f]{8}", str(meta["id"])):
+        errors.append("id 不是 8 位 hex")
+    if meta.get("type") and meta["type"] not in MSG_TYPES:
+        errors.append("非法 type: %s" % meta["type"])
+    need = EXPECT_DEFAULT.get(meta.get("type"))
+    if need and need != "none" and not meta.get("expect"):
+        errors.append("%s 缺 expect" % meta["type"])
+    body = meta.get("body") or ""
+    if len(body) > 2000:
+        errors.append("body %d 字符 > 2000" % len(body))
+    if _has_abs_path(meta.get("ref") or "") or _has_abs_path(_strip_code_fences(body)):
+        errors.append("含本机绝对路径")
+    return errors
+
+
+def _scan_bus(root: Path) -> tuple[list[dict], list[tuple[str, str]]]:
+    ref = _bus_ref(root)
+    if not ref:
+        return [], []
+    out = git("log", ref, "--format=%H%x1f%B%x1f", cwd=root, check=False).stdout
+    chunks = out.split("\x1f")
+    good: list[dict] = []
+    bad: list[tuple[str, str]] = []
+    for i in range(0, len(chunks) - 1, 2):
+        sha = chunks[i].strip().splitlines()[-1] if chunks[i].strip() else ""
+        text = chunks[i + 1]
+        meta = parse_message(text)
+        if not meta:
+            bad.append((sha, "缺结构化头（首行不是 ---）"))
+            continue
+        errors = _validate_message(meta)
+        if errors:
+            bad.append((sha, "；".join(errors)))
+        else:
+            good.append(meta)
+    return good, bad
+
+
+def cmd_hook(args) -> int:
+    root = repo_root()
+    common = _to_path(git_out("rev-parse", "--git-common-dir", cwd=root))
+    hooks = common / "hooks"
+    path = hooks / "pre-push"
+    marker = "agent-workspace pre-push"
+    if args.action == "status":
+        if path.exists() and marker in path.read_text(encoding="utf-8", errors="replace"):
+            print("INSTALLED %s" % path)
+            return 0
+        print("MISSING %s" % path)
+        return 3
+    if path.exists() and not args.force:
+        print("已存在 %s；用 --force 覆盖" % path, file=sys.stderr)
+        return 3
+    hooks.mkdir(parents=True, exist_ok=True)
+    aw_py = Path(__file__).resolve()
+    script = (
+        "#!/bin/sh\n"
+        "# %s\n"
+        'exec "%s" "%s" msg pre-push-hook "$@"\n'
+        % (marker, sys.executable, aw_py)
+    )
+    write_text(path, script)
+    try:
+        os.chmod(path, 0o755)
+    except OSError:
+        pass
+    print("INSTALLED %s" % path)
+    return 0
+
+
+def _pre_push_hook(root: Path) -> int:
+    bad = 0
+    for line in sys.stdin:
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        local_ref, local_sha, _remote_ref, _remote_sha = parts[:4]
+        if not local_ref.endswith("/" + BUS_BRANCH) or set(local_sha) == {"0"}:
+            continue
+        for sha in git("rev-list", local_sha, "--not", "--remotes",
+                       cwd=root, check=False).stdout.split():
+            text = git("log", "-1", "--format=%B", sha, cwd=root, check=False).stdout
+            meta = parse_message(text)
+            errors = ["缺结构化头（首行不是 ---）"] if not meta else _validate_message(meta)
+            if errors:
+                bad += 1
+                print("bus 消息不合规 %s: %s" % (sha[:8], "；".join(errors)), file=sys.stderr)
+    if bad:
+        print("拒绝推送：%d 条 bus 消息未通过格式校验" % bad, file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_msg(args) -> int:
     root = repo_root()
-    ident = resolve_identity(root)
-    aw_init(root)
     action = args.action
+    aw_init(root)
+
+    if action == "lint":
+        text = git("log", "-1", "--format=%B", args.rev, cwd=root, check=False).stdout
+        meta = parse_message(text)
+        errors = ["缺结构化头（首行不是 ---）"] if not meta else _validate_message(meta)
+        if errors:
+            print("INVALID %s: %s" % (args.rev[:8], "；".join(errors)))
+            return 1
+        print("OK %s" % args.rev[:8])
+        return 0
+
+    if action == "doctor":
+        good, bad = _scan_bus(root)
+        counts: dict[str, int] = {}
+        for m in good:
+            mid = str(m.get("id") or "")
+            if mid:
+                counts[mid] = counts.get(mid, 0) + 1
+        for mid, n in counts.items():
+            if n > 1:
+                bad.append((mid, "duplicate id x%d" % n))
+        if args.json:
+            print(json.dumps({"valid": len(good), "invalid": len(bad),
+                              "samples": [{"sha": s, "reason": r} for s, r in bad[:20]]},
+                             ensure_ascii=False, indent=2))
+        else:
+            print("bus messages: %d valid, %d invalid" % (len(good), len(bad)))
+            for sha, reason in bad[:20]:
+                print("  %s %s" % (sha[:8], reason))
+        return 1 if bad else 0
+
+    if action == "pre-push-hook":
+        return _pre_push_hook(root)
+
+    ident = resolve_identity(root)
 
     if action == "send":
         _assert_bus_writer(root, ident)
@@ -2200,21 +2357,30 @@ def cmd_msg(args) -> int:
 
     if action == "pending":
         pending = _pending_messages(root, ident, fetch=not args.no_fetch)
+        if getattr(args, "overdue", 0):
+            pending = [m for m in pending
+                       if (_age_seconds(m.get("at")) or 0) >= args.overdue * 3600]
         pending.sort(key=lambda m: m.get("_seq", 0))
         if args.json:
             fields = ("id", "from", "at", "type", "subject", "contract", "version",
                       "expect", "reply_by", "ref", "thread")
-            print(json.dumps({"count": len(pending),
-                              "messages": [{k: m.get(k) for k in fields if m.get(k)}
-                                           for m in pending]},
+            rows = []
+            for m in pending:
+                row = {k: m.get(k) for k in fields if m.get(k)}
+                age = _age_seconds(m.get("at"))
+                row["age_hours"] = round(age / 3600, 1) if age is not None else None
+                rows.append(row)
+            print(json.dumps({"count": len(pending), "messages": rows},
                              ensure_ascii=False, indent=2))
         else:
             if not pending:
                 print("PENDING 0")
             for m in pending:
                 print(_msg_line(m, ident, full=True))
-                if m.get("reply_by"):
-                    print("    reply_by=%s" % m["reply_by"])
+                age = _age_seconds(m.get("at"))
+                print("    age=%s%s" % (
+                    _fmt_age(age),
+                    (" reply_by=" + m["reply_by"]) if m.get("reply_by") else ""))
         return 0
 
     if action == "show":
@@ -2240,6 +2406,7 @@ def cmd_msg(args) -> int:
             "body": body, "re": target.get("id"), "result": "ok" if ok else "no",
             "contract": target.get("contract", ""), "version": target.get("version", ""),
             "subject": "ack %s" % target.get("id"),
+            "thread": target.get("thread") or target.get("id"),
         }
         text = render_message(meta)
         path = aw_path(root, "outbox", "%s-%s.md" % (meta["at"].replace(":", "").replace("-", ""), meta["id"]))
@@ -3109,6 +3276,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_doctor = sub.add_parser("doctor", help="一页巡检：workspace/拓扑/认领/队列/契约")
     p_doctor.set_defaults(func=cmd_doctor)
 
+    p_hook = sub.add_parser("hook", help="安装/查看 git hooks（pre-push 校验 bus 格式）")
+    p_hook.add_argument("action", choices=["install", "status"])
+    p_hook.add_argument("--force", action="store_true")
+    p_hook.set_defaults(func=cmd_hook)
+
     p_watch = sub.add_parser("watch", help="bus 消息监听：有新消息时唤醒 agent（不耗模型 token）")
     p_watch.add_argument("--interval", type=int, default=5, help="fetch 间隔秒数")
     p_watch.add_argument("--once", action="store_true", help="只扫一遍就退出")
@@ -3139,7 +3311,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_msg = sub.add_parser("msg", help="BA 间消息（空 commit 走 bus 分支）")
     p_msg.add_argument("action", choices=["send", "inbox", "list", "pending", "reply",
-                                          "ack", "flush", "show", "wait"])
+                                          "ack", "flush", "show", "wait",
+                                          "lint", "doctor", "pre-push-hook"])
     p_msg.add_argument("--json", action="store_true", help="机器可读输出")
     p_msg.add_argument("id", nargs="?", default="")
     p_msg.add_argument("--to", default="", help="收件人，逗号分隔；支持 all / role:ba / agent_id")
@@ -3148,6 +3321,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_msg.add_argument("--expect", default="", choices=["", *EXPECTS],
                        help="是否需要反馈（默认按 type 推导）")
     p_msg.add_argument("--reply-by", default="", help="期望回复时间（自由文本，如 2026-10-25T18:00Z）")
+    p_msg.add_argument("--rev", default="", help="lint 时的 commit sha")
+    p_msg.add_argument("--overdue", type=float, default=0, help="pending 只看超过 N 小时的消息")
     p_msg.add_argument("--body", default="")
     p_msg.add_argument("--subject", default="")
     p_msg.add_argument("--ref", default="")
