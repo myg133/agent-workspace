@@ -2,6 +2,19 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.29.1] - 2026-10-29
+
+### 修复：watch --exec 非阻塞 + 多 agent 说明
+
+- `--exec` 从阻塞 `subprocess.run` 改为 `Popen`：
+  拉起 agent 后 watcher 继续监听，不会因 agent 长跑漏消息
+- 子进程输出丢弃、独立进程组，watcher 退出不影响 agent
+- `trigger.md` 新增「一台 PC 多个 agent」：
+  - watcher 是 per repo / per machine，不是 per agent
+  - 同仓库 3 个 agent 只需 1 个 watcher
+  - 已常驻会话无法注入，需 msg_wait / wake 文件 / 重启
+  - 不要与 omp 自带 watchdog 同时跑
+
 ## [1.29.0] - 2026-10-29
 
 ### 新增：aw.py watch，消息触发替代定时轮询

@@ -49,6 +49,20 @@ aw.py watch --interval 5 --exec /path/to/start-agent.sh
 - 单机文件锁，重复启动输出 `WATCH_RUNNING`；
 - 只 `git fetch`，不调用模型。
 
+### 2.1 一台 PC 多个 agent
+
+watcher 是 **per repo / per machine**，不是 per agent：
+
+| 机器 | agent | watcher |
+|------|-------|---------|
+| HomePC | dsh + omp + codex | **1 个** |
+| workPC | dsh + omp | **1 个** |
+
+- 同一仓库的多个 agent 只是不同的 `AW_WAKE_AGENT`，一个 watcher 全部覆盖；
+- 不同仓库（不同项目）才需要各起一个，锁是 per repo 的；
+- `--exec` 现在是**非阻塞**的：它会拉起进程后立刻继续监听，不会因为 agent 跑得久而漏消息；
+- 派发脚本必须按 `AW_WAKE_AGENT` 路由，并对同一 agent 加锁去重，避免一次 burst 拉起多个实例。
+
 ## 3. supervisor 脚本
 
 `start-agent.sh` 示例：
@@ -80,6 +94,21 @@ esac
 - 等待期间模型不产生 token；
 - 客户端单次工具超时必须 ≥ wait timeout；
 - 超时返回 `found:false`，再决定继续等还是退出。
+
+### 4.1 已经常驻的会话怎么办
+
+watcher 不能直接“注入”到一个已经挂起的 dsh / omp / codex 会话里。三种做法：
+
+| 做法 | 说明 |
+|------|------|
+| agent 阻塞在 `msg_wait` | 最简单；等待期间不耗 token |
+| watcher 写 wake 文件，agent 读 | 需要 agent 侧配合轮询本地文件（不 fetch） |
+| 收到消息后重启该 agent | 适合“处理完就退出”的模型 |
+
+如果 HomePC 的 omp 已经自带 watchdog，**不要再起第二个 `aw.py watch`**：
+
+- 要么把它的 watchdog 当成唯一的 watcher；
+- 要么停掉它，统一用 `aw.py watch`，否则同一条消息会唤醒两次。
 
 ## 5. 跨机
 

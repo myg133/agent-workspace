@@ -2536,7 +2536,9 @@ def _watch_loop(root: Path, state_path: Path, args) -> int:
         write_json(state_path, {"seen": sorted(seen)[-5000:], "seeded_at": _now()})
         print("WATCH_READY 已初始化，跳过 %d 条历史消息" % len(seen), file=sys.stderr)
 
+    children: list[subprocess.Popen] = []
     while True:
+        children = [c for c in children if c.poll() is None]
         if not args.no_fetch:
             git("fetch", "-q", "origin", BUS_BRANCH, cwd=root, check=False, timeout=20)
         messages = load_bus_messages(root, fetch=False)
@@ -2563,7 +2565,17 @@ def _watch_loop(root: Path, state_path: Path, args) -> int:
                         "AW_WAKE_TYPE": str(m.get("type")),
                         "AW_WAKE_FROM": str(m.get("from")),
                     })
-                    subprocess.run(args.exec, shell=True, env=env, cwd=str(root))
+                    if os.name == "nt":
+                        children.append(subprocess.Popen(
+                            args.exec, shell=True, env=env, cwd=str(root),
+                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP))
+                    else:
+                        children.append(subprocess.Popen(
+                            args.exec, shell=True, env=env, cwd=str(root),
+                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, start_new_session=True))
         if new:
             seen |= {m["id"] for m in new if m.get("id")}
             write_json(state_path, {"seen": sorted(seen)[-5000:], "updated_at": _now()})
