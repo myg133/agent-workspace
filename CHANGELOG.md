@@ -2,6 +2,19 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.29.0] - 2026-10-29
+
+### 新增：aw.py watch，消息触发替代定时轮询
+
+- 每台机器一个 watcher：`aw.py watch --interval 5`
+  - 只 `git fetch bus`，不调用模型、不耗 token
+  - 首次启动 seed，跳过历史消息
+  - 状态在 `.aw/watch-state.json`，单机文件锁防重复
+  - `--json` 每行一条唤醒；`--exec` 拉起对应 agent（env: `AW_WAKE_AGENT` 等）
+- 新增 `references/global/trigger.md`：三种触发方式、supervisor 脚本、跨机部署、反模式
+- messaging.md §11 从"轮询分档"改为"watcher 优先"，轮询只作兜底
+- SKILL / README 工具表补充 `watch`
+
 ## [1.28.0] - 2026-10-26
 
 ### 修复：next-req 跨机撞号

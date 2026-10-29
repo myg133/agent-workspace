@@ -2494,6 +2494,83 @@ def cmd_stats(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- watch
+
+def _wake_targets(message: dict, roster: list[dict]) -> list[str]:
+    active = {a["id"] for a in roster if a.get("status", "active") == "active"}
+    roles = {a["id"]: (a.get("role") or "ba") for a in roster}
+    targets: set[str] = set()
+    for t in (message.get("to") or []) + (message.get("cc") or []):
+        if t == "all":
+            targets |= active or {"*"}
+        elif t.startswith("role:"):
+            role = t[5:]
+            targets |= {i for i in active if roles.get(i) == role} or {"*"}
+        else:
+            targets.add(t)
+    targets.discard(message.get("from", ""))
+    return sorted(targets)
+
+
+def cmd_watch(args) -> int:
+    root = repo_root()
+    aw_init(root)
+    state_path = aw_path(root, "watch-state.json")
+    lock = FileLock(aw_path(root, "locks", "watch.lock"), timeout=0.5)
+    try:
+        with lock:
+            return _watch_loop(root, state_path, args)
+    except TimeoutError:
+        print("WATCH_RUNNING 本机已经有一个 watcher 在跑", file=sys.stderr)
+        return 3
+
+
+def _watch_loop(root: Path, state_path: Path, args) -> int:
+    state = read_json(state_path, {})
+    seen = set(state.get("seen") or [])
+    first = not state_path.exists()
+
+    messages = load_bus_messages(root, fetch=not args.no_fetch)
+    if first:
+        seen = {m.get("id") for m in messages if m.get("id")}
+        write_json(state_path, {"seen": sorted(seen)[-5000:], "seeded_at": _now()})
+        print("WATCH_READY 已初始化，跳过 %d 条历史消息" % len(seen), file=sys.stderr)
+
+    while True:
+        if not args.no_fetch:
+            git("fetch", "-q", "origin", BUS_BRANCH, cwd=root, check=False, timeout=20)
+        messages = load_bus_messages(root, fetch=False)
+        roster = load_roster(root)
+        new = [m for m in messages if m.get("id") and m["id"] not in seen]
+        for m in new:
+            for agent in _wake_targets(m, roster):
+                payload = {
+                    "agent": agent, "id": m.get("id"), "from": m.get("from"),
+                    "type": m.get("type"), "subject": m.get("subject", ""),
+                    "expect": m.get("expect", "none"), "at": m.get("at"),
+                }
+                if args.json:
+                    print(json.dumps(payload, ensure_ascii=False), flush=True)
+                else:
+                    print("WAKE %s %s %s %s" % (
+                        agent, m.get("id"), m.get("type"), (m.get("subject") or "")[:60]),
+                        flush=True)
+                if args.exec:
+                    env = dict(os.environ)
+                    env.update({
+                        "AW_WAKE_AGENT": agent,
+                        "AW_WAKE_MSG_ID": str(m.get("id")),
+                        "AW_WAKE_TYPE": str(m.get("type")),
+                        "AW_WAKE_FROM": str(m.get("from")),
+                    })
+                    subprocess.run(args.exec, shell=True, env=env, cwd=str(root))
+        if new:
+            seen |= {m["id"] for m in new if m.get("id")}
+            write_json(state_path, {"seen": sorted(seen)[-5000:], "updated_at": _now()})
+        if args.once:
+            return 0
+        time.sleep(max(1, args.interval))
+
 # ---------------------------------------------------------------- mcp setup
 
 MCP_SERVER = Path(__file__).resolve().parent / "aw_mcp.py"
@@ -3019,6 +3096,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_doctor = sub.add_parser("doctor", help="一页巡检：workspace/拓扑/认领/队列/契约")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_watch = sub.add_parser("watch", help="bus 消息监听：有新消息时唤醒 agent（不耗模型 token）")
+    p_watch.add_argument("--interval", type=int, default=5, help="fetch 间隔秒数")
+    p_watch.add_argument("--once", action="store_true", help="只扫一遍就退出")
+    p_watch.add_argument("--json", action="store_true", help="每行一个 JSON")
+    p_watch.add_argument("--exec", default="", help="收到消息时执行的命令（env: AW_WAKE_AGENT / AW_WAKE_MSG_ID）")
+    p_watch.add_argument("--no-fetch", action="store_true")
+    p_watch.set_defaults(func=cmd_watch)
 
     p_stats = sub.add_parser("stats", help="运营指标（JSON / 表格）")
     p_stats.add_argument("--json", action="store_true")

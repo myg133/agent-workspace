@@ -529,6 +529,18 @@ class WorkspaceCase(unittest.TestCase):
         git(["push", "-q", "origin", "--all"], self.repo)
         return bare
 
+    def test_watch_wakes_only_new(self):
+        run(["msg", "send", "--to", "ba-2", "--type", "fyi", "--body", "old"],
+            self.repo, agent="ba-1")
+        seed = run(["watch", "--once", "--json"], self.repo, agent=None)
+        self.assertEqual(seed.returncode, 0, seed.stderr)
+        self.assertEqual(seed.stdout.strip(), "")
+        run(["msg", "send", "--to", "ba-2", "--type", "question", "--body", "new"],
+            self.repo, agent="ba-1")
+        woke = run(["watch", "--once", "--json"], self.repo, agent=None)
+        self.assertIn('"agent": "ba-2"', woke.stdout)
+        self.assertIn('"type": "question"', woke.stdout)
+
     def test_next_req_sees_remote_demand(self):
         bare = self._with_remote()
         other = self.tmp / "other"

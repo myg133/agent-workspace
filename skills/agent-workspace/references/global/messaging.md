@@ -279,14 +279,16 @@ Notifier 的硬限制（只读、不回复、不 ack）见 `references/roles/not
 
 默认**不消费**（不推进已读）；需要消费时加 `consume:true`。
 
-CLI 无 MCP 时可退回轮询，但建议按状态分档（见下）：
+**空闲时不要让模型醒着。** 比 `msg_wait` 更省的是 watcher：
 
-| 状态 | 间隔 |
-|------|------|
-| 阻塞等 CI | 1 / 5 / 15 分钟 |
-| 有任务在手 | 15 分钟 |
-| 空闲 | 30 → 60 分钟退避 |
-| 等某个决定 | 2–3 分钟，最多 30 分钟 |
+```bash
+# 每台机器一个，只 fetch、不调模型；有新消息时拉起对应 agent
+aw.py watch --interval 5 --exec ./start-agent.sh
+```
+
+详见 `references/global/trigger.md`。
+
+只有在客户端不支持长工具调用时，才退回定时轮询；不要把它当默认。
 
 ## 12. 规模
 
