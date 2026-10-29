@@ -655,6 +655,25 @@ class WorkspaceCase(unittest.TestCase):
             hook = self.repo / hook
         self.assertTrue(hook.exists())
 
+    def test_msg_pending_groups_and_override(self):
+        run(["msg", "send", "--to", "ba-2", "--type", "fyi", "--expect", "ack",
+             "--body", "请确认"], self.repo, agent="ba-1")
+        run(["msg", "send", "--to", "ba-2", "--type", "question",
+             "--body", "怎么拆"], self.repo, agent="ba-1")
+        data = json.loads(run(["msg", "pending", "--json"], self.repo, agent="ba-2").stdout)
+        self.assertEqual(data["count"], 2)
+        self.assertEqual(data["groups"]["reply"], 1)
+        self.assertEqual(data["groups"]["ack"], 1)
+        fyi = next(m for m in data["messages"] if m["type"] == "fyi")
+        self.assertTrue(fyi["override"])
+        self.assertEqual(fyi["expect_default"], "none")
+
+    def test_msg_send_downgrade_warning(self):
+        out = run(["msg", "send", "--to", "ba-2", "--type", "handoff",
+                   "--expect", "ack", "--body", "交接"], self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("降级", out.stderr)
+
     def test_msg_body_too_large_hint(self):
         bad = run(["msg", "send", "--to", "all", "--body", "x" * 2001], self.repo, agent="ba-1")
         self.assertEqual(bad.returncode, 1)

@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.33.0] - 2026-10-29
+
+### 改进：expect 语义分级（bus-report change request）
+
+- `msg pending` 按 expect 分栏：`需回复（reply）` / `需回执（ack）`
+- 每行标注 `[覆盖默认: fyi 默认 none]`；JSON 增加 `groups` / `override` / `expect_default`
+- `--overdue` 不带值：reply 2h / ack 24h；带值：统一阈值
+- `msg send` 对 question/blocker/handoff 降级为 ack/none 时在 stderr 提示，不阻断
+- `messaging.md` 新增「ack 还是 reply」判断标准
+
 ## [1.32.0] - 2026-10-29
 
 ### 新增：aw.py schema，阻止 agent 读源码重造 watchdog

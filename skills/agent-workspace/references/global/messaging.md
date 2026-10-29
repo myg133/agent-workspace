@@ -105,6 +105,28 @@ deadline: 2026-10-22T00:00:00Z
 - **发送方不要原地干等**：用 `msg_wait` 等 ≤120 秒，超时按 `default` 继续；
 - Planner 每天跑 `msg pending`，欠回复优先于新任务。
 
+#### ack 还是 reply
+
+| expect | 用于 | 典型类型 |
+|---|---|---|
+| `reply` | 对方需要**产出信息**：回答、方案、交接内容、裁决 | question / blocker / handoff |
+| `ack` | 对方只需要**确认收到**：知会、通知、单向下发 | fyi / contract-change |
+
+- 不要把 `reply` 当“收到请回复”用——那就是 `ack`；
+- 允许覆盖默认值，但**降级要在正文说明理由**（一句即可），尤其是 `handoff → ack`；
+- 反例：`fyi` 写“请回复确认”却用 `expect=reply`，会让对方写一段没必要的正文；
+- `msg send` 对 `question/blocker/handoff` 降级为 `ack/none` 时会在 stderr 提示，不阻断。
+
+`msg pending` 分两栏显示：
+
+```text
+需回复（reply）2 条
+需回执（ack）6 条
+```
+
+`--overdue` 不带值时按 `reply 2h / ack 24h` 过滤；带值则统一阈值。
+每行标注 `[覆盖默认: fyi 默认 none]`，一眼看出这是显式要求还是类型默认。
+
 #### 写入端校验（推荐）
 
 ```bash

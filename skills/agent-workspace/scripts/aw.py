@@ -2248,6 +2248,13 @@ def cmd_msg(args) -> int:
             raise GitError("expect 必须是: %s" % " / ".join(EXPECTS))
         if not expect:
             expect = EXPECT_DEFAULT.get(args.type, "none")
+        default_expect = EXPECT_DEFAULT.get(args.type, "none")
+        if ((getattr(args, "expect", "") or "").strip()
+                and default_expect == "reply" and expect in ("ack", "none")):
+            print(
+                "提示: %s 默认 expect=reply；本条被降级为 %s，收件方只会被要求确认收到，\n"
+                "      不会进入「必须实质回复」清单。若只做通知请改用 --type fyi。"
+                % (args.type, expect), file=sys.stderr)
         if len(body) > 2000:
             raise GitError(
                 "body %d 字符，超过 2000 上限。\n"
@@ -2375,30 +2382,55 @@ def cmd_msg(args) -> int:
 
     if action == "pending":
         pending = _pending_messages(root, ident, fetch=not args.no_fetch)
-        if getattr(args, "overdue", 0):
+        overdue = getattr(args, "overdue", None)
+        if overdue is not None:
+            if overdue == -1:
+                thresholds = {"reply": 2.0, "ack": 24.0}
+            else:
+                thresholds = {"reply": float(overdue), "ack": float(overdue)}
             pending = [m for m in pending
-                       if (_age_seconds(m.get("at")) or 0) >= args.overdue * 3600]
+                       if (_age_seconds(m.get("at")) or 0)
+                       >= thresholds.get(m.get("expect"), 0) * 3600]
         pending.sort(key=lambda m: m.get("_seq", 0))
-        if args.json:
+        groups = {"reply": [m for m in pending if m.get("expect") == "reply"],
+                  "ack": [m for m in pending if m.get("expect") == "ack"]}
+
+        def row_of(m: dict) -> dict:
             fields = ("id", "from", "at", "type", "subject", "contract", "version",
                       "expect", "reply_by", "ref", "thread")
-            rows = []
-            for m in pending:
-                row = {k: m.get(k) for k in fields if m.get(k)}
-                age = _age_seconds(m.get("at"))
-                row["age_hours"] = round(age / 3600, 1) if age is not None else None
-                rows.append(row)
-            print(json.dumps({"count": len(pending), "messages": rows},
-                             ensure_ascii=False, indent=2))
+            row = {k: m.get(k) for k in fields if m.get(k)}
+            age = _age_seconds(m.get("at"))
+            row["age_hours"] = round(age / 3600, 1) if age is not None else None
+            default = EXPECT_DEFAULT.get(m.get("type"), "none")
+            row["expect_default"] = default
+            row["override"] = m.get("expect") != default
+            return row
+
+        if args.json:
+            print(json.dumps({
+                "count": len(pending),
+                "groups": {k: len(v) for k, v in groups.items()},
+                "messages": [row_of(m) for m in pending],
+            }, ensure_ascii=False, indent=2))
         else:
             if not pending:
                 print("PENDING 0")
-            for m in pending:
-                print(_msg_line(m, ident, full=True))
-                age = _age_seconds(m.get("at"))
-                print("    age=%s%s" % (
-                    _fmt_age(age),
-                    (" reply_by=" + m["reply_by"]) if m.get("reply_by") else ""))
+            for key, title in (("reply", "需回复（reply）"), ("ack", "需回执（ack）")):
+                items = groups[key]
+                if not items:
+                    continue
+                print("%s %d 条" % (title, len(items)))
+                for m in items:
+                    print(_msg_line(m, ident, full=True))
+                    age = _age_seconds(m.get("at"))
+                    default = EXPECT_DEFAULT.get(m.get("type"), "none")
+                    mark = ""
+                    if m.get("expect") != default:
+                        mark = "  [覆盖默认: %s 默认 %s]" % (m.get("type"), default)
+                    print("    age=%s%s%s" % (
+                        _fmt_age(age),
+                        (" reply_by=" + m["reply_by"]) if m.get("reply_by") else "",
+                        mark))
         return 0
 
     if action == "show":
@@ -3395,7 +3427,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="是否需要反馈（默认按 type 推导）")
     p_msg.add_argument("--reply-by", default="", help="期望回复时间（自由文本，如 2026-10-25T18:00Z）")
     p_msg.add_argument("--rev", default="", help="lint 时的 commit sha")
-    p_msg.add_argument("--overdue", type=float, default=0, help="pending 只看超过 N 小时的消息")
+    p_msg.add_argument("--overdue", type=float, nargs="?", const=-1, default=None,
+                       help="pending 只看超期消息；不带值=reply 2h/ack 24h，带值=统一 N 小时")
     p_msg.add_argument("--body", default="")
     p_msg.add_argument("--subject", default="")
     p_msg.add_argument("--ref", default="")
