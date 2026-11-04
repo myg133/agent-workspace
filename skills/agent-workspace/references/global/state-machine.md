@@ -34,9 +34,9 @@ stateDiagram-v2
 | `demand.md` / `acceptance.md` | 同上 | **BA**（QA 可提交修订建议） | 只能读 |
 | `design-summary.md` | 同上 | **BA**（Dev 提供素材） | 只能读 |
 | `test-cases/*.md` | `BA/demands/REQ-xxx/test-cases/` | **QA 写，BA 提交** | — |
-| `.feature/manifest.json` | `feature-REQ-xxx/.feature/` | **Dev** | 只能读 |
-| `.feature/traceability.md` | 同上 | **Dev** | 只能读 |
-| `.feature/verification-report.md` | 同上 | **Dev**（自验） | QA 追加自己的 `qa-report.md` |
+| `feature-meta/manifest.json` | `feature-REQ-xxx/feature-meta/` | **Dev** | 只能读 |
+| `feature-meta/traceability.md` | 同上 | **Dev** | 只能读 |
+| `feature-meta/verification-report.md` | 同上 | **Dev**（自验） | QA 追加自己的 `qa-report.md` |
 | `dispatch/agent-registry.md` | `BA/dispatch/` | **BA**（每次提交时顺带更新） | 只能读 |
 | `dispatch/req-registry.md` | 同上 | **BA**（认领时写） | 只能读 |
 | `plan/*.md` | `BA/plan/` | **Planner** | 只能读 |
@@ -63,7 +63,7 @@ git push origin demand      # 失败 → pull --rebase → 重试（≤3 次）
 | 门禁 | 条件 | 不满足时 |
 |------|------|---------|
 | 可以开工（`已就绪 → 进行中`） | `demand.md` + `acceptance.md` 非空，测试用例已生成 | 退回 `已评审` |
-| 可以送审（`进行中 → 待验证`） | Dev 自验通过，`.feature/verification-report.md` 存在 | 留在 `进行中` |
+| 可以送审（`进行中 → 待验证`） | Dev 自验通过，`feature-meta/verification-report.md` 存在 | 留在 `进行中` |
 | 可以开 PR（`待验证 → 已验证`） | QA Pre-merge 报告结论为通过 | 置 `已退回` |
 | 可以合并 | `已验证` + CI 绿 | 阻塞 |
 | 可以上线（`已验证 → 已完成`） | Post-merge e2e 通过 + worktree 已回收 | 阻塞 |

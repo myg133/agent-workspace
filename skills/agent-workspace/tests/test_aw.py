@@ -279,6 +279,15 @@ class WorkspaceCase(unittest.TestCase):
         out = run(["verify"], self.repo)
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
 
+    def test_verify_flags_legacy_feature_meta(self):
+        run(["queue", "add", "REQ-001"], self.repo, agent="ba-1")
+        run(["claim", "next"], self.repo, agent="ba-1")
+        wt = self.repo / "feature-REQ-001"
+        (wt / "feature-meta").rename(wt / ".feature")
+        out = run(["verify"], self.repo, agent=None)
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertIn("旧 .feature", out.stdout)
+
     def test_verify_detects_pollution(self):
         (self.repo / "leak.md").write_text("x", encoding="utf-8")
         git(["add", "-f", "leak.md"], self.repo)
@@ -694,7 +703,7 @@ class WorkspaceCase(unittest.TestCase):
     def test_manifest_demand_dir_is_relative(self):
         run(["queue", "add", "REQ-001"], self.repo, agent="ba-1")
         run(["claim", "next"], self.repo, agent="ba-1")
-        manifest = json.loads((self.repo / "feature-REQ-001" / ".feature" / "manifest.json")
+        manifest = json.loads((self.repo / "feature-REQ-001" / "feature-meta" / "manifest.json")
                               .read_text(encoding="utf-8"))
         self.assertTrue(manifest["demand_dir"].startswith("BA/demands/"), manifest["demand_dir"])
         self.assertNotIn(":", manifest["demand_dir"])
@@ -727,7 +736,7 @@ class WorkspaceCase(unittest.TestCase):
 
     def _feature(self, name="feature-REQ-001", agent="pcB", pins=None):
         git(["worktree", "add", name, "-b", "feature/%s" % name.replace("feature-", ""), "develop"], self.repo)
-        d = self.repo / name / ".feature"
+        d = self.repo / name / "feature-meta"
         d.mkdir(parents=True, exist_ok=True)
         payload = {"req": name.replace("feature-", ""), "agent_id": agent}
         if pins is not None:

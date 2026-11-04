@@ -60,7 +60,7 @@ claim next:
   4. 从队列取第一个未被占用的 REQ，写 claims/<REQ>.json
   5. 释放锁
   6. git worktree add feature-REQ-xxx -b feature/REQ-xxx develop（失败重试 4 次）
-  7. 写 .feature/manifest.json 并提交（记录谁领的）
+  7. 写 feature-meta/manifest.json 并提交（记录谁领的）
   8. 输出 CLAIMED <REQ>
 ```
 

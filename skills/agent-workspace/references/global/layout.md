@@ -83,3 +83,18 @@ git worktree add ../feature-REQ-001 -b feature/REQ-001 develop # 在 BA/ 中
 ```
 
 定稿后**晋升**到 Git 跟踪目录（复制 → `git add` → commit → 删除草稿）。纯中间产物不必晋升。
+
+## 6. 需要提交的目录不要用隐藏名
+
+- `feature-meta/`：提交，**不要写成 `.feature/`**；
+- `.local/`：本地目录，保持隐藏；
+- 规则：**要进 Git 的目录用可见名，只有纯本地状态才用 `.` 前缀。**
+
+旧项目迁移（每个 feature worktree 一次）：
+
+```bash
+git mv .feature feature-meta
+git commit -m "[Dev] 迁移 feature 元数据目录"
+```
+
+`aw.py verify` 对旧 `.feature/` 只告警，不阻断；`aw.py upgrade` 会列出待迁移项。

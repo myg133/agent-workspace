@@ -18,7 +18,7 @@
 ```bash
 git rev-parse --show-toplevel        # 确认是自己的 worktree
 git branch --show-current            # feature/REQ-001
-cat .feature/manifest.json           # 需求编号 / 基线 commit
+cat feature-meta/manifest.json           # 需求编号 / 基线 commit
 cat <repo-root>/BA/demands/REQ-001-*/demand.md
 cat <repo-root>/BA/demands/REQ-001-*/acceptance.md
 ls  <repo-root>/BA/demands/REQ-001-*/test-cases/
@@ -26,7 +26,7 @@ ls  <repo-root>/BA/demands/REQ-001-*/test-cases/
 
 > `BA/...` 相对路径在这里是错的，必须带 `<repo-root>/` 前缀（见 `references/global/paths.md`）。
 
-把 `.feature/status.md` 置为「开发中」。
+把 `feature-meta/status.md` 置为「开发中」。
 
 ## 3. Step 2 实现
 
@@ -39,12 +39,12 @@ ls  <repo-root>/BA/demands/REQ-001-*/test-cases/
 
 ```text
 1. 追溯性矩阵：每条 AC → 代码位置 → 测试位置 → PASS/FAIL
-   写入 .feature/traceability.md
+   写入 feature-meta/traceability.md
 2. 单元测试 + 集成测试全绿
 3. Lint 通过；无 TODO/FIXME；无 console.log/debugger
 4. 无硬编码密钥；新增依赖已获批准
 5. 覆盖率：整体 ≥ 80%，关键模块 ≥ 90%
-6. 写入 .feature/verification-report.md（模板 verification-report.md.tpl）
+6. 写入 feature-meta/verification-report.md（模板 verification-report.md.tpl）
 ```
 
 ## 5. Step 4 交回 BA
@@ -58,7 +58,7 @@ REQ-001 开发完成
 - 测试: 单测 42/42，集成 8/8，覆盖率 87%
 - 偏离: 需求未提及但必要的改动（列清单，没有就写"无"）
 - 风险: 已知边界问题
-- 产物: .feature/verification-report.md
+- 产物: feature-meta/verification-report.md
 - 请派 QA Pre-merge
 ```
 

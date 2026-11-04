@@ -196,7 +196,7 @@ msg_reply {"id": "a1b2", "body": "..."}
 > `body` 里的 **fenced code block**（```...```）不参与路径检查，方便贴日志/示例；
 > 但这是豁免，不是鼓励——能在贴之前删掉的路径，仍然应该删。
 
-同理，`.feature/manifest.json` 的 `demand_dir` 也存仓库相对路径，不存本机路径。
+同理，`feature-meta/manifest.json` 的 `demand_dir` 也存仓库相对路径，不存本机路径。
 
 ## 4. 寻址与可见性
 

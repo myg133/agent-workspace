@@ -2,6 +2,17 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.34.0] - 2026-11-04
+
+### 变更：feature 元数据目录改为可见的 feature-meta/
+
+- `.feature/` → `feature-meta/`：需要提交的目录不再用隐藏名
+- `claim` 新建 feature 时写 `feature-meta/manifest.json`
+- `verify` 对旧 `.feature/` 只告警；`upgrade` 列出 `git mv .feature feature-meta`
+- `contract check` / `load_feature_pins` 兼容旧 `.feature/`
+- 文档：layout、state-machine、dev、contracts、concurrency、messaging、upgrade 同步
+- `.local/` 仍为隐藏的本地目录，不提交
+
 ## [1.33.0] - 2026-10-29
 
 ### 改进：expect 语义分级（bus-report change request）

@@ -13,7 +13,8 @@
 | `code/` `BA/` `Deploy/` | 无 | 不动 |
 | `feature-xxx/` | 无 | 不动（已合并的按回收流程处理） |
 | `BA/dispatch/*.md` | 表结构变了（认领改为 `.aw/`） | 只补缺失文件；旧表冻结为快照 |
-| `.feature/` | 新增规范 | 可选：补 `manifest.json` |
+| `feature-meta/` | 新增规范 | 可选：补 `manifest.json` |
+| 旧 `.feature/` | 隐藏目录（已废弃） | 每个 feature worktree：`git mv .feature feature-meta` 并提交 |
 | `.aw/` | 新增（本地状态） | 只在启用 claim 时创建 |
 | `.local/` | 无 | 确认各 worktree 的 `.gitignore` 里有 `.local/` |
 | `references/*.md` | **改名**（skill 内部） | 改 prompt / 文档里的引用 |

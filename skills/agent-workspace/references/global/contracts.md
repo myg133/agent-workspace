@@ -57,7 +57,7 @@ BA/contracts/
 每个 feature worktree 在自己 manifest 里声明用哪版：
 
 ```json
-// feature-REQ-002/.feature/manifest.json
+// feature-REQ-002/feature-meta/manifest.json
 {
   "req": "REQ-002",
   "agent_id": "pcB-ba-1",
@@ -136,6 +136,6 @@ user-api  v2       pcB-ba-1   feature-REQ-001(v1)
 
 - 契约正文：`demand` 分支（可 review、可追溯）
 - 变更通知与回执：`bus` 分支（空 commit）
-- pin：feature 分支的 `.feature/manifest.json`
+- pin：feature 分支的 `feature-meta/manifest.json`
 
 三者由 `contract check` 串起来：**文件有没有、谁该看、有没有确认、实现有没有跟上**。

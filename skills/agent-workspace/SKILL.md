@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.33.0
+  version: 1.34.0
 ---
 
 # Agent Workspace
@@ -89,7 +89,7 @@ python <skill-path>/scripts/aw.py audit
 11. **身份必须由人指定**：`--agent <name>` 或 `AW_AGENT_ID`，都没有时工具 `exit 2`（`MISSING_AGENT_ID`），
     不自动生成、不猜。名称在同一仓库内唯一且跨会话稳定。
 12. 未读消息存在时 `claim next` 拒绝（`UNREAD_MESSAGES`，exit 4）——先读消息（或让 Notifier 读）再认领。
-13. 契约有版本：已 ratified 的 `vN.md` 不可改；消费方在 `.feature/manifest.json` 里 pin 版本；
+13. 契约有版本：已 ratified 的 `vN.md` 不可改；消费方在 `feature-meta/manifest.json` 里 pin 版本；
     合并前 `aw.py contract check` 必须通过。
 14. `develop` 只通过 PR 合并；`main` 只从 `release` 合并。
 15. 命令铁律：`git checkout --orphan` 之后用 `git reset`，**绝不用 `git rm -rf .`**（会删工作区文件）。

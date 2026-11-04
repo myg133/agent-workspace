@@ -24,6 +24,8 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = SKILL_DIR / "assets" / "templates"
 ROOT_FILES = {".gitignore", "README.md"}
+FEATURE_META = "feature-meta"
+LEGACY_FEATURE_META = ".feature"
 
 OK, WARN, FAIL = "OK  ", "WARN", "FAIL"
 
@@ -240,14 +242,23 @@ def _check_naming(root: Path, report) -> None:
 
 def _check_feature_artifacts(root: Path, report) -> None:
     missing = []
+    legacy = []
     for e in worktrees(root):
         if not e["path"].name.startswith("feature-"):
             continue
-        if not (e["path"] / ".feature" / "manifest.json").exists():
+        meta = e["path"] / FEATURE_META / "manifest.json"
+        old = e["path"] / LEGACY_FEATURE_META / "manifest.json"
+        if meta.exists():
+            continue
+        if old.exists():
+            legacy.append(str(e["path"].relative_to(root)))
+        else:
             missing.append(str(e["path"].relative_to(root)))
+    if legacy:
+        report(WARN, "feature 产物", "旧 .feature（%s）；运行 aw.py upgrade 迁移" % ", ".join(legacy))
     if missing:
-        report(WARN, "feature 产物", "缺 .feature/manifest.json: %s" % ", ".join(missing))
-    else:
+        report(WARN, "feature 产物", "缺 %s/manifest.json: %s" % (FEATURE_META, ", ".join(missing)))
+    if not legacy and not missing:
         report(OK, "feature 产物", "无 feature worktree 或产物齐全")
 
 
@@ -1207,10 +1218,10 @@ def _write_manifest(root: Path, req: str, ident: dict) -> None:
         "created_at": _now(),
         "demand_dir": demand_rel,   # 仓库相对路径，跨机可读
     }
-    write_json(wt / ".feature" / "manifest.json", manifest)
+    write_json(wt / FEATURE_META / "manifest.json", manifest)
     # 把分配记录提交进 feature 分支：既是审计，也让工作区保持干净（便于回收）
     ident_args = ensure_identity(wt)
-    git(*ident_args, "add", ".feature/manifest.json", cwd=wt, check=False)
+    git(*ident_args, "add", "%s/manifest.json" % FEATURE_META, cwd=wt, check=False)
     git(*ident_args, "commit", "-q", "-m", "[BA] 分配 %s → %s" % (req, ident["agent_id"]),
         cwd=wt, check=False)
 
@@ -3041,7 +3052,9 @@ def load_feature_pins(root: Path) -> list[dict]:
     for e in worktrees(root):
         if not e["path"].name.startswith("feature-") or not e["path"].exists():
             continue
-        manifest = e["path"] / ".feature" / "manifest.json"
+        manifest = e["path"] / FEATURE_META / "manifest.json"
+        if not manifest.exists():
+            manifest = e["path"] / LEGACY_FEATURE_META / "manifest.json"
         data = read_json(manifest, {}) if manifest.exists() else {}
         pins = data.get("contracts") or {}
         features.append({
@@ -3234,10 +3247,19 @@ def cmd_upgrade(args) -> int:
 
     # 4. feature 产物
     for e in wt:
-        if e["path"].name.startswith("feature-") and not (e["path"] / ".feature" / "manifest.json").exists():
-            add.append(("%s/.feature/manifest.json" % e["path"].name,
+        if not e["path"].name.startswith("feature-"):
+            continue
+        meta = e["path"] / FEATURE_META / "manifest.json"
+        old = e["path"] / LEGACY_FEATURE_META / "manifest.json"
+        if meta.exists():
+            continue
+        if old.exists():
+            adjust.append(("%s/%s" % (e["path"].name, LEGACY_FEATURE_META),
+                           "旧隐藏目录 .feature", "git mv .feature %s 并提交" % FEATURE_META))
+        else:
+            add.append(("%s/%s/manifest.json" % (e["path"].name, FEATURE_META),
                         "缺少分配记录",
-                        "启用 .feature 规范时补 manifest（agent_id / base_commit）"))
+                        "补 manifest（agent_id / base_commit）"))
 
     # 5. 僵尸 worktree
     for e in wt:
