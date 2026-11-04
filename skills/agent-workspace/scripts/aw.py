@@ -1844,7 +1844,34 @@ def render_message(meta: dict) -> str:
     return "\n".join(head) + "\n"
 
 
-def _bus_fetch(root: Path) -> None:
+def _remote_bus_sha(root: Path) -> str | None:
+    """用 ls-remote 廉价探测远端 bus 的最新 sha（只查引用，不传对象）。"""
+    if not _has_remote(root):
+        return None
+    try:
+        proc = git("ls-remote", "origin", "refs/heads/%s" % BUS_BRANCH,
+                   cwd=root, check=False, timeout=10)
+    except GitError:
+        return None
+    if proc.returncode != 0:
+        return None
+    for line in proc.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[1].endswith("/" + BUS_BRANCH):
+            return parts[0]
+    return None
+
+
+def _bus_fetch(root: Path, force: bool = False) -> None:
+    """拉取 bus；先用 ls-remote 探测远端 tip，未变化就跳过 fetch。
+
+    远端不可达或无 remote 时静默降级，继续读本地已有 bus。
+    """
+    remote_sha = _remote_bus_sha(root)
+    if remote_sha is None:
+        return
+    if not force and remote_sha == _bus_tip(root):
+        return
     try:
         git("fetch", "-q", "origin", BUS_BRANCH, cwd=root, check=False, timeout=20)
     except GitError:
@@ -1947,32 +1974,124 @@ def _bus_ref(root: Path) -> str | None:
     return None
 
 
-def load_bus_messages(root: Path, fetch: bool = True) -> list[dict]:
-    if fetch:
-        _bus_fetch(root)
-    ref = _bus_ref(root)
-    if not ref:
-        return []
-    out = git("log", ref, "--format=%H%x1f%B%x1f", cwd=root, check=False).stdout
+BUS_CACHE_VERSION = 1
+
+
+def _bus_cache_paths(root: Path) -> tuple[Path, Path]:
+    """本地解析缓存的两个文件：消息快照（ndjson）与已解析到的 commit 游标。"""
+    base = aw_path(root, "bus-cache")
+    return base / "messages.ndjson", base / "cursor.json"
+
+
+def _load_bus_cache(root: Path) -> tuple[list[dict], str]:
+    """读取本地缓存，返回 (消息列表, 上次解析到的 sha)。
+
+    按消息 id 去重：即使上次"写入缓存后、推进游标前"进程被杀，
+    下次也不会把同一条消息重复加进列表。
+    """
+    msgs_file, cursor_file = _bus_cache_paths(root)
+    messages: list[dict] = []
+    seen: set[str] = set()
+    if msgs_file.exists():
+        for line in msgs_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                meta = json.loads(line)
+            except ValueError:
+                continue  # 单行损坏不影响其余消息
+            mid = meta.get("id")
+            if mid and mid in seen:
+                continue
+            if mid:
+                seen.add(mid)
+            messages.append(meta)
+    cursor = ""
+    if cursor_file.exists():
+        data = read_json(cursor_file, {})
+        if data.get("version") == BUS_CACHE_VERSION:
+            cursor = data.get("sha") or ""
+    return messages, cursor
+
+
+def _save_bus_cache(root: Path, messages: list[dict], tip: str,
+                    rebuild: bool = False) -> None:
+    """把新解析的消息写入缓存并推进游标；rebuild=True 时整体重写。"""
+    msgs_file, cursor_file = _bus_cache_paths(root)
+    msgs_file.parent.mkdir(parents=True, exist_ok=True)
+    with msgs_file.open("w" if rebuild else "a", encoding="utf-8", newline="\n") as fh:
+        for meta in messages:
+            fh.write(json.dumps(meta, ensure_ascii=False) + "\n")
+    write_text(cursor_file, json.dumps(
+        {"version": BUS_CACHE_VERSION, "sha": tip}, ensure_ascii=False))
+
+
+def _commit_exists(root: Path, sha: str) -> bool:
+    """判断游标指向的 commit 是否仍存在（用于检测历史被改写）。"""
+    if not sha:
+        return False
+    return git("cat-file", "-e", "%s^{commit}" % sha,
+               cwd=root, check=False, timeout=10).returncode == 0
+
+
+def _parse_bus_log(out: str) -> tuple[list[dict], int]:
+    """解析 `git log --format=%H%x1f%B%x1f` 的输出。
+
+    返回 (「旧 → 新」的消息列表, 无法解析的条数)。
+    """
     chunks = out.split("\x1f")
     messages = []
     bad = 0
     for i in range(0, len(chunks) - 1, 2):
         sha = chunks[i].strip().splitlines()[-1] if chunks[i].strip() else ""
-        text = chunks[i + 1]
-        meta = parse_message(text)
+        meta = parse_message(chunks[i + 1])
         if meta and meta.get("id"):
             meta["_sha"] = sha
             messages.append(meta)
         else:
             bad += 1
+    # git log 是「新 → 旧」，反转成「旧 → 新」：顺序等于提交顺序，不受时钟影响
+    messages.reverse()
+    return messages, bad
+
+
+def load_bus_messages(root: Path, fetch: bool = True) -> list[dict]:
+    """读取全部 bus 消息（旧 → 新）。
+
+    只解析游标之后的新提交（`<cursor>..bus`），结果追加到本地缓存，
+    因此单次读取的成本与"新增消息数"成正比，而不是与历史总量成正比。
+    缓存游标失效（历史被改写）时自动退回全量重建。
+    """
+    if fetch:
+        _bus_fetch(root)
+    ref = _bus_ref(root)
+    if not ref:
+        return []
+
+    cached, cursor = _load_bus_cache(root)
+    if cursor and not _commit_exists(root, cursor):
+        cached, cursor = [], ""  # 游标已失效：丢弃缓存，按全量重建
+
+    rev_range = "%s..%s" % (cursor, ref) if cursor else ref
+    out = git("log", rev_range, "--format=%H%x1f%B%x1f", cwd=root, check=False).stdout
+    fresh, bad = _parse_bus_log(out)
     global _BUS_WARNED
     if bad and not _BUS_WARNED:
         _BUS_WARNED = True
         print("警告：%d 条 bus 消息无法解析（缺首行 --- 或字段不完整），已忽略；"
               "运行 aw.py msg doctor 查看" % bad, file=sys.stderr)
-    # git log 是「新 → 旧」，反转成「旧 → 新」：消息顺序等于提交顺序，不受时钟影响
-    messages.reverse()
+
+    if fresh:
+        known = {m.get("id") for m in cached if m.get("id")}
+        fresh = [m for m in fresh if m.get("id") not in known]
+    if fresh:
+        tip = git("rev-parse", ref, cwd=root, check=False).stdout.strip()
+        _save_bus_cache(root, fresh, tip, rebuild=not cursor)
+        messages = cached + fresh
+    else:
+        messages = cached
+
     for idx, meta in enumerate(messages):
         meta["_seq"] = idx
     return messages
@@ -2203,6 +2322,113 @@ def _pre_push_hook(root: Path) -> int:
     return 0
 
 
+def _notify_state_path(root: Path, agent_id: str) -> Path:
+    return aw_path(root, "msg-notified", "%s.json" % agent_id)
+
+
+def _notified_state(root: Path, agent_id: str) -> dict:
+    """通知状态：`ids` 是已通知过、`baseline` 是常驻首启的历史基线。
+
+    两者都与"已读"解耦：`msg watch` 只负责叫醒，不推进已读。
+    """
+    return read_json(_notify_state_path(root, agent_id), {})
+
+
+def _write_notified_ids(root: Path, agent_id: str, ids: set[str],
+                        universe: set[str], baseline: set[str] | None = None,
+                        locked: bool = False) -> None:
+    """合并写通知状态；`locked=True` 表示调用方已持有该锁（避免重复加锁死等）。"""
+    path = _notify_state_path(root, agent_id)
+    lock = None if locked else FileLock(aw_path(root, "locks", "msg-notified.lock"))
+    if lock is not None:
+        lock.__enter__()
+    try:
+        current = read_json(path, {})
+        known = set(current.get("ids") or [])
+        seen = set(current.get("baseline") or [])
+        if universe:
+            known &= universe
+            seen &= universe
+        write_json(path, {
+            "ids": sorted(known | set(ids)),
+            "baseline": sorted(seen | set(baseline or ())),
+            "updated_at": _now(),
+        })
+    finally:
+        if lock is not None:
+            lock.__exit__(None, None, None)
+
+
+def _watch_poll(root: Path, ident: dict, args,
+                exclude_baseline: bool = False) -> list[dict]:
+    """扫一轮 bus，返回「发给我、未读、且还没通知过」的消息。
+
+    只看未读：已经被 `msg inbox` 消费的消息不再叫醒，避免 `--once` 重复输出。
+    `exclude_baseline=True` 用于常驻模式，跳过首启基线里的历史积压。
+    """
+    messages = load_bus_messages(root)
+    state = _notified_state(root, ident["agent_id"])
+    skip = set(state.get("ids") or [])
+    if exclude_baseline:
+        skip |= set(state.get("baseline") or [])
+    read = _read_ids(root, ident["agent_id"], messages)
+    fresh = []
+    for meta in messages:
+        if not _is_mine(meta, ident):
+            continue
+        if meta.get("from") == ident["agent_id"]:
+            continue  # 自己的消息不叫醒自己
+        mid = meta.get("id")
+        if not mid or mid in skip or mid in read:
+            continue
+        if args.sender and meta.get("from") != args.sender:
+            continue
+        if args.type and meta.get("type") != args.type:
+            continue
+        fresh.append(meta)
+    return fresh
+
+
+def _claim_watch(root: Path, ident: dict, args, exclude_baseline: bool,
+                 record_baseline: bool = False) -> list[dict]:
+    """原子领取待通知消息：加锁 → 扫描 → 标记。
+
+    并发监听同一个 agent 时，只有一个进程能拿到同一批消息，避免重复投递。
+    `record_baseline=True` 时把命中项记为基线并返回空列表（常驻首启不补发积压）。
+    """
+    with FileLock(aw_path(root, "locks", "msg-notified.lock")):
+        fresh = _watch_poll(root, ident, args, exclude_baseline)
+        if not fresh:
+            return []
+        ids = {m["id"] for m in fresh if m.get("id")}
+        universe = {m.get("id") for m in load_bus_messages(root, fetch=False)
+                    if m.get("id")}
+        if record_baseline:
+            _write_notified_ids(root, ident["agent_id"], set(), universe,
+                                baseline=ids, locked=True)
+            return []
+        _write_notified_ids(root, ident["agent_id"], ids, universe, locked=True)
+        return fresh
+
+
+def _emit_watch(ident: dict, messages: list[dict], as_json: bool) -> None:
+    """把新消息打印到 stdout，供 agent 直接读取。
+
+    `--json` 输出结构化结果，便于脚本解析；默认输出与 `msg inbox` 一致的紧凑行。
+    """
+    if as_json:
+        fields = ("id", "from", "to", "cc", "at", "type", "subject", "contract",
+                  "version", "ref", "deadline", "thread", "priority", "expect",
+                  "reply_by", "body")
+        print(json.dumps({"found": True, "count": len(messages),
+                          "messages": [{k: m.get(k) for k in fields if m.get(k)}
+                                       for m in messages]},
+                         ensure_ascii=False, indent=2))
+        return
+    for meta in messages:
+        print(_msg_line(meta, ident))
+
+
 def cmd_msg(args) -> int:
     root = repo_root()
     action = args.action
@@ -2249,7 +2475,8 @@ def cmd_msg(args) -> int:
         cc = [t.strip() for t in (args.cc or "").split(",") if t.strip()]
         if not to:
             raise GitError("--to 不能为空（可以是 all / role:ba / agent_id）")
-        if args.type not in MSG_TYPES:
+        msg_type = args.type or "fyi"
+        if msg_type not in MSG_TYPES:
             raise GitError("type 必须是: %s" % ", ".join(MSG_TYPES))
         body = (args.body or "").strip()
         if not body:
@@ -2258,14 +2485,14 @@ def cmd_msg(args) -> int:
         if expect and expect not in EXPECTS:
             raise GitError("expect 必须是: %s" % " / ".join(EXPECTS))
         if not expect:
-            expect = EXPECT_DEFAULT.get(args.type, "none")
-        default_expect = EXPECT_DEFAULT.get(args.type, "none")
+            expect = EXPECT_DEFAULT.get(msg_type, "none")
+        default_expect = EXPECT_DEFAULT.get(msg_type, "none")
         if ((getattr(args, "expect", "") or "").strip()
                 and default_expect == "reply" and expect in ("ack", "none")):
             print(
                 "提示: %s 默认 expect=reply；本条被降级为 %s，收件方只会被要求确认收到，\n"
                 "      不会进入「必须实质回复」清单。若只做通知请改用 --type fyi。"
-                % (args.type, expect), file=sys.stderr)
+                % (msg_type, expect), file=sys.stderr)
         if len(body) > 2000:
             raise GitError(
                 "body %d 字符，超过 2000 上限。\n"
@@ -2288,7 +2515,7 @@ def cmd_msg(args) -> int:
                 raise GitError("发送者不是 active: %s" % ident["agent_id"])
         meta = {
             "id": _msg_id(), "from": ident["agent_id"], "to": to, "cc": cc,
-            "at": _now_utc(), "type": args.type, "body": body,
+            "at": _now_utc(), "type": msg_type, "body": body,
             "ref": ref, "contract": args.contract or "",
             "version": args.version or "", "deadline": args.deadline or "",
             "thread": args.thread or "", "priority": args.priority or "p2",
@@ -2351,6 +2578,26 @@ def cmd_msg(args) -> int:
             _write_read_ids(root, ident["agent_id"],
                             {m["id"] for m in show if m.get("id")}, universe)
         return 0
+
+    if action == "watch":
+        interval = max(1, int(args.interval))
+        deadline = time.time() + args.watch_timeout if args.watch_timeout > 0 else None
+        state_path = _notify_state_path(root, ident["agent_id"])
+        bootstrapped = state_path.exists() or args.once
+        while True:
+            # 首启基线：只压制常驻模式的首批弹窗，不写成"已通知"，
+            # 这样积压消息之后仍能被 `--once` 补出来。
+            fresh = _claim_watch(root, ident, args,
+                                 exclude_baseline=not args.once,
+                                 record_baseline=not bootstrapped)
+            bootstrapped = True
+            if fresh:
+                _emit_watch(ident, fresh, args.json)
+            if args.once:
+                return 0 if fresh else 3
+            if deadline and time.time() >= deadline:
+                return 0
+            time.sleep(interval)
 
     if action == "wait":
         deadline = time.time() + max(1, int(args.timeout))
@@ -2488,7 +2735,7 @@ def cmd_msg(args) -> int:
             raise GitError("--body 不能为空（回复内容）")
         meta = {
             "id": _msg_id(), "from": ident["agent_id"], "to": [target.get("from", "")],
-            "cc": target.get("cc") or [], "at": _now_utc(), "type": args.type,
+            "cc": target.get("cc") or [], "at": _now_utc(), "type": args.type or "fyi",
             "body": body, "re": target.get("id"),
             "thread": target.get("thread") or target.get("id"),
             "contract": target.get("contract", ""), "version": target.get("version", ""),
@@ -2779,7 +3026,7 @@ def _watch_loop(root: Path, state_path: Path, args) -> int:
     while True:
         children = [c for c in children if c.poll() is None]
         if not args.no_fetch:
-            git("fetch", "-q", "origin", BUS_BRANCH, cwd=root, check=False, timeout=20)
+            _bus_fetch(root)  # 内部先用 ls-remote 探测，tip 未变不 fetch
         messages = load_bus_messages(root, fetch=False)
         roster = load_roster(root)
         new = [m for m in messages if m.get("id") and m["id"] not in seen]
@@ -2830,6 +3077,7 @@ CLI_ONLY = [
     {"name": "upgrade", "summary": "旧项目升级检查（只读）", "audience": "human"},
     {"name": "hook install", "summary": "安装 pre-push 校验", "audience": "human"},
     {"name": "watch", "summary": "bus 监听，新消息唤醒 agent（supervisor）", "audience": "supervisor"},
+    {"name": "msg watch", "summary": "单 agent 收件箱监听（--once exit 0/3）", "audience": "agent"},
     {"name": "mcp", "summary": "检测 / 安装 MCP 配置", "audience": "human"},
     {"name": "agent bootstrap", "summary": "名册为空时抢占第一个 Planner", "audience": "human"},
     {"name": "agent token", "summary": "轮换 agent 令牌", "audience": "human"},
@@ -3533,13 +3781,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_msg = sub.add_parser("msg", help="BA 间消息（空 commit 走 bus 分支）")
     p_msg.add_argument("action", choices=["send", "inbox", "list", "pending", "reply",
-                                          "ack", "flush", "show", "wait",
+                                          "ack", "flush", "show", "wait", "watch",
                                           "lint", "doctor", "pre-push-hook"])
     p_msg.add_argument("--json", action="store_true", help="机器可读输出")
     p_msg.add_argument("id", nargs="?", default="")
     p_msg.add_argument("--to", default="", help="收件人，逗号分隔；支持 all / role:ba / agent_id")
     p_msg.add_argument("--cc", default="")
-    p_msg.add_argument("--type", default="fyi", choices=list(MSG_TYPES))
+    p_msg.add_argument("--type", default="", choices=["", *MSG_TYPES],
+                       help="消息类型；send 缺省为 fyi，其余动作缺省不过滤")
     p_msg.add_argument("--expect", default="", choices=["", *EXPECTS],
                        help="是否需要反馈（默认按 type 推导）")
     p_msg.add_argument("--reply-by", default="", help="期望回复时间（自由文本，如 2026-10-25T18:00Z）")
@@ -3563,8 +3812,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_msg.add_argument("--no-advance", action="store_true", help="只读，不推进游标（Notifier 用）")
     p_msg.add_argument("--force", action="store_true", help="跳过收件人注册校验")
     p_msg.add_argument("--timeout", type=int, default=120, help="wait 最长秒数（默认 120）")
-    p_msg.add_argument("--interval", type=int, default=5, help="wait 轮询间隔秒数")
+    p_msg.add_argument("--interval", type=int, default=5, help="wait / watch 轮询间隔秒数")
     p_msg.add_argument("--consume", action="store_true", help="wait 命中后标记已读")
+    p_msg.add_argument("--once", action="store_true",
+                       help="watch 只扫一轮：有消息 exit 0，无消息 exit 3")
+    p_msg.add_argument("--watch-timeout", type=int, default=0,
+                       help="watch 常驻模式最长运行秒数，0 表示一直运行")
     p_msg.add_argument("--ok", action="store_true", help="ack 时表示同意（默认）")
     p_msg.add_argument("--note", default="", help="ack 附言")
     p_msg.add_argument("--reject", action="store_true", help="ack 时表示不同意")

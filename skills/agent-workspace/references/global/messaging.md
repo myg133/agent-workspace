@@ -237,6 +237,7 @@ aw.py msg flush           # 重试 outbox 里的未发送消息
 
 - **发送先落 `.aw/outbox/`**：push 成功才删除；失败返回 `QUEUED`，下次 send/inbox 自动重试。
 - **并发推送**：push 被拒 → 重新 fetch → 基于最新 tip 重放 outbox → 再 push（最多 4 次）。
+- **读取先探针**：先 `ls-remote` 只查远端引用（~100ms），与本地 tip 一致就跳过 fetch；解析结果缓存在 `.aw/bus-cache/`，只解析游标之后的新提交，不再每次扫全历史。
 - **永不 rebase / force**：远端历史只增不改，消息顺序 = push 顺序。
 - **时间戳用 UTC**：跨机时钟不一致时仍可比；排序以 commit 图为准。
 
@@ -323,6 +324,30 @@ aw.py watch --interval 5 --exec ./start-agent.sh
 详见 `references/global/trigger.md`。
 
 只有在客户端不支持长工具调用时，才退回定时轮询；不要把它当默认。
+
+### 单 agent 监听自己的收件箱（`msg watch`）
+
+`aw.py watch` 是**每台机器一个**的唤醒器（按 `to`/`cc` 展开要拉起哪些 agent）；
+如果 agent 想自己盯着自己的收件箱，用 `msg watch`，按 `AW_AGENT_ID` 隔离：
+
+```bash
+aw.py msg watch --once --json     # 扫一轮：有消息 exit 0，没有 exit 3
+aw.py msg watch --interval 2      # 常驻：有新消息就打印到 stdout
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--once` | 只扫一轮就退出，适合每回合开始 / 任务切换前调用 |
+| `--interval` | 扫描间隔，默认 5 秒；每轮只做一次 `ls-remote` 引用探测 |
+| `--watch-timeout` | 常驻模式最长运行秒数，0 表示一直运行 |
+| `--json` | 输出结构化结果，便于脚本解析 |
+| `--type` / `--sender` | 只在显式传入时过滤（默认不过滤，所有类型都会叫醒） |
+
+- 输出直接走 stdout，agent 读输出即可，不需要额外的投递通道。
+- 通知与已读**解耦**：watch 只负责叫醒，不消费消息；已读仍由 `msg inbox` 推进。
+- 常驻模式首次启动以当前未读为基线，不补发历史积压；基线不算"已通知"，所以之后用 `--once` 仍能把存量补出来。
+- 同一个 agent 并发跑多个 watch 时，同一条消息只会投递一次：领取动作（扫描 + 标记）在 `.aw/locks/msg-notified.lock` 下原子完成。
+- 状态落在 `.aw/msg-notified/<agent_id>.json`：`ids` 是已通知、`baseline` 是首启基线；两者都按 `agent_id` 隔离。
 
 ## 12. 规模
 

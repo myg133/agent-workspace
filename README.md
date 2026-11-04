@@ -138,7 +138,7 @@ bun run bus-report.ts serve --remote git@github.com:you/your-repo.git --out ./ou
 python -m unittest discover -s skills/agent-workspace/tests -v
 ```
 
-61 个用例覆盖：布局、巡检、认领并发、消息寻址/游标/回执/离线队列/阻塞等待、反馈义务与欠回复门禁、契约检查、升级检查、身份绑定与令牌、MCP 握手。
+78 个用例覆盖：布局、巡检、认领并发、消息寻址/游标/回执/离线队列/阻塞等待/低延迟监听、反馈义务与欠回复门禁、契约检查、升级检查、身份绑定与令牌、MCP 握手。
 全部在临时目录运行，不碰当前仓库。
 
 ## 升级已有项目

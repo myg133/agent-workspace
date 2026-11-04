@@ -2,6 +2,30 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.36.0] - 2026-11-04
+
+### 新增：单 agent 收件箱监听（`msg watch`）
+
+- `aw.py msg watch --once --json`：扫一轮即退出，有消息 exit 0、无消息 exit 3，输出走 stdout
+- `aw.py msg watch --interval N`：常驻监听；`--watch-timeout` 限制运行时长
+- 按 `AW_AGENT_ID` 只看自己的收件箱，同机多 agent 各听各的，互不串收
+- 通知与已读解耦：watch 只负责叫醒，不消费消息，已读仍由 `msg inbox` 推进
+- 常驻首启以当前未读为基线，不补发历史积压；基线不算已通知，存量可用 `--once` 补出
+- 同一 agent 并发 watch 时原子领取（`.aw/locks/msg-notified.lock`），同一条消息只投递一次
+- 状态按 agent 隔离：`.aw/msg-notified/<agent_id>.json`（`ids` 已通知 / `baseline` 首启基线）
+- 与 per machine 的 `aw.py watch` 分工：前者是唤醒器，后者是收件箱监听
+
+### 优化：bus 读取成本
+
+- 读取前先 `git ls-remote` 探测远端引用（~100ms），tip 未变则跳过 `git fetch`
+- 增量解析：只解析游标之后的新提交，结果缓存到 `.aw/bus-cache/`，成本与历史规模无关
+- `aw.py watch` 每轮轮询同样走探针，不再无条件 fetch
+
+### 修复
+
+- `msg wait` / `msg watch` 的 `--type` 默认值改为空：此前默认只匹配 `fyi`，
+  导致 `question` / `blocker` / `contract-change` 永远等不到（`msg send` 仍默认 `fyi`）
+
 ## [1.35.0] - 2026-11-04
 
 ### 新增：首次接入 onboarding
