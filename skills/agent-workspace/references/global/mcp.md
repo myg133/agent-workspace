@@ -169,6 +169,7 @@ agent 运行时不要 shell 调 `aw.py`；用同名工具。参数名基本一�
 | `aw.py msg ack ID` | `msg_ack` | `reject` / `note` |
 | `aw.py msg flush` | `msg_flush` | |
 | `aw.py msg wait` | `msg_wait` | `timeout` / `consume` |
+| `aw.py msg watch` | —（CLI only） | `--once` / `--interval` / `--watch-timeout` / `--json`；MCP 侧用 `msg_wait` |
 | `aw.py queue add REQ` | `queue_add` | |
 | `aw.py queue list` | `queue_list` | |
 | `aw.py queue sync` | `queue_sync` | |
