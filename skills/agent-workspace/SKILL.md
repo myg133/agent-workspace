@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.34.0
+  version: 1.35.0
 ---
 
 # Agent Workspace
@@ -14,6 +14,9 @@ Planner 定方向、BA 写需求、Dev 写代码、QA 只验证、Deploy 只管�
 ## 30 秒上手
 
 ```bash
+# 第一次：先看缺什么，再决定 init / migrate、local / remote、solo / team
+python <skill-path>/scripts/aw.py onboard
+
 # 新项目
 python <skill-path>/scripts/aw.py init my-project --name "My Project" --remote <url>
 
@@ -106,6 +109,7 @@ python <skill-path>/scripts/aw.py audit
 | **QA** | 子 | `references/roles/qa.md` | `global/state-machine.md`（写入权） |
 | **Deploy** | 子 | `references/roles/deploy.md` | `lifecycle/release.md` |
 | **Explore** | 子 | `references/roles/explore.md` | `global/paths.md` |
+| 第一次接入 / 初始化 | `references/init/onboarding.md` | `aw.py onboard` |
 | 初始化项目 | `references/init/new-project.md` | `global/layout.md` |
 | 迁移仓库 | `references/init/migrate-project.md` | — |
 | 巡检 / 回收 | `references/lifecycle/audit.md` | `lifecycle/cleanup.md` |

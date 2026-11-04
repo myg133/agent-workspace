@@ -137,6 +137,7 @@ TOOLS = [
          {"force": BOOL}),
     tool("hook_status", "查看 pre-push 是否已安装", {}),
     tool("schema", "工具清单（JSON）：MCP 工具 + 仅 CLI 命令；不要读源码", {}),
+    tool("onboard", "首次接入检查：模式 / 身份 / 名册 / hook / 待问问题", {}),
     tool("audit", "只读巡检：拓扑、僵尸 worktree、stale session",
          {"stale_minutes": INT}),
     tool("queue_add", "把需求加入待认领队列", {"req": STR, "title": STR}, ["req"]),
@@ -276,6 +277,8 @@ def build_argv(name: str, args: dict) -> list[str]:
         return ["hook", "status"]
     if name == "schema":
         return ["schema"]
+    if name == "onboard":
+        return ["onboard", "--json"]
     if name == "verify":
         argv = ["verify"]
         for key in ("strict", "json"):

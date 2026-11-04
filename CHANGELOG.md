@@ -2,6 +2,17 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.35.0] - 2026-11-04
+
+### 新增：首次接入 onboarding
+
+- `aw.py onboard [--json]`：检查 initialized / mode(local|remote) / team(solo|team) /
+  identity / roster / hook / queue，并给出待问用户的问题与下一步命令
+- MCP 新增 `onboard` 工具
+- 新增 `references/init/onboarding.md`：六个问题（init/migrate、local/remote、
+  solo/team、agent 命名、主分支、hook）与三套推荐流程
+- SKILL「30 秒上手」改为先 `onboard` 再 `init` / `migrate`
+
 ## [1.34.0] - 2026-11-04
 
 ### 变更：feature 元数据目录改为可见的 feature-meta/

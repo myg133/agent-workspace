@@ -2863,6 +2863,97 @@ def cmd_schema(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- onboard
+
+def cmd_onboard(args) -> int:
+    data: dict = {"initialized": False, "questions": [], "next": []}
+    try:
+        root = repo_root()
+        aw_init(root)
+        branch = branch_of(root)
+    except (GitError, IdentityError):
+        data["questions"] = [
+            "这是新项目（init）还是已有仓库（migrate）？",
+            "本地模式还是远程模式（有 origin）？",
+        ]
+        data["next"] = ["aw.py init <dir> --name ... [--remote ...]", "或 aw.py migrate --main <branch>"]
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False, indent=2))
+        else:
+            print("状态: 不是 workspace 仓库")
+            for q in data["questions"]:
+                print("  问用户: " + q)
+        return 0
+
+    files = sorted(p for p in git("ls-files", cwd=root, check=False).stdout.splitlines() if p)
+    remote = git("remote", "get-url", "origin", cwd=root, check=False).stdout.strip()
+    roster = load_roster(root)
+    active = [a for a in roster if a.get("status", "active") == "active"]
+    planners = [a for a in active if a.get("role") == "planner"]
+    hook_path = _pre_push_path(root)
+    hook_ok = hook_path.exists() and HOOK_MARKER in hook_path.read_text(
+        encoding="utf-8", errors="replace")
+    queue = load_queue(root)
+    ident = (os.environ.get("AW_AGENT_ID") or "").strip()
+
+    mode = "remote" if remote else "local"
+    team = "team" if planners else "solo"
+    questions = []
+    if not remote:
+        questions.append("本地模式（不 push、不跨机）还是补一个 origin？")
+    if not roster:
+        questions.append("BA 叫什么名字？单人 solo 还是 Planner + 多 BA？")
+    elif not planners and len(active) > 1:
+        questions.append("已有多个 BA 但没有 Planner：指定一个 Planner，还是保持 solo？")
+    if not ident:
+        questions.append("本终端用哪个 agent_id？（如 pcA-ba-1）")
+    if not hook_ok:
+        questions.append("是否安装 pre-push 校验？（aw.py hook install）")
+
+    data.update({
+        "initialized": True,
+        "root": str(root),
+        "branch": branch,
+        "mode": mode,
+        "remote": remote,
+        "team": team,
+        "identity": ident,
+        "roster": {"total": len(roster), "active": len(active),
+                   "planner": planners[0]["id"] if planners else None},
+        "hook": hook_ok,
+        "queue": len(queue),
+        "questions": questions,
+        "next": [],
+    })
+    if not ident:
+        data["next"].append("aw.py agent register <name> --role ba（solo 可直接 active）")
+    if not hook_ok:
+        data["next"].append("aw.py hook install")
+    data["next"].append("aw.py doctor")
+
+    if args.json:
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    else:
+        print("Agent Workspace 接入检查")
+        print("  repo   : %s (%s)" % (root, branch))
+        print("  mode   : %s%s" % (mode, ("  origin=" + remote) if remote else ""))
+        print("  team   : %s%s" % (team, ("  planner=" + data["roster"]["planner"])
+                                   if planners else ""))
+        print("  identity: %s" % (ident or "MISSING"))
+        print("  roster : %d active / %d total" % (len(active), len(roster)))
+        print("  hook   : %s" % ("OK" if hook_ok else "MISSING"))
+        print("  queue  : %d" % len(queue))
+        if questions:
+            print("\n需要问用户：")
+            for q in questions:
+                print("  - " + q)
+        if data["next"]:
+            print("\n下一步：")
+            for n in data["next"]:
+                print("  " + n)
+    return 0
+
+
 # ---------------------------------------------------------------- mcp setup
 
 MCP_SERVER = Path(__file__).resolve().parent / "aw_mcp.py"
@@ -3399,6 +3490,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_doctor = sub.add_parser("doctor", help="一页巡检：workspace/拓扑/认领/队列/契约")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_onboard = sub.add_parser("onboard", help="首次接入检查：模式 / 身份 / 名册 / hook / 待问问题")
+    p_onboard.add_argument("--json", action="store_true")
+    p_onboard.set_defaults(func=cmd_onboard)
 
     p_schema = sub.add_parser("schema", help="输出工具清单（JSON）：MCP 工具 + 仅 CLI 命令")
     p_schema.set_defaults(func=cmd_schema)

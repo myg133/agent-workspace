@@ -131,6 +131,23 @@ class WorkspaceCase(unittest.TestCase):
         cli = {c["name"] for c in data["cli_only"]}
         self.assertIn("watch", cli)
 
+    def test_onboard_local(self):
+        out = run(["onboard", "--json"], self.repo, agent=None)
+        data = json.loads(out.stdout)
+        self.assertTrue(data["initialized"])
+        self.assertEqual(data["mode"], "local")
+        self.assertEqual(data["team"], "solo")
+        self.assertFalse(data["hook"])
+        self.assertTrue(data["questions"])
+
+    def test_onboard_not_repo(self):
+        plain = self.tmp / "plain"
+        plain.mkdir()
+        out = run(["onboard", "--json"], plain, agent=None)
+        data = json.loads(out.stdout)
+        self.assertFalse(data["initialized"])
+        self.assertTrue(data["questions"])
+
     def test_doctor_and_stats(self):
         clean = run(["doctor"], self.repo, agent=None)
         self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
