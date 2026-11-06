@@ -481,6 +481,66 @@ class WorkspaceCase(unittest.TestCase):
         self.assertEqual(out.returncode, 3)
         self.assertIn("WAIT_TIMEOUT", out.stdout)
 
+    def test_msg_wait_default_matches_all_types(self):
+        """不传 --type 时不能只匹配 fyi：question 也要能等到。"""
+        a, b = self._make_pair()
+        run(["msg", "send", "--to", "pcB", "--type", "question", "--body", "ping"],
+            a, agent="pcA")
+        out = run(["msg", "wait", "--timeout", "3", "--json"], b, agent="pcB")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertEqual(json.loads(out.stdout)["messages"][0]["type"], "question")
+
+    def test_msg_watch_once(self):
+        a, b = self._make_pair()
+        run(["msg", "send", "--to", "pcB", "--type", "question", "--body", "ping"],
+            a, agent="pcA")
+        out = run(["msg", "watch", "--once", "--json"], b, agent="pcB")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        data = json.loads(out.stdout)
+        self.assertEqual(data["count"], 1)
+        # 已通知过：再次扫描不应重复输出
+        again = run(["msg", "watch", "--once", "--json"], b, agent="pcB")
+        self.assertEqual(again.returncode, 3)
+
+    def test_msg_watch_only_my_inbox(self):
+        """同机多 agent 各听各的：发给别人的消息不叫醒自己。"""
+        a, b = self._make_pair()
+        run(["msg", "send", "--to", "pcA", "--body", "for-a"], a, agent="pcA")
+        out = run(["msg", "watch", "--once", "--json"], b, agent="pcB")
+        self.assertEqual(out.returncode, 3, out.stdout)
+
+    def test_msg_watch_resident_baseline_keeps_backlog(self):
+        """常驻首启不弹积压，但积压仍算未通知，`--once` 能补出来。"""
+        a, b = self._make_pair()
+        run(["msg", "send", "--to", "pcB", "--type", "question", "--body", "backlog"],
+            a, agent="pcA")
+        resident = run(["msg", "watch", "--interval", "1", "--watch-timeout", "2", "--json"],
+                       b, agent="pcB")
+        self.assertEqual(resident.returncode, 0, resident.stderr)
+        self.assertEqual(resident.stdout.strip(), "")
+        backlog = run(["msg", "watch", "--once", "--json"], b, agent="pcB")
+        self.assertEqual(backlog.returncode, 0, backlog.stderr)
+        self.assertIn("backlog", backlog.stdout)
+
+    def test_msg_watch_once_concurrent_no_duplicate(self):
+        """同一 agent 并发 `--once`，同一条消息只能被一路投递。"""
+        a, b = self._make_pair()
+        run(["msg", "send", "--to", "pcB", "--type", "question", "--body", "once-only"],
+            a, agent="pcA")
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("AW_AGENT_ID", "AW_SESSION_ID", "AW_AGENT_TOKEN")}
+        env["AW_AGENT_ID"] = "pcB"
+        env["AW_SESSION_ID"] = "sess-pcB"
+        procs = [subprocess.Popen(
+            [sys.executable, str(AW), "msg", "watch", "--once", "--json"],
+            cwd=str(b), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            encoding="utf-8", errors="replace", env=env,
+        ) for _ in range(2)]
+        outs = [p.communicate()[0] for p in procs]
+        codes = sorted(p.returncode for p in procs)
+        self.assertEqual(codes, [0, 3], outs)
+        self.assertEqual(sum("once-only" in o for o in outs), 1)
+
     def test_msg_ack(self):
         a, b = self._make_pair()
         run(["msg", "send", "--to", "pcB", "--type", "contract-change",

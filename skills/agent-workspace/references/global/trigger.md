@@ -68,6 +68,18 @@ watcher 是 **per repo / per machine**，不是 per agent：
 - `--exec` 现在是**非阻塞**的：它会拉起进程后立刻继续监听，不会因为 agent 跑得久而漏消息；
 - 派发脚本必须按 `AW_WAKE_AGENT` 路由，并对同一 agent 加锁去重，避免一次 burst 拉起多个实例。
 
+如果 agent 由框架自带的多会话机制管理、不需要外部拉起，也可以让每个 agent
+自己跑 `msg watch`，按 `AW_AGENT_ID` 只看自己的收件箱：
+
+```bash
+AW_AGENT_ID=pcA-ba-1 aw.py msg watch --once --json   # 有消息 exit 0，没有 exit 3
+```
+
+两者区别：`aw.py watch` 是 per machine 的**唤醒器**（告诉你该拉起谁），
+`msg watch` 是 per agent 的**收件箱监听**（只看发给自己的消息）。
+同一台机器上用了 `aw.py watch` 就不必再让每个 agent 各起一个 `msg watch`，
+否则同一条消息会触发两次。
+
 ## 3. supervisor 脚本
 
 `start-agent.sh` 示例：
