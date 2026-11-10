@@ -26,8 +26,20 @@ import time
 from pathlib import Path
 
 AW = Path(__file__).resolve().parent / "aw.py"
-AGENT = (os.environ.get("AW_AGENT_ID") or "").strip()
-VERSION = "1.1.0"
+
+
+def _arg_value(flag: str) -> str:
+    args = sys.argv[1:]
+    for i, arg in enumerate(args):
+        if arg == flag and i + 1 < len(args):
+            return args[i + 1]
+        if arg.startswith(flag + "="):
+            return arg.split("=", 1)[1]
+    return ""
+
+
+AGENT = (_arg_value("--agent") or os.environ.get("AW_AGENT_ID") or "").strip()
+VERSION = "1.3.0"
 PROTOCOL = "2024-11-05"
 _NOTIFY_FLAG = (os.environ.get("AW_MCP_NOTIFY") or "").strip().lower()
 # 默认开启；AW_MCP_NOTIFY=0 / --no-notify 关闭
@@ -35,6 +47,33 @@ NOTIFY = ("--no-notify" not in sys.argv
           and _NOTIFY_FLAG not in ("0", "false", "off", "no"))
 WRITE_LOCK = threading.Lock()
 READY = threading.Event()
+_AGENT_LOCK = threading.Lock()
+_NOTIFY_STARTED = threading.Event()
+_NOTIFY_SEEN: set[str] = set()
+
+
+def _bind_agent(identity: str) -> None:
+    """一个进程 = 一个身份。
+
+    优先 env AW_AGENT_ID / --agent；都没有时取首次 tools/call 的 agent_id。
+    这样多个 BA 共用一个 .mcp.json 也能各用各的身份（每个会话各起一个 aw_mcp 进程）。
+    """
+    global AGENT
+    if not identity:
+        return
+    with _AGENT_LOCK:
+        if not AGENT:
+            AGENT = identity
+            log("notify: 身份绑定 %s" % identity)
+        elif AGENT != identity:
+            log("notify: 本进程已绑定 %s，忽略 %s" % (AGENT, identity))
+            return
+        start = NOTIFY and not _NOTIFY_STARTED.is_set()
+        if start:
+            _seed_notify(AGENT)
+            _NOTIFY_STARTED.set()
+    if start:
+        threading.Thread(target=notify_loop, daemon=True).start()
 
 
 def log(*args) -> None:
@@ -50,7 +89,22 @@ def run_aw(argv: list[str], agent: str | None = None, token: str | None = None,
     if token:
         env["AW_AGENT_TOKEN"] = token
     env.setdefault("AW_AGENT_PID", str(os.getpid()))
-    env.setdefault("AW_SESSION_ID", "proc-%d" % os.getpid())
+    if not (os.environ.get("AW_SESSION_ID") or "").strip():
+        for key, label in (("PI_SESSION_ID", "env:PI_SESSION_ID"),
+                           ("DSH_SESSION_ID", "env:DSH_SESSION_ID"),
+                           ("CLAUDE_SESSION_ID", "env:CLAUDE_SESSION_ID")):
+            value = (os.environ.get(key) or "").strip()
+            if value:
+                env["AW_SESSION_ID"] = value
+                env["AW_SESSION_SOURCE"] = label
+                break
+        else:
+            env["AW_SESSION_ID"] = "proc-%d" % os.getpid()
+            env["AW_SESSION_SOURCE"] = "generated"
+    else:
+        env["AW_SESSION_ID"] = os.environ["AW_SESSION_ID"]
+        env.setdefault("AW_SESSION_SOURCE",
+                       os.environ.get("AW_SESSION_SOURCE") or "env:AW_SESSION_ID")
     extra = {}
     if os.name == "nt":
         extra["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
@@ -367,14 +421,20 @@ def _wake_ids(path: Path) -> set[str]:
     return {str(m.get("id")) for m in data.get("messages") or [] if m.get("id")}
 
 
+def _seed_notify(agent: str) -> None:
+    """在发 initialize 之前同步 seed，避免“线程还没 seed 就来了新消息”被吞掉。"""
+    path = _wake_path(agent)
+    _NOTIFY_SEEN.update(_wake_ids(path) if path and path.exists() else set())
+
+
 def notify_loop() -> None:
     if not NOTIFY:
         return
     if not AGENT:
-        log("notify: 没有 AW_AGENT_ID，通知已禁用")
+        log("notify: 没有身份（env AW_AGENT_ID / --agent / 首次调用 agent_id 均未提供），通知已禁用")
         return
     path = _wake_path(AGENT)
-    seen: set[str] = _wake_ids(path) if path and path.exists() else set()
+    seen: set[str] = set(_NOTIFY_SEEN)
     if not READY.wait(timeout=30):
         log("notify: 等待 initialize 超时，通知未启动")
         return
@@ -417,6 +477,7 @@ def call_tool(name: str, args: dict) -> dict:
                          "  2) 启动环境设置 AW_AGENT_ID=pcA-ba-1"}],
             "isError": True,
         }
+    _bind_agent(identity)
     entry = _roster_entry(identity) or {}
     auth_token = (str(args.get("token") or "").strip()
                   or (os.environ.get("AW_AGENT_TOKEN") or "").strip())
@@ -486,7 +547,7 @@ def handle(msg: dict) -> None:
     if method == "initialize":
         reply(msg_id, {
             "protocolVersion": params.get("protocolVersion") or PROTOCOL,
-            "capabilities": {"tools": {}},
+            "capabilities": {"tools": {}, "logging": {}},
             "serverInfo": {"name": "aw-mcp", "version": VERSION},
         })
         READY.set()
@@ -519,8 +580,12 @@ def main() -> int:
             pass
     log("aw-mcp %s starting; agent=%s pid=%d notify=%s"
         % (VERSION, AGENT or "(missing)", os.getpid(), NOTIFY))
-    if NOTIFY:
+    if NOTIFY and AGENT:
+        _seed_notify(AGENT)
+        _NOTIFY_STARTED.set()
         threading.Thread(target=notify_loop, daemon=True).start()
+    elif NOTIFY:
+        log("notify: 未绑定身份，等首次 tools/call 的 agent_id 后再启动")
     for line in sys.stdin:
         line = line.strip()
         if not line:

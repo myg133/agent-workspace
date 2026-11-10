@@ -11,9 +11,10 @@
 | | agent_id | session_id |
 |---|---|---|
 | 生命周期 | 长期（机器上的槽位） | 每次启动 |
-| 来源 | 启动时注入 `AW_AGENT_ID` | `AW_SESSION_ID` / `DSH_SESSION_ID` |
+| 来源 | `--agent` / `AW_AGENT_ID` / 首次 `agent_id` | `--session` / `AW_SESSION_ID` / `PI_SESSION_ID` / `DSH_SESSION_ID` / `CLAUDE_SESSION_ID` / `proc-<pid>` |
 | 用途 | **WIP 判定、任务归属** | 审计、存活辅助判定 |
-| 示例 | `ba-slot-1` … `ba-slot-4` | `session-5cbba30e-…` |
+| 记录 | `.aw/claims/<REQ>.json` 的 `agent_id` | `.aw/sessions/<agent>.json` 的 `session_id` + `session_source` |
+| 示例 | `ba-slot-1` … `ba-slot-4` | `session-5cbba30e-…` / `proc-12345` |
 
 ```powershell
 $env:AW_AGENT_ID = 'ba-slot-1'
@@ -22,6 +23,9 @@ omp
 ```
 
 **WIP 只看 agent_id**：会话重启后 session 变了，但槽位不变，因此不会被允许再领一个。
+
+如果同一 agent 换了 session，旧认领会保留并标记 `superseded`（不 requeue）：
+旧会话可能还在跑，静默退回队列会让两个人做同一个需求。
 
 ## 2. 为什么不能用「一张登记表」认领
 

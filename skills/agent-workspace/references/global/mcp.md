@@ -12,11 +12,14 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
                            aw.py
 ```
 
-- **一个 agent 一个终端 / 一个进程**：`AW_AGENT_ID` 由启动环境注入；
-- 服务器进程启动时：
-  - `AW_AGENT_PID = 本进程 pid`（liveness 用这个）
-  - `AW_SESSION_ID = proc-<pid>`（一个进程 = 一个会话）
-- 因此**不需要 `--agent` 参数，也不依赖 session_id 关联**。
+- **一个 agent 一个终端 / 一个进程**；
+- 身份优先级：`--agent` > `AW_AGENT_ID` > 首次 `tools/call` 的 `agent_id`；
+- 会话优先级：`--session` > `AW_SESSION_ID` > `PI_SESSION_ID` > `DSH_SESSION_ID`
+  > `CLAUDE_SESSION_ID` > `proc-<pid>`；
+  - 实际使用的来源写入 `.aw/sessions/<agent>.json` 的 `session_source`
+    （`session-arg` / `env:PI_SESSION_ID` / `generated` …）；
+  - `proc-<pid>` 只是兜底，审计上能区分“真会话”和“临时兜底”；
+- 服务器进程启动时设置 `AW_AGENT_PID = 本进程 pid`（liveness 用这个）。
 
 ## 1.1 安装（自动写配置）
 
@@ -51,16 +54,16 @@ aw.py mcp print                   # 打印通用 JSON（手工粘贴）
     "aw": {
       "command": "python",
       "args": ["<skill-path>/scripts/aw_mcp.py"],
-      "cwd": "<repo-root>",
-      "env": { "AW_AGENT_ID": "pcA-ba-1" }
+      "cwd": "<repo-root>"
     }
   }
 }
 ```
 
 - `cwd` 必须是 workspace 根（或任一 worktree 目录，`aw.py` 会自己解析根）；
-- 每个 agent 用同一份配置，只改 `AW_AGENT_ID`；
-- 没有 `AW_AGENT_ID` 时服务照常启动，但每次工具调用返回 `MISSING_AGENT_ID`。
+- **同一项目里的多个 BA 共用这一份配置**，不要在 `env` 里写死 `AW_AGENT_ID`——那样所有会话都会变成同一个身份；
+- 身份来源优先级：`--agent` > 环境变量 `AW_AGENT_ID`（终端/启动器注入，适合一人一终端）> 首次 `tools/call` 的 `agent_id`；
+- 首次带 `agent_id` 的调用会**绑定本进程身份**，并据此启动通知线程；同进程之后再带别的 `agent_id` 只影响那一次调用，不改绑（stderr 记 `已绑定 X，忽略 Y`）。
 
 ### 主动通知（notifications/message，默认开启）
 
@@ -88,7 +91,8 @@ MCP 进程默认启动一个后台线程，tail
 - 启动时对文件里已有消息做 seed，不重放；
 - 同一条 `id` 只通知一次；
 - 通知只带 id/type/from/expect，不带正文和路径；
-- 需要同仓库有 `aw.py watch --ensure` 在写 wake 文件。
+- 需要同仓库有 `aw.py watch --ensure` 在写 wake 文件；
+- 通知线程的身份取自上面的绑定（env 或首次调用的 `agent_id`）；两者都没有时不启动，stderr 会打印原因。
 
 **宿主支持差异**：很多客户端只把 `notifications/message` 当日志，不会自动起一轮。
 不支持时仍用 `msg_inbox` / `msg_wait`，通知只是提示。
@@ -350,9 +354,9 @@ aw verify
 
 | 客户端 | 配置文件 | 父键 | 工具名 | 环境变量 |
 |--------|----------|------|--------|----------|
-| omp | `.omp/mcp.json` 或 `~/.omp/agent/mcp.json` | `mcpServers` | 原名 | 大概率继承终端 |
-| mcode | 项目根 `.mcp.json` 或 `~/.minimax/mcp.json` | `mcpServers` | 原名 | 源码里是显式构造 |
-| DSH | `~/.dsh/profiles/<profile>/cordis.patch.yml` | YAML 列表 | `mcp__<server>__<tool>` | 必须显式转发 |
+| omp | `.omp/mcp.json` 或 `~/.omp/agent/mcp.json` | `mcpServers` | 原名 | 大概率继承终端；`${PI_SESSION_ID:-}` 可显式传 session |
+| mcode | 项目根 `.mcp.json` 或 `~/.minimax/mcp.json` | `mcpServers` | 原名 | 源码里是显式构造；首次调用绑定身份 |
+| DSH | `~/.dsh/profiles/<profile>/cordis.patch.yml` | YAML 列表 | `mcp__<server>__<tool>` | 必须显式转发 `AW_AGENT_ID` / `AW_SESSION_ID` |
 
 ### omp
 
@@ -365,6 +369,7 @@ aw verify
       "command": "python",
       "args": ["/path/to/aw_mcp.py"],
       "cwd": "/path/to/repo",
+      "env": { "AW_SESSION_ID": "${PI_SESSION_ID:-}" },
       "enabled": true,
       "timeout": 180000
     }
@@ -374,7 +379,7 @@ aw verify
 
 - 支持 `cwd` 与 `timeout`，不需要包装器；
 - `timeout` 是给 `msg_wait` 留的余量（若客户端按秒计，写 `180`）；
-- 不要在配置里写 `AW_AGENT_ID`，它必须来自终端。
+- 不要在配置里写死 `AW_AGENT_ID`：身份来自终端/启动器，或每次调用的 `agent_id`（首次调用会绑定为通知身份）。
 
 ### mcode
 
@@ -399,7 +404,7 @@ aw verify
 1. `cwd` 只接受 `./` 或 `${PLUGIN_ROOT}` 形式，不能写绝对路径；
 2. `env` 是显式构造的，没有合并 `process.env` 的迹象——**先用 `agent_whoami` 验证**。
 
-如果返回 `MISSING_AGENT_ID`：改用 CLI，或给每个 agent 独立的配置目录并在 `env` 里写死名字。
+如果返回 `MISSING_AGENT_ID`：每次调用带 `agent_id`（首次会绑定通知身份）；仍不行就改用 CLI。
 不要在一份共享 `.mcp.json` 里写死 `AW_AGENT_ID`，否则 8 个 agent 会变成同一个。
 
 ### DSH
@@ -419,6 +424,7 @@ aw verify
         cwd: /path/to/repo
         env:
           AW_AGENT_ID: !!js process.env.AW_AGENT_ID
+          AW_SESSION_ID: !!js process.env.PI_SESSION_ID
         toolCallTimeoutMs: 180000
         failOnStartupError: false
 ```

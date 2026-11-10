@@ -927,6 +927,41 @@ def _session_alive(rec: dict, ttl: int = SESSION_TTL_SECONDS) -> bool:
     return (time.time() - ts) < ttl
 
 
+SESSION_ENV = (
+    ("AW_SESSION_ID", "env:AW_SESSION_ID"),
+    ("PI_SESSION_ID", "env:PI_SESSION_ID"),
+    ("DSH_SESSION_ID", "env:DSH_SESSION_ID"),
+    ("CLAUDE_SESSION_ID", "env:CLAUDE_SESSION_ID"),
+)
+
+
+def _resolve_session() -> tuple[str, str]:
+    """会话 id 与来源：--session > AW_SESSION_ID > PI > DSH > CLAUDE > proc-pid。"""
+    forced = (os.environ.get("AW_SESSION_SOURCE") or "").strip()
+    for key, label in SESSION_ENV:
+        value = (os.environ.get(key) or "").strip()
+        if value:
+            if key == "AW_SESSION_ID" and forced:
+                return value, forced
+            return value, label
+    return "proc-%d" % os.getpid(), "generated"
+
+
+def _claim_session_state(rec: dict, claim: dict, ttl: int = SESSION_TTL_SECONDS) -> str:
+    """alive / dead / superseded。
+
+    superseded = 会话还活着，但不是当初认领的那个 session（同 agent 槽位换了会话）。
+    这种情况保留认领、只打标记，避免旧会话仍在跑时把活 requeue 给别人。
+    """
+    if not _session_alive(rec, ttl):
+        return "dead"
+    claimed = (claim.get("session_id") or "").strip()
+    current = (rec.get("session_id") or "").strip()
+    if claimed and current and claimed != current:
+        return "superseded"
+    return "alive"
+
+
 def terminal_anchor() -> str:
     """终端级锚点：同一个终端里的命令共享，不同终端互不相同。
 
@@ -1079,16 +1114,12 @@ def resolve_identity(root: Path, role: str = "ba", rebind: bool = False) -> dict
         raise IdentityError(
             "MISSING_AGENT_ID\n"
             "还没有 agent 名称，不能继续。\n"
-            "两种方式（二选一）：\n"
-            "  1) 指定一次，本终端会记住：aw.py --agent pcA-ba-1 agent whoami\n"
-            "  2) 显式绑定：            aw.py agent bind pcA-ba-1\n"
-            "如果启动器能设置环境变量，也可以用 AW_AGENT_ID。"
+            "提供 agent 名称（三选一）：\n"
+            "  1) 显式参数：aw.py --agent pcA-ba-1 agent whoami\n"
+            "  2) 终端绑定：aw.py agent bind pcA-ba-1（一次，本终端记住）\n"
+            "  3) 环境变量：AW_AGENT_ID=pcA-ba-1"
         )
-    session_id = (
-        os.environ.get("AW_SESSION_ID")
-        or os.environ.get("DSH_SESSION_ID")
-        or "%s-%s-%s" % (agent_id, _dt.datetime.now().strftime("%Y%m%d%H%M%S"), os.urandom(2).hex())
-    )
+    session_id, session_source = _resolve_session()
     # 会话文件按 agent 槽位归并：一个槽位同时只有一个活会话
     aw_init(root)
     path = aw_path(root, "sessions", "%s.json" % agent_id)
@@ -1109,6 +1140,7 @@ def resolve_identity(root: Path, role: str = "ba", rebind: bool = False) -> dict
     record = {
         "agent_id": agent_id,
         "session_id": session_id,
+        "session_source": session_source,
         "pid": agent_pid,
         "host": socket.gethostname(),
         "role": role,
@@ -1167,15 +1199,32 @@ def requeue(root: Path, claim: dict, queue: list[dict], source: str) -> None:
                          "added_at": _now(), "source": source})
 
 
+def _mark_superseded(claim: dict, session: dict) -> bool:
+    if claim.get("superseded"):
+        return False
+    data = {k: v for k, v in claim.items() if k != "_path"}
+    data.update({
+        "superseded": True,
+        "superseded_at": _now(),
+        "superseded_live_session": session.get("session_id"),
+    })
+    write_json(Path(claim["_path"]), data)
+    claim.update({k: v for k, v in data.items()})
+    return True
+
+
 def _reap_dead(root: Path, claims: list[dict], queue: list[dict]) -> int:
-    """把死会话占用的认领归档并退回队列，返回处理条数。"""
+    """死会话：归档并退回队列；同槽位换会话：保留认领、标 superseded。"""
     reaped = 0
     for c in claims:
         session = read_json(aw_path(root, "sessions", "%s.json" % c.get("agent_id", "")), {})
-        if not _session_alive(session):
+        state = _claim_session_state(session, c)
+        if state == "dead":
             requeue(root, c, queue, "recovered")
             archive_claim(root, c, "dead-session")
             reaped += 1
+        elif state == "superseded":
+            _mark_superseded(c, session)
     return reaped
 
 
@@ -1385,8 +1434,12 @@ def cmd_claim(args) -> int:
             if c.get("state") not in CLAIM_STATES:
                 continue
             sess = sessions.get(c.get("agent_id", ""))
-            if not _session_alive(sess):
+            state = _claim_session_state(sess, c)
+            if state == "dead":
                 problems.append(("dead-session", "%s 由已退出的会话占用（%s）" % (c["req"], c.get("agent_id"))))
+            elif state == "superseded":
+                problems.append(("superseded-session", "%s 的认领会话 %s 已被 %s 取代（保留认领）"
+                                 % (c["req"], c.get("session_id"), (sess or {}).get("session_id"))))
             wt = root / c.get("worktree", "")
             if not wt.exists():
                 problems.append(("missing-worktree", "%s 的 worktree 不存在" % c["req"]))
@@ -1413,13 +1466,19 @@ def cmd_claim(args) -> int:
             for c in sorted(claims, key=lambda x: x.get("claimed_at", "")):
                 agent = c.get("agent_id", "?")
                 sess = read_json(aw_path(root, "sessions", "%s.json" % agent), {})
-                dead = not _session_alive(sess)
+                state = _claim_session_state(sess, c)
+                dead = state == "dead"
+                superseded = state == "superseded"
                 duplicate = agent in seen
                 missing_wt = not (root / c.get("worktree", "")).exists()
                 if dead or duplicate or missing_wt:
                     reason = "dead-session" if dead else ("multi-claim" if duplicate else "missing-worktree")
                     requeue(root, c, queue, reason)
                     archive_claim(root, c, reason)
+                    fixed += 1
+                elif superseded:
+                    _mark_superseded(c, sess)
+                    seen[agent] = c
                     fixed += 1
                 else:
                     seen[agent] = c
@@ -2405,7 +2464,7 @@ def _claim_watch(root: Path, ident: dict, args, exclude_baseline: bool,
     并发监听同一个 agent 时，只有一个进程能拿到同一批消息，避免重复投递。
     `record_baseline=True` 时把命中项记为基线并返回空列表（常驻首启不补发积压）。
     """
-    with FileLock(aw_path(root, "locks", "msg-notified.lock")):
+    with FileLock(aw_path(root, "locks", "msg-notified.lock"), timeout=60):
         fresh = _watch_poll(root, ident, args, exclude_baseline)
         if not fresh:
             return []
@@ -3841,6 +3900,8 @@ def _subparser_list(parser: argparse.ArgumentParser) -> list[argparse.ArgumentPa
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="aw.py", description="Agent Workspace 工具")
     parser.add_argument("--agent", default=None, help="agent_id（优先于 AW_AGENT_ID）")
+    parser.add_argument("--session", default=None,
+                        help="session_id（优先于 AW_SESSION_ID / PI_SESSION_ID / DSH_SESSION_ID）")
     parser.add_argument("--agent-token", default=None, help="agent 令牌（优先于 AW_AGENT_TOKEN）")
     parser.add_argument("--no-bind", action="store_true", help="不读写终端绑定（一个终端跑多个 agent 时用）")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -4007,6 +4068,7 @@ def build_parser() -> argparse.ArgumentParser:
     # 允许 --agent 写在子命令后面：aw.py msg inbox --agent ba-1
     for subparser in _subparser_list(parser):
         subparser.add_argument("--agent", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+        subparser.add_argument("--session", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
         subparser.add_argument("--agent-token", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
         subparser.add_argument("--no-bind", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     return parser
@@ -4039,6 +4101,11 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["AW_AGENT_SOURCE"] = "--agent"
     elif os.environ.get("AW_AGENT_ID"):
         os.environ.setdefault("AW_AGENT_SOURCE", "env AW_AGENT_ID")
+    if getattr(args, "session", None):
+        os.environ["AW_SESSION_ID"] = args.session
+        os.environ["AW_SESSION_SOURCE"] = "session-arg"
+    elif os.environ.get("AW_SESSION_ID"):
+        os.environ.setdefault("AW_SESSION_SOURCE", "env:AW_SESSION_ID")
     if getattr(args, "no_bind", False):
         os.environ["AW_NO_BIND"] = "1"
     if getattr(args, "agent_token", None):

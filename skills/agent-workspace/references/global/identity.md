@@ -22,6 +22,20 @@
 4. 都没有 → exit 2（MISSING_AGENT_ID）
 ```
 
+### 1.1 session_id 解析
+
+```text
+1. --session <id>          （显式，最高）
+2. AW_SESSION_ID           （启动器注入）
+3. PI_SESSION_ID           （omp）
+4. DSH_SESSION_ID          （DSH）
+5. CLAUDE_SESSION_ID       （Claude Code）
+6. proc-<pid>              （兜底，标记 generated）
+```
+
+实际来源写入 `.aw/sessions/<agent_id>.json` 的 `session_source`。
+`proc-<pid>` 会随进程变化，只适合临时兜底；审计看到 `generated` 就知道这不是稳定会话。
+
 ## 2. 终端锚点
 
 读取顺序：`WT_SESSION` → `TERM_SESSION_ID` → `TMUX_PANE` → `SSH_TTY` → `TTY`。

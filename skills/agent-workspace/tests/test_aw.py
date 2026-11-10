@@ -243,6 +243,20 @@ class WorkspaceCase(unittest.TestCase):
         finally:
             self._stop_mcp(proc)
 
+    def test_mcp_first_call_records_session(self):
+        proc = self._mcp(agent=None, extra_env={
+            "PI_SESSION_ID": "", "DSH_SESSION_ID": "", "CLAUDE_SESSION_ID": ""})
+        try:
+            call = self._mcp_tool(proc, "agent_whoami", {"agent_id": "ba-lazy"})
+            payload = json.loads(call["result"]["content"][0]["text"])
+            self.assertEqual(payload["exit_code"], 0, payload)
+        finally:
+            self._stop_mcp(proc)
+        session = json.loads((self.repo / ".aw" / "sessions" / "ba-lazy.json")
+                             .read_text(encoding="utf-8"))
+        self.assertTrue(session["session_id"].startswith("proc-"))
+        self.assertEqual(session["session_source"], "generated")
+
     def test_mcp_requires_agent_id(self):
         proc = self._mcp(agent=None)
         try:
@@ -382,6 +396,44 @@ class WorkspaceCase(unittest.TestCase):
         out = run(["claim", "next"], self.repo, agent=None)
         self.assertEqual(out.returncode, 2, out.stdout)
         self.assertIn("MISSING_AGENT_ID", out.stderr)
+
+    def test_session_arg_records_source(self):
+        out = run(["--session", "foo", "agent", "whoami"], self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        data = json.loads((self.repo / ".aw" / "sessions" / "ba-1.json")
+                          .read_text(encoding="utf-8"))
+        self.assertEqual(data["session_id"], "foo")
+        self.assertEqual(data["session_source"], "session-arg")
+
+    def test_session_from_pi_env(self):
+        run(["agent", "whoami"], self.repo, agent="ba-2",
+            extra_env={"AW_SESSION_ID": "", "PI_SESSION_ID": "pi-9"})
+        data = json.loads((self.repo / ".aw" / "sessions" / "ba-2.json")
+                          .read_text(encoding="utf-8"))
+        self.assertEqual(data["session_id"], "pi-9")
+        self.assertEqual(data["session_source"], "env:PI_SESSION_ID")
+
+    def test_session_generated_is_proc_pid(self):
+        run(["agent", "whoami"], self.repo, agent="ba-3", extra_env={
+            "AW_SESSION_ID": "", "PI_SESSION_ID": "",
+            "DSH_SESSION_ID": "", "CLAUDE_SESSION_ID": ""})
+        data = json.loads((self.repo / ".aw" / "sessions" / "ba-3.json")
+                          .read_text(encoding="utf-8"))
+        self.assertTrue(data["session_id"].startswith("proc-"))
+        self.assertEqual(data["session_source"], "generated")
+
+    def test_claim_superseded_kept(self):
+        run(["queue", "add", "REQ-001"], self.repo)
+        run(["claim", "next"], self.repo, agent="ba-1")
+        out = run(["--session", "new-sess", "claim", "doctor", "--repair"],
+                  self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        claim = json.loads((self.repo / ".aw" / "claims" / "REQ-001.json")
+                           .read_text(encoding="utf-8"))
+        self.assertTrue(claim.get("superseded"))
+        self.assertFalse(any(q.get("req") == "REQ-001" for q in
+                             json.loads((self.repo / ".aw" / "queue.json")
+                                        .read_text(encoding="utf-8"))))
 
     def _register(self, *names):
         for name in names:

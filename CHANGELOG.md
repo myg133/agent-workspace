@@ -2,6 +2,43 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.42.0] - 2026-11-10
+
+### 变更：session 显式优先 + 来源可审计
+
+- 新增全局 `--session`：`--session` > `AW_SESSION_ID` > `PI_SESSION_ID`
+  > `DSH_SESSION_ID` > `CLAUDE_SESSION_ID` > `proc-<pid>`
+- `.aw/sessions/<agent>.json` 新增 `session_source`
+  （`session-arg` / `env:PI_SESSION_ID` / `generated` …）
+- 兜底从随机串改为 `proc-<pid>`，审计可区分“真会话”和“临时兜底”
+- MCP `run_aw()` 透传 PI/DSH/CLAUDE session，并写 `AW_SESSION_SOURCE`；
+  不再用 `setdefault` 覆盖已有 `AW_SESSION_ID`
+- `initialize` capabilities 增加 `logging: {}`（发 notifications/message 前先声明）
+- 同一 agent 换 session 时，旧认领标记 `superseded`，保留不退队列；
+  `claim doctor` 增加 `superseded-session` 报告项
+- 文档：identity / concurrency / mcp 同步 session 优先级与 omp/DSH 配置
+- 修复通知 seed 竞态：initialize 前同步 seed，避免新消息被当成历史
+- `msg-notified` 锁超时 10s → 60s，避免并发 `--once` 在高负载下误报 TimeoutError
+
+### 测试
+
+- 新增 `--session`、PI 环境、generated、MCP 首次调用写 session、superseded 认领用例
+
+## [1.41.0] - 2026-11-10
+
+### 新增：MCP 首次调用绑定身份（来自 omp 实现，已校验）
+
+- 没有 `AW_AGENT_ID` 时，首次 `tools/call` 的 `agent_id` 绑定为本进程通知身份
+- 一个进程只绑定一个身份；后续调用带别的 `agent_id` 只影响该次调用，不改绑
+- 有 env 身份时优先使用 env；通知线程据此启动
+- 配置示例去掉 `AW_AGENT_ID`：同一项目多个 BA 可共用一份配置
+- 新增 `tests/test_aw_mcp.py`：env 绑定、首次调用绑定、无身份不通知、换身份不改绑
+
+### 修复
+
+- 新增测试的 Windows 管道读取改为单 reader 线程（`select` 不支持管道）
+- 测试进程显式 UTF-8，避免 GBK 解码错误
+
 ## [1.40.0] - 2026-11-10
 
 ### 变更：MCP 主动通知默认开启
