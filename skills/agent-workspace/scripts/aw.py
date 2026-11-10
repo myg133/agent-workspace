@@ -2844,7 +2844,7 @@ def cmd_doctor(args) -> int:
         rows.append((OK, "watcher", "pid %s，心跳 %s" % (
             watcher["pid"], _fmt_age(watcher["age_seconds"]))))
     else:
-        rows.append((WARN, "watcher", "%s；由 supervisor 启动 aw.py watch --wake-dir .aw/wake"
+        rows.append((WARN, "watcher", "%s；首个 agent 可 aw.py watch --ensure，或用 supervisor"
                      % watcher["status"]))
         warns.append("watcher")
 
@@ -3048,12 +3048,80 @@ def _wake_targets(message: dict, roster: list[dict]) -> list[str]:
     return sorted(targets)
 
 
+def _stop_watch(root: Path) -> int:
+    state = _watch_status_data(root)
+    pid = state.get("pid") or 0
+    if not pid or not pid_alive(pid):
+        print("WATCH_STOPPED 当前没有运行中的 watcher")
+        return 0
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(pid), "/F"],
+                       capture_output=True, text=True, check=False)
+    else:
+        try:
+            os.kill(pid, 15)
+        except OSError:
+            pass
+    for _ in range(20):
+        time.sleep(0.2)
+        if _watch_status_data(root)["status"] != "RUNNING":
+            print("WATCH_STOPPED pid=%s" % pid)
+            return 0
+    print("WATCH_STOP_FAILED pid=%s" % pid, file=sys.stderr)
+    return 3
+
+
+def _ensure_watch(root: Path, args) -> int:
+    state = _watch_status_data(root)
+    if state["status"] == "RUNNING":
+        print("WATCH_RUNNING pid=%s" % state["pid"])
+        return 0
+
+    wake = args.wake_dir or ".aw/wake"
+    cmd = [sys.executable, str(Path(__file__).resolve()), "watch",
+           "--interval", str(args.interval), "--wake-dir", wake]
+    if args.no_fetch:
+        cmd.append("--no-fetch")
+    if args.exec:
+        cmd += ["--exec", args.exec]
+
+    log = aw_path(root, "watch.log")
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with open(log, "a", encoding="utf-8") as handle:
+        kwargs: dict = {"cwd": str(root), "stdin": subprocess.DEVNULL,
+                        "stdout": handle, "stderr": handle}
+        if os.name == "nt":
+            flags = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+            flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+            kwargs["creationflags"] = flags
+        else:
+            kwargs["start_new_session"] = True
+        subprocess.Popen(cmd, **kwargs)
+
+    for _ in range(20):
+        time.sleep(0.25)
+        state = _watch_status_data(root)
+        if state["status"] == "RUNNING":
+            if args.json:
+                print(json.dumps({"status": "STARTED", "pid": state["pid"],
+                                  "wake_dir": state["wake_dir"]}, ensure_ascii=False))
+            else:
+                print("WATCH_STARTED pid=%s wake_dir=%s" % (state["pid"], state["wake_dir"]))
+            return 0
+    print("WATCH_START_FAILED 见 %s" % log, file=sys.stderr)
+    return 3
+
+
 def cmd_watch(args) -> int:
     root = repo_root()
     aw_init(root)
     state_path = aw_path(root, "watch-state.json")
     if getattr(args, "status", False):
         return _watch_status(root, bool(args.json))
+    if getattr(args, "stop", False):
+        return _stop_watch(root)
+    if getattr(args, "ensure", False):
+        return _ensure_watch(root, args)
     lock = FileLock(aw_path(root, "locks", "watch.lock"), timeout=0.5)
     try:
         with lock:
@@ -3158,7 +3226,7 @@ CLI_ONLY = [
     {"name": "migrate", "summary": "迁移已有仓库", "audience": "human"},
     {"name": "upgrade", "summary": "旧项目升级检查（只读）", "audience": "human"},
     {"name": "hook install", "summary": "安装 pre-push 校验", "audience": "human"},
-    {"name": "watch", "summary": "bus 监听，新消息唤醒 agent（supervisor）", "audience": "supervisor"},
+    {"name": "watch", "summary": "bus 监听；--ensure 首个 agent 后台起，--status 查心跳", "audience": "any"},
     {"name": "msg watch", "summary": "单 agent 收件箱监听（--once exit 0/3）", "audience": "agent"},
     {"name": "mcp", "summary": "检测 / 安装 MCP 配置", "audience": "human"},
     {"name": "agent bootstrap", "summary": "名册为空时抢占第一个 Planner", "audience": "human"},
@@ -3241,7 +3309,7 @@ def cmd_onboard(args) -> int:
     if not hook_ok:
         questions.append("是否安装 pre-push 校验？（aw.py hook install）")
     if watch["status"] != "RUNNING":
-        questions.append("谁负责启动 watcher？（supervisor / 计划任务；一台机器一个）")
+        questions.append("watcher 未运行：首个 agent 执行 aw.py watch --ensure，还是交给 supervisor？")
 
     data.update({
         "initialized": True,
@@ -3264,7 +3332,7 @@ def cmd_onboard(args) -> int:
     if not hook_ok:
         data["next"].append("aw.py hook install")
     if watch["status"] != "RUNNING":
-        data["next"].append("aw.py watch --interval 5 --wake-dir .aw/wake（由 supervisor 启动）")
+        data["next"].append("aw.py watch --ensure --interval 5 --wake-dir .aw/wake")
     data["next"].append("aw.py doctor")
 
     if args.json:
@@ -3848,6 +3916,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_watch.add_argument("--no-fetch", action="store_true")
     p_watch.add_argument("--wake-dir", default="", help="把唤醒事件写到 <dir>/<agent>.json")
     p_watch.add_argument("--status", action="store_true", help="查看 watcher 状态（pid / 心跳 / wake_dir）")
+    p_watch.add_argument("--ensure", action="store_true", help="没有 watcher 就在后台起一个（幂等）")
+    p_watch.add_argument("--stop", action="store_true", help="停止本机 watcher")
     p_watch.set_defaults(func=cmd_watch)
 
     p_stats = sub.add_parser("stats", help="运营指标（JSON / 表格）")

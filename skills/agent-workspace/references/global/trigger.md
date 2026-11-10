@@ -83,16 +83,34 @@ AW_AGENT_ID=pcA-ba-1 aw.py msg watch --once --json   # 有消息 exit 0，没有
 
 ### 2.2 谁启动 watcher
 
-**不要由 agent 启动 watcher。** agent 是任务型进程，生命周期短，无法保证
-“只跑一个”，也无法在退出后继续监听。
+两种都成立：
 
-| 方式 | 适用 |
-|------|------|
-| supervisor / 启动脚本 | 开发机、容器 entrypoint |
-| systemd user service | Linux 常驻 |
-| launchd | macOS |
-| Windows 计划任务 / 启动文件夹 | Windows |
-| 手动 | 临时调试 |
+| 方式 | 适用 | 说明 |
+|------|------|------|
+| **首个 agent 执行 `watch --ensure`** | 没有 supervisor 的普通开发机 | 幂等；后台起独立进程后立刻返回 |
+| supervisor / systemd / launchd / 计划任务 | 长期运行、容器、无人值守 | 更可控，能配重启策略 |
+
+**不要由 agent 进程自己跑循环**（`watch` 前台阻塞），而是调用 `--ensure`：
+
+```bash
+aw.py watch --ensure --interval 5 --wake-dir .aw/wake
+# WATCH_STARTED pid=34160 wake_dir=.../.aw/wake   ← 首次
+# WATCH_RUNNING pid=34160                          ← 后续 agent 调用
+```
+
+语义：
+
+- `--ensure` 检查状态；没有 RUNNING 就 **detach 一个子进程**（POSIX `setsid` / Windows `DETACHED_PROCESS`），然后返回；
+- watcher 不依附于当前 agent 会话，agent 退出后继续监听；
+- 多个 agent 同时 ensure：文件锁保证只有一个成为 watcher，其余得到 `WATCH_RUNNING`；
+- 机器重启 / watcher 被杀后，下一个 agent 再 `--ensure` 即可恢复；
+- 日志在 `.aw/watch.log`，状态用 `--status` 查。
+
+边界：
+
+- 容器或强沙箱可能不允许 detach 子进程，这时必须用 supervisor；
+- `--ensure` 只负责“起”，不负责“守护”；要自动重启还是 systemd / 计划任务；
+- 停止用 `aw.py watch --stop`。
 
 原则：**一台机器、一个仓库、一个 watcher**。
 
@@ -114,6 +132,14 @@ aw.py doctor                  # watcher 一行
 | `UNKNOWN` | 从未启动过 | 启动一次 |
 
 重复启动会被文件锁挡住，输出 `WATCH_RUNNING`，不会出现两个 watcher。
+
+单独检查也可以：
+
+```bash
+aw.py watch --ensure --json   # 需要时起，已在跑则 WATCH_RUNNING
+aw.py watch --status --json   # 只读
+aw.py watch --stop            # 停掉本机 watcher
+```
 
 ### 2.3 与 MCP 通知的关系
 

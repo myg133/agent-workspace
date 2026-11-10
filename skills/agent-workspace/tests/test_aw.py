@@ -659,6 +659,20 @@ class WorkspaceCase(unittest.TestCase):
         self.assertEqual(after.returncode, 3)
         self.assertEqual(json.loads(after.stdout)["status"], "STOPPED")
 
+    def test_watch_ensure_and_stop(self):
+        try:
+            out = run(["watch", "--ensure", "--interval", "1", "--json"],
+                      self.repo, agent=None)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertIn("STARTED", out.stdout)
+            st = json.loads(run(["watch", "--status", "--json"],
+                                self.repo, agent=None).stdout)
+            self.assertEqual(st["status"], "RUNNING")
+            again = run(["watch", "--ensure", "--interval", "1"], self.repo, agent=None)
+            self.assertIn("WATCH_RUNNING", again.stdout)
+        finally:
+            run(["watch", "--stop"], self.repo, agent=None)
+
     def test_next_req_sees_remote_demand(self):
         bare = self._with_remote()
         other = self.tmp / "other"

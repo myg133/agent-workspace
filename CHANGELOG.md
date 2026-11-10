@@ -2,6 +2,18 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.38.0] - 2026-11-10
+
+### 新增：首个 agent 可幂等启动 watcher
+
+- `aw.py watch --ensure`：没有 RUNNING 就在后台 detach 一个 watcher，立即返回；
+  已在跑则输出 `WATCH_RUNNING`，不会重复启动
+- `aw.py watch --stop`：停止本机 watcher
+- POSIX 用 `setsid`（start_new_session），Windows 用 `DETACHED_PROCESS`；
+  agent 退出不影响 watcher，日志在 `.aw/watch.log`
+- `doctor` / `onboard` 提示改为「首个 agent 可 `--ensure`，或用 supervisor」
+- `trigger.md` 重写「谁启动 watcher」：首个 agent 与 supervisor 两种模式
+
 ## [1.37.0] - 2026-11-10
 
 ### 新增：watcher 生命周期可见 + wake-dir
