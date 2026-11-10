@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.42.1] - 2026-11-10
+
+### 修复：MCP `msg_send` 的 `reply_by` 参数映射
+
+- `build_argv` 不再把下划线直接拼进 flag：`reply_by` → `--reply-by`
+- 同时接受 camelCase `replyBy`（部分 agent 会这么传）
+- 新增用例：snake/camel 两种写法都必须成功，且不得出现 `unrecognized arguments`
+
 ## [1.42.0] - 2026-11-10
 
 ### 变更：session 显式优先 + 来源可审计

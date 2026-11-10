@@ -296,6 +296,22 @@ class WorkspaceCase(unittest.TestCase):
                 timer.cancel()
             self._stop_mcp(proc)
 
+    def test_mcp_msg_send_reply_by_flags(self):
+        proc = self._mcp()
+        try:
+            for rid, args in enumerate((
+                {"to": "all", "body": "snake", "type": "question",
+                 "reply_by": "2026-11-11T00:00:00Z"},
+                {"to": "all", "body": "camel", "type": "question",
+                 "replyBy": "2026-11-11T00:00:00Z"},
+            ), start=20):
+                call = self._mcp_tool(proc, "msg_send", args, rid=rid)
+                payload = json.loads(call["result"]["content"][0]["text"])
+                self.assertEqual(payload["exit_code"], 0, payload)
+                self.assertNotIn("unrecognized arguments", payload["stderr"])
+        finally:
+            self._stop_mcp(proc)
+
     def test_mcp_install_config(self):
         cfg = self.tmp / "claude.json"
         out = run(["mcp", "install", "--client", "claude", "--path", str(cfg)], self.repo, agent=None)

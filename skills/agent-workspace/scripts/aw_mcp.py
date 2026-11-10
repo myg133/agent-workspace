@@ -211,6 +211,14 @@ TOOLS = [
 ]
 
 
+def _pick(args: dict, *names: str):
+    for name in names:
+        value = args.get(name)
+        if value:
+            return value
+    return None
+
+
 def build_argv(name: str, args: dict) -> list[str]:
     a = args or {}
     if name == "agent_whoami":
@@ -268,9 +276,12 @@ def build_argv(name: str, args: dict) -> list[str]:
         if a.get("type"):
             argv += ["--type", a["type"]]
         for key in ("cc", "subject", "ref", "contract", "version", "deadline",
-                    "thread", "priority", "reply_by"):
+                    "thread", "priority"):
             if a.get(key):
                 argv += ["--" + key, str(a[key])]
+        reply_by = _pick(a, "reply_by", "replyBy")
+        if reply_by:
+            argv += ["--reply-by", str(reply_by)]
         if a.get("expect"):
             argv += ["--expect", a["expect"]]
         if a.get("force"):
