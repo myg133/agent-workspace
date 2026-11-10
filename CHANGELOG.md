@@ -2,6 +2,19 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.37.0] - 2026-11-10
+
+### 新增：watcher 生命周期可见 + wake-dir
+
+- `aw.py watch --status [--json]`：`RUNNING` / `STALE` / `STOPPED` / `UNKNOWN`，
+  返回 pid、心跳年龄、interval、wake_dir、已见消息数；非 RUNNING 时 exit 3
+- `.aw/watch-state.json` 增加 pid / started_at / interval / last_fetch / last_wake / wake_dir
+- `aw.py watch --wake-dir .aw/wake`：命中消息写成 `.aw/wake/<agent>.json`，
+  供 MCP 转通知；fetch 仍只有每机器一份
+- `aw.py doctor` 增加 watcher 行；未运行时 WARN
+- `aw.py onboard` 增加 watch 状态，未运行时给出 supervisor 启动建议
+- `trigger.md` 新增「谁启动 watcher」「如何检查」「与 MCP 通知的关系」
+
 ## [1.36.0] - 2026-11-04
 
 ### 新增：单 agent 收件箱监听（`msg watch`）

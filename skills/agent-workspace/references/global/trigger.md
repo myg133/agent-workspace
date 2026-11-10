@@ -50,9 +50,10 @@ aw.py watch --interval 5 --exec /path/to/start-agent.sh
 行为：
 
 - 首次启动会 **seed**，跳过历史消息，不重放；
-- 状态在 `.aw/watch-state.json`；
+- 状态在 `.aw/watch-state.json`（pid / 心跳 / wake_dir）；
 - 单机文件锁，重复启动输出 `WATCH_RUNNING`；
-- 只 `git fetch`，不调用模型。
+- 只 `git fetch`，不调用模型；
+- `--wake-dir .aw/wake` 会把每个 agent 的唤醒事件写成 `.aw/wake/<agent>.json`，供 MCP 转通知。
 
 ### 2.1 一台 PC 多个 agent
 
@@ -79,6 +80,48 @@ AW_AGENT_ID=pcA-ba-1 aw.py msg watch --once --json   # 有消息 exit 0，没有
 `msg watch` 是 per agent 的**收件箱监听**（只看发给自己的消息）。
 同一台机器上用了 `aw.py watch` 就不必再让每个 agent 各起一个 `msg watch`，
 否则同一条消息会触发两次。
+
+### 2.2 谁启动 watcher
+
+**不要由 agent 启动 watcher。** agent 是任务型进程，生命周期短，无法保证
+“只跑一个”，也无法在退出后继续监听。
+
+| 方式 | 适用 |
+|------|------|
+| supervisor / 启动脚本 | 开发机、容器 entrypoint |
+| systemd user service | Linux 常驻 |
+| launchd | macOS |
+| Windows 计划任务 / 启动文件夹 | Windows |
+| 手动 | 临时调试 |
+
+原则：**一台机器、一个仓库、一个 watcher**。
+
+检查：
+
+```bash
+aw.py watch --status          # RUNNING / STALE / STOPPED / UNKNOWN
+aw.py watch --status --json
+aw.py doctor                  # watcher 一行
+```
+
+状态来自 `.aw/watch-state.json`：
+
+| 状态 | 含义 | 处理 |
+|------|------|------|
+| `RUNNING` | pid 存活且心跳新鲜 | 正常 |
+| `STALE` | pid 还在，但超过 `max(60s, 6×interval)` 没心跳 | 可能卡在 fetch/锁；看日志后重启 |
+| `STOPPED` | pid 不存在 | 重新启动 |
+| `UNKNOWN` | 从未启动过 | 启动一次 |
+
+重复启动会被文件锁挡住，输出 `WATCH_RUNNING`，不会出现两个 watcher。
+
+### 2.3 与 MCP 通知的关系
+
+watcher 只写 `.aw/wake/<agent>.json`；MCP 进程读这个文件、发 notification。
+这样 fetch 仍然只有一份，MCP 不联网、不碰 git。
+
+如果 MCP 没有启动，wake 文件仍在，只是没人发通知——消息本身还在 bus 上，
+`msg_inbox` / `msg_wait` 仍然能取到。
 
 ## 3. supervisor 脚本
 

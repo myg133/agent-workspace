@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作工作区
-  version: 1.36.0
+  version: 1.37.0
 ---
 
 # Agent Workspace
@@ -231,7 +231,7 @@ MCP 侧对应 `schema {}`。需要自己写 watchdog / 轮询前，先确认 `aw
 | `aw.py upgrade` | 旧项目升级检查（只读）：补什么/清什么/改什么 | 0 无需动作，1 有待处理 |
 | `aw.py doctor` | 一页巡检：workspace/拓扑/认领/队列/契约/模式 | 0 正常，1 有 FAIL |
 | `aw.py stats [--json]` | 运营指标：WIP、队列年龄、ack 中位数、每 REQ 提问数 | 0 |
-| `aw.py watch` | bus 监听：新消息唤醒 agent（不耗模型 token） | 0 |
+| `aw.py watch [--status] [--wake-dir]` | bus 监听；`--status` 看 pid/心跳；`--wake-dir` 写 `.aw/wake/` | 0 / 3 |
 | `aw.py msg watch` | 单 agent 收件箱监听；`--once` 有消息 0、无消息 3 | 0 / 3 |
 | `aw.py schema` | 机器可读工具清单（MCP + CLI），避免读源码 | 0 |
 | `aw.py hook install` | 安装 pre-push 校验（每个 clone 一次） | 0 |

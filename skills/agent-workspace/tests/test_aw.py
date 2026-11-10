@@ -638,6 +638,27 @@ class WorkspaceCase(unittest.TestCase):
         self.assertIn('"agent": "ba-2"', woke.stdout)
         self.assertIn('"type": "question"', woke.stdout)
 
+    def test_watch_status_and_wake_dir(self):
+        before = run(["watch", "--status", "--json"], self.repo, agent=None)
+        self.assertEqual(before.returncode, 3)
+        self.assertEqual(json.loads(before.stdout)["status"], "UNKNOWN")
+
+        run(["watch", "--once"], self.repo, agent=None)
+        sent = run(["msg", "send", "--to", "ba-2", "--type", "question",
+                    "--body", "wake me"], self.repo, agent="ba-1")
+        mid = re.search(r"SENT(?:_LOCAL)? ([0-9a-f]+)", sent.stdout).group(1)
+
+        out = run(["watch", "--once", "--wake-dir", ".aw/wake"], self.repo, agent=None)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        path = self.repo / ".aw" / "wake" / "ba-2.json"
+        self.assertTrue(path.exists())
+        data = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(data["messages"][-1]["id"], mid)
+
+        after = run(["watch", "--status", "--json"], self.repo, agent=None)
+        self.assertEqual(after.returncode, 3)
+        self.assertEqual(json.loads(after.stdout)["status"], "STOPPED")
+
     def test_next_req_sees_remote_demand(self):
         bare = self._with_remote()
         other = self.tmp / "other"

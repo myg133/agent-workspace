@@ -93,7 +93,7 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 | `aw.py contract check` | 契约一致性：pin 落后、consumer 未声明、变更未 ack |
 | `aw.py doctor` | 一页巡检：workspace、拓扑、认领、队列、契约、模式 |
 | `aw.py stats` | 运营指标（JSON / 表格） |
-| `aw.py watch` | bus 监听：新消息唤醒 agent（替代定时轮询） |
+| `aw.py watch [--status] [--wake-dir]` | bus 监听；`--status` 查心跳，`--wake-dir` 写唤醒文件 |
 | `aw.py msg watch` | 单 agent 收件箱监听：有消息立即返回（`--once` exit 0/3） |
 | `aw.py schema` | 机器可读工具清单（MCP + CLI），避免读源码 |
 | `aw.py hook install` | pre-push 校验 bus 消息格式 |
