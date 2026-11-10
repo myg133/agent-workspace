@@ -110,7 +110,9 @@ aw.py watch --ensure --interval 5 --wake-dir .aw/wake
 
 - 容器或强沙箱可能不允许 detach 子进程，这时必须用 supervisor；
 - `--ensure` 只负责“起”，不负责“守护”；要自动重启还是 systemd / 计划任务；
-- 停止用 `aw.py watch --stop`。
+- 停止用 `aw.py watch --stop`；
+- Windows 下 watcher 及其 `git` 子进程默认用 `CREATE_NO_WINDOW`，不会反复弹控制台；
+  如果 `--exec` 拉起的 agent 本身是控制台程序，需要自己在启动脚本里隐藏窗口。
 
 原则：**一台机器、一个仓库、一个 watcher**。
 

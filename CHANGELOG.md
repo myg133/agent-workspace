@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.38.1] - 2026-11-10
+
+### 修复：Windows 下反复弹控制台窗口
+
+- `aw.py` 的 `git()` / `commit-tree` / `taskkill` 子进程加 `CREATE_NO_WINDOW`
+- `aw_mcp.py` 调用 `aw.py` 与 `git rev-parse` 时加 `CREATE_NO_WINDOW`
+- 修复 detached watcher 每轮 fetch 弹一个 git 窗口的问题
+
 ## [1.38.0] - 2026-11-10
 
 ### 新增：首个 agent 可幂等启动 watcher

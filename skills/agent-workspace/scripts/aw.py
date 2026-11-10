@@ -38,6 +38,13 @@ class IdentityError(GitError):
     """没有 agent 名称——必须由人指定后才能继续。"""
 
 
+def _win_no_window() -> dict:
+    """Windows 下避免每次 git/python 子进程弹控制台窗口。"""
+    if os.name != "nt":
+        return {}
+    return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)}
+
+
 def git(*args: str, cwd: Path | str | None = None, check: bool = True,
         timeout: float | None = None) -> subprocess.CompletedProcess:
     # core.quotepath=false：中文/空格文件名按原样输出，避免 "\346\226\207" 这类转义
@@ -46,6 +53,7 @@ def git(*args: str, cwd: Path | str | None = None, check: bool = True,
         proc = subprocess.run(
             cmd, cwd=str(cwd) if cwd else None, timeout=timeout,
             capture_output=True, text=True, encoding="utf-8", errors="replace",
+            **_win_no_window(),
         )
     except subprocess.TimeoutExpired:
         raise GitError("git %s 超时（%ss）" % (" ".join(args), timeout))
@@ -1904,7 +1912,8 @@ def _commit_message(root: Path, text: str, parent: str | None, at: str) -> str:
     args += ["-F", str(tmp)]
     proc = subprocess.run(["git", "-c", "core.quotepath=false", *ensure_identity(root), *args],
                           cwd=str(root), capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", env=env)
+                          encoding="utf-8", errors="replace", env=env,
+                          **_win_no_window())
     tmp.unlink(missing_ok=True)
     if proc.returncode != 0:
         raise GitError("commit-tree 失败: %s" % proc.stderr.strip())
@@ -3056,7 +3065,7 @@ def _stop_watch(root: Path) -> int:
         return 0
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/F"],
-                       capture_output=True, text=True, check=False)
+                       capture_output=True, text=True, check=False, **_win_no_window())
     else:
         try:
             os.kill(pid, 15)

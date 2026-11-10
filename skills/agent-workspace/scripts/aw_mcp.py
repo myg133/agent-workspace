@@ -43,10 +43,13 @@ def run_aw(argv: list[str], agent: str | None = None, token: str | None = None,
         env["AW_AGENT_TOKEN"] = token
     env.setdefault("AW_AGENT_PID", str(os.getpid()))
     env.setdefault("AW_SESSION_ID", "proc-%d" % os.getpid())
+    extra = {}
+    if os.name == "nt":
+        extra["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
     return subprocess.run(
         [sys.executable, str(AW), *argv],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
-        env=env, timeout=timeout, cwd=os.getcwd(),
+        env=env, timeout=timeout, cwd=os.getcwd(), **extra,
     )
 
 
@@ -304,10 +307,13 @@ def build_argv(name: str, args: dict) -> list[str]:
 
 def _repo_root() -> Path | None:
     try:
+        extra = {}
+        if os.name == "nt":
+            extra["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
         out = subprocess.run(
             ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
             cwd=os.getcwd(), capture_output=True, text=True,
-            encoding="utf-8", errors="replace",
+            encoding="utf-8", errors="replace", **extra,
         ).stdout.strip()
         if not out:
             return None
