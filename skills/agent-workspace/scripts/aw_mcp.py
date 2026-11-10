@@ -29,7 +29,10 @@ AW = Path(__file__).resolve().parent / "aw.py"
 AGENT = (os.environ.get("AW_AGENT_ID") or "").strip()
 VERSION = "1.1.0"
 PROTOCOL = "2024-11-05"
-NOTIFY = os.environ.get("AW_MCP_NOTIFY") == "1" or "--notify" in sys.argv
+_NOTIFY_FLAG = (os.environ.get("AW_MCP_NOTIFY") or "").strip().lower()
+# 默认开启；AW_MCP_NOTIFY=0 / --no-notify 关闭
+NOTIFY = ("--no-notify" not in sys.argv
+          and _NOTIFY_FLAG not in ("0", "false", "off", "no"))
 WRITE_LOCK = threading.Lock()
 READY = threading.Event()
 

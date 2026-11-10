@@ -2,6 +2,15 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.40.0] - 2026-11-10
+
+### 变更：MCP 主动通知默认开启
+
+- `aw_mcp.py` 默认启动通知线程，不再要求 `AW_MCP_NOTIFY=1`
+- 关闭方式：`AW_MCP_NOTIFY=0` / `false` / `off`，或启动参数 `--no-notify`
+- 配置只需 `AW_AGENT_ID`；watcher 用 `aw.py watch --ensure --wake-dir .aw/wake`
+- `mcp.md` / `trigger.md` / `SKILL.md` / `onboarding.md` 同步默认值与启动步骤
+
 ## [1.39.0] - 2026-11-10
 
 ### 新增：MCP 主动通知（notifications/message）

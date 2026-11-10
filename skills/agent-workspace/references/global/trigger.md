@@ -146,7 +146,7 @@ aw.py watch --stop            # 停掉本机 watcher
 ### 2.3 与 MCP 通知的关系
 
 watcher 只写 `.aw/wake/<agent>.json`；MCP 进程读这个文件、发
-`notifications/message`（`AW_MCP_NOTIFY=1`）。这样 fetch 仍然只有一份，
+`notifications/message`（默认开启，`AW_MCP_NOTIFY=0` 关闭）。这样 fetch 仍然只有一份，
 MCP 不联网、不碰 git。
 
 通知只带 `id / from / type / expect / subject / at`，不带正文；格式见

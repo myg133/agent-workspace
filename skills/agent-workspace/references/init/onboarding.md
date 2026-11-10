@@ -84,6 +84,19 @@ aw.py hook install
 
 不装也能跑，但手工 commit 的 bus 消息不会被校验。
 
+### Q7 watcher 和主动通知
+
+MCP 主动通知**默认开启**，不需要设 `AW_MCP_NOTIFY`；但需要同仓库有 watcher 在写
+`.aw/wake/`：
+
+```bash
+aw.py watch --ensure --interval 5 --wake-dir .aw/wake
+```
+
+- 第一个 agent 调一次即可，后续 agent 得到 `WATCH_RUNNING`；
+- 不想让 MCP 发通知：`AW_MCP_NOTIFY=0` 或 `--no-notify`；
+- 宿主是否把通知变成一轮对话由客户端决定；不支持时用 `msg_inbox` / `msg_wait`。
+
 ## 2. 推荐流程
 
 ### 新项目（solo、本地）
@@ -93,6 +106,7 @@ aw.py init my-project --name "My Project"
 cd my-project
 aw.py hook install
 aw.py agent register pcA-ba-1 --role ba
+aw.py watch --ensure --interval 5 --wake-dir .aw/wake
 aw.py doctor
 ```
 

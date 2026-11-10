@@ -52,10 +52,7 @@ aw.py mcp print                   # 打印通用 JSON（手工粘贴）
       "command": "python",
       "args": ["<skill-path>/scripts/aw_mcp.py"],
       "cwd": "<repo-root>",
-      "env": {
-        "AW_AGENT_ID": "pcA-ba-1",
-        "AW_MCP_NOTIFY": "1"
-      }
+      "env": { "AW_AGENT_ID": "pcA-ba-1" }
     }
   }
 }
@@ -65,9 +62,9 @@ aw.py mcp print                   # 打印通用 JSON（手工粘贴）
 - 每个 agent 用同一份配置，只改 `AW_AGENT_ID`；
 - 没有 `AW_AGENT_ID` 时服务照常启动，但每次工具调用返回 `MISSING_AGENT_ID`。
 
-### 主动通知（notifications/message）
+### 主动通知（notifications/message，默认开启）
 
-设 `AW_MCP_NOTIFY=1` 后，MCP 进程会启动一个后台线程，tail
+MCP 进程默认启动一个后台线程，tail
 `.aw/wake/<agent>.json`（或 `AW_WAKE_DIR` 指定目录），有新消息时发：
 
 ```json
@@ -86,6 +83,7 @@ aw.py mcp print                   # 打印通用 JSON（手工粘贴）
 }
 ```
 
+- 默认开启；关闭：环境变量 `AW_MCP_NOTIFY=0` 或启动参数 `--no-notify`；
 - 只在 MCP 完成 `initialize` 之后发；
 - 启动时对文件里已有消息做 seed，不重放；
 - 同一条 `id` 只通知一次；

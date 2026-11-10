@@ -260,7 +260,8 @@ class WorkspaceCase(unittest.TestCase):
     def test_mcp_notify_message(self):
         wake = self.tmp / "wake"
         wake.mkdir()
-        proc = self._mcp(extra_env={"AW_MCP_NOTIFY": "1", "AW_WAKE_DIR": str(wake)})
+        # 不设 AW_MCP_NOTIFY：验证默认开启
+        proc = self._mcp(extra_env={"AW_WAKE_DIR": str(wake)})
         timer = None
         try:
             mcp_exchange(proc, {"jsonrpc": "2.0", "id": 1, "method": "initialize",
