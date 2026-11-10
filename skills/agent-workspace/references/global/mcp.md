@@ -14,36 +14,56 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 
 - **一个 agent 一个终端 / 一个进程**；
 - 身份优先级：`--agent` > `AW_AGENT_ID` > 首次 `tools/call` 的 `agent_id`；
+  若调用带 `session` 且没有显式 `agent_id`，用 `by-session` 反查 agent（映射优先于 env 身份）；
 - 会话优先级：`--session` > `AW_SESSION_ID` > `PI_SESSION_ID` > `DSH_SESSION_ID`
   > `CLAUDE_SESSION_ID` > `proc-<pid>`；
   - 实际使用的来源写入 `.aw/sessions/<agent>.json` 的 `session_source`
-    （`session-arg` / `PI_SESSION_ID` / `DSH_SESSION_ID` / `generated` …）；
+    （`--session` / `PI_SESSION_ID` / `DSH_SESSION_ID` / `generated` / `mcp` …）；
   - `proc-<pid>` 只是兜底，审计上能区分“真会话”和“临时兜底”；
 - 服务器进程启动时设置 `AW_AGENT_PID = 本进程 pid`（liveness 用这个）。
 - MCP 调用写会话记录时带 `AW_FROM_MCP=1`，**不写** `.aw/sessions/<agent>.map.json`；
   映射只由真实会话（终端 / `--session` / `PI_SESSION_ID` 等）刷新。
 
-### 会话↔agent 映射（v1）
+### 会话↔agent 映射（v3）
 
-`.aw/sessions/<agent>.map.json` 是“会话↔agent”的唯一权威映射：
+`.aw/sessions/<agent>.map.json` 是「会话↔agent」的唯一权威映射：
 
 ```json
 {
   "agent_id": "tree",
   "session_id": "session-488f...",
   "session_source": "DSH_SESSION_ID",
+  "session_authoritative": true,
+  "sessions": [
+    {"session_id": "session-488f...", "source": "DSH_SESSION_ID", "at": "2026-11-10T23:37:00+08:00"},
+    {"session_id": "session-bbbb...", "source": "PI_SESSION_ID", "at": "2026-11-10T23:20:00+08:00"}
+  ],
   "host": "PC-A",
   "cwd": "E:/proj",
   "pid": 0,
   "updated_at": "2026-11-10T23:37:00+08:00",
-  "map_version": 1
+  "map_version": 2
 }
 ```
 
+反向映射 `.aw/sessions/by-session/<sha256(session_id)[:16]>.json` 供会话从自身 session id 反查 agent id：
+
+```json
+{ "session_id": "session-488f...", "agent_id": "tree",
+  "source": "DSH_SESSION_ID", "updated_at": "2026-11-10T23:37:00+08:00" }
+```
+
 - 只在真实会话来源下写；`generated` / `mcp` 只代表“某个进程用过这个身份”，不得用于会话定位；
-- 每 agent 一个文件，原子替换；同 `session_id` 60 秒内不重复写；
-- 映射是本机文件，不跨机同步；
-- 映射写入失败只 warn，不影响命令退出码。
+- `sessions` 保留最近 8 条；120 分钟内出现不同 `session_id` 时追加并 warn，不覆盖历史；
+- 同 `session_id` 60 秒内不重复写；写失败只 warn，退出码不变；
+- `by-session` 最多 500 条 / 保留 7 天，写满清理最旧；`proc-*` 不写反向映射；
+- `agent whoami --session <SID>` 在无显式身份时用反向映射解析；`--json` 的 `resolved_by` 为 `session-map`；
+- 消费方读不到反向映射时回退到「唯一 cwd」规则，不得直接拒绝、更不得广播；
+- 映射是本机文件，不跨机同步。
+
+> **已知限制**：MCP 身份是**进程/配置级**，不是会话级：同一 profile 内的多个 DSH 会话共享同一个
+> `AW_AGENT_ID`。本映射解决「插件该叫醒哪个会话」，不解决「两个会话共用同一 agent 身份」。
+> 后者需要每会话显式传 `agent_id`，或每 BA 一个 profile。
 
 ## 1.1 安装（自动写配置）
 

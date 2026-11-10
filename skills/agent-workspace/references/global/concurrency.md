@@ -29,26 +29,40 @@ omp
 
 ### 1.1 会话↔agent 权威映射
 
-`.aw/sessions/<agent>.map.json` 是“会话↔agent”的唯一权威映射（v1）：
+`.aw/sessions/<agent>.map.json` 是「会话↔agent」的唯一权威映射（v3）：
 
 ```json
 {
   "agent_id": "tree",
   "session_id": "session-488f...",
   "session_source": "DSH_SESSION_ID",
+  "session_authoritative": true,
+  "sessions": [
+    {"session_id": "session-488f...", "source": "DSH_SESSION_ID", "at": "2026-11-10T23:37:00+08:00"},
+    {"session_id": "session-bbbb...", "source": "PI_SESSION_ID", "at": "2026-11-10T23:20:00+08:00"}
+  ],
   "host": "PC-A",
   "cwd": "E:/proj",
   "pid": 0,
   "updated_at": "2026-11-10T23:37:00+08:00",
-  "map_version": 1
+  "map_version": 2
 }
 ```
 
+反向映射 `.aw/sessions/by-session/<sha256(session_id)[:16]>.json` 供会话从自身 session id 反查 agent id。
+
 - 只在真实会话来源下写；`generated` / `mcp` 的记录只代表“某个进程用过这个身份”，
   **不得用于会话定位**；
-- 每 agent 一个文件，原子替换；同 `session_id` 60 秒内不重复写；
-- 映射是本机文件，不跨机同步；
-- 写失败只 warn，不改变命令退出码。
+- `sessions` 保留最近 8 条；120 分钟内出现不同 `session_id` 时追加并 warn，不覆盖历史；
+- 同 `session_id` 60 秒内不重复写；写失败只 warn，不改变退出码；
+- `by-session` 最多 500 条 / 保留 7 天，写满清理最旧；`proc-*` 不写反向映射；
+- `agent whoami --session <SID>` 用反向映射解析，`--json` 的 `resolved_by` 为 `session-map`；
+- 消费方读不到反向映射时回退到「唯一 cwd」规则，不得直接拒绝、更不得广播；
+- 映射是本机文件，不跨机同步。
+
+> **已知限制**：MCP 身份是**进程/配置级**，不是会话级：同一 profile 内的多个 DSH 会话共享同一个
+> `AW_AGENT_ID`。本映射解决「插件该叫醒哪个会话」，不解决「两个会话共用同一 agent 身份」。
+> 后者需要每会话显式传 `agent_id`，或每 BA 一个 profile。
 
 ## 2. 为什么不能用「一张登记表」认领
 

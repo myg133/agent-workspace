@@ -2,6 +2,27 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.45.0] - 2026-11-11
+
+### 新增：会话↔agent 映射 v3
+
+- `session_authoritative`：真实来源为 `true`，`generated` / `mcp` 为 `false`；
+  generated 不覆盖真实 `session_id`，`session_id` 永不为空；
+- 映射升级到 `map_version: 2`：
+  - `sessions` 保留最近 8 条；120 分钟内出现不同 `session_id` 追加并 warn；
+  - `session_id` 未变 60 秒内不重复写；
+  - 节流/写入门控只对 `agent` / `claim` 命令生效；
+- 新增反向映射 `.aw/sessions/by-session/<sha256(session_id)[:16]>.json`：
+  - 只写 `session_authoritative=true` 的真实 id，`proc-*` 不写；
+  - 最多 500 条 / 保留 7 天，写满清理最旧；
+- `--session` 的 `session_source` 记为 `--session`；
+- `aw.py agent whoami --session <SID>` 可用反向映射解析 agent；
+  `--json` 新增 `resolved_by`（`session-map` / `identity`）；
+  - 未显式 `--agent` 时，反向映射优先于 `AW_AGENT_ID` / 终端绑定；
+- MCP 调用带 `session` 且无显式 `agent_id` 时，同样用反向映射兜底；
+- MCP 无真实 session 时写 `session_source: mcp`，带 `AW_FROM_MCP=1`，不写映射；
+- 文档补充已知限制：MCP 身份是进程/配置级，不是会话级。
+
 ## [1.44.0] - 2026-11-10
 
 ### 新增：会话↔agent 映射 v1

@@ -36,6 +36,19 @@
 实际来源写入 `.aw/sessions/<agent_id>.json` 的 `session_source`。
 `proc-<pid>` 会随进程变化，只适合临时兜底；审计看到 `generated` 就知道这不是稳定会话。
 
+### 1.2 反向映射：session → agent
+
+`.aw/sessions/by-session/<sha256(session_id)[:16]>.json` 记录真实会话与 agent 的对应关系。
+
+```bash
+aw.py agent whoami --session <SID> --json
+# {"agent_id":"tree", ..., "resolved_by":"session-map"}
+```
+
+- 未显式给 `--agent` 时，反向映射优先于 `AW_AGENT_ID` / 终端绑定；
+- 解析不到则回退现有身份解析，最终仍缺失才报 `MISSING_AGENT_ID`；
+- `proc-*` 不写反向映射。
+
 ## 2. 终端锚点
 
 读取顺序：`WT_SESSION` → `TERM_SESSION_ID` → `TMUX_PANE` → `SSH_TTY` → `TTY`。

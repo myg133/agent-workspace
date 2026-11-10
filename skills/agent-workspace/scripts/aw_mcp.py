@@ -39,7 +39,7 @@ def _arg_value(flag: str) -> str:
 
 
 AGENT = (_arg_value("--agent") or os.environ.get("AW_AGENT_ID") or "").strip()
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 PROTOCOL = "2024-11-05"
 _NOTIFY_FLAG = (os.environ.get("AW_MCP_NOTIFY") or "").strip().lower()
 # 默认开启；AW_MCP_NOTIFY=0 / --no-notify 关闭
@@ -101,7 +101,7 @@ def run_aw(argv: list[str], agent: str | None = None, token: str | None = None,
                 break
         else:
             env["AW_SESSION_ID"] = "proc-%d" % os.getpid()
-            env["AW_SESSION_SOURCE"] = "generated"
+            env["AW_SESSION_SOURCE"] = "mcp"
     else:
         env["AW_SESSION_ID"] = os.environ["AW_SESSION_ID"]
         env.setdefault("AW_SESSION_SOURCE",
@@ -482,8 +482,27 @@ def notify_loop() -> None:
         time.sleep(2)
 
 
+def _session_map_agent(session_id: str) -> str:
+    root = _repo_root()
+    if root is None:
+        return ""
+    key = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:16]
+    try:
+        data = json.loads((root / ".aw" / "sessions" / "by-session" / (key + ".json"))
+                          .read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    return str(data.get("agent_id") or "").strip()
+
+
 def call_tool(name: str, args: dict) -> dict:
-    identity = (str(args.get("agent_id") or "").strip()) or AGENT
+    explicit = str(args.get("agent_id") or "").strip()
+    session = str(args.get("session") or "").strip()
+    identity = explicit or AGENT
+    if not explicit and session:
+        mapped = _session_map_agent(session)
+        if mapped:
+            identity = mapped
     if not identity:
         return {
             "content": [{"type": "text", "text":

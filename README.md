@@ -151,7 +151,7 @@ watcher 只写 `.aw/wake/<agent>.json`；“有新消息 → 模型起一轮”�
 python -m unittest discover -s skills/agent-workspace/tests -v
 ```
 
-97 个用例覆盖：布局、巡检、认领并发、消息寻址/游标/回执/离线队列/阻塞等待/低延迟监听、反馈义务与欠回复门禁、契约检查、升级检查、身份/会话绑定与映射、令牌、MCP 握手与通知、唤醒插件。
+101 个用例覆盖：布局、巡检、认领并发、消息寻址/游标/回执/离线队列/阻塞等待/低延迟监听、反馈义务与欠回复门禁、契约检查、升级检查、身份/会话绑定与映射、令牌、MCP 握手与通知、唤醒插件。
 全部在临时目录运行，不碰当前仓库。
 
 ## 升级已有项目
@@ -171,25 +171,32 @@ aw.py upgrade      # 只读：列出「需要补 / 需要清 / 需要改」
 $env:AW_AGENT_ID = 'ba-slot-1'; omp
 ```
 
-### 会话↔agent 映射 v1
+### 会话↔agent 映射 v3
 
-`.aw/sessions/<agent>.map.json` 是“会话↔agent”的唯一权威映射：
+`.aw/sessions/<agent>.map.json` 是「会话↔agent」的唯一权威映射；
+`.aw/sessions/by-session/<sha256(session_id)[:16]>.json` 是反向映射，供会话从自身 session id 反查 agent id。
 
 ```json
 {
   "agent_id": "tree",
   "session_id": "session-488f...",
   "session_source": "DSH_SESSION_ID",
+  "session_authoritative": true,
+  "sessions": [
+    {"session_id": "session-488f...", "source": "DSH_SESSION_ID", "at": "2026-11-10T23:37:00+08:00"},
+    {"session_id": "session-bbbb...", "source": "PI_SESSION_ID", "at": "2026-11-10T23:20:00+08:00"}
+  ],
   "host": "PC-A",
   "cwd": "E:/proj",
   "pid": 0,
   "updated_at": "2026-11-10T23:37:00+08:00",
-  "map_version": 1
+  "map_version": 2
 }
 ```
 
 - 只在真实会话来源下写；`generated` / `mcp` 只代表“某个进程用过这个身份”，不得用于会话定位；
-- 每 agent 一个文件，原子替换；同 `session_id` 60 秒内不重复写；
+- `sessions` 保留最近 8 条；120 分钟内出现不同 `session_id` 时追加并 warn；
+- `agent whoami --session <SID>` 可用反向映射解析，`--json` 的 `resolved_by` 为 `session-map`；
 - 映射是本机文件，不跨机同步。
 
 认领走工具，不走表格：
