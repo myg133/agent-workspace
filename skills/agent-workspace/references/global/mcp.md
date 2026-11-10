@@ -17,9 +17,33 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 - 会话优先级：`--session` > `AW_SESSION_ID` > `PI_SESSION_ID` > `DSH_SESSION_ID`
   > `CLAUDE_SESSION_ID` > `proc-<pid>`；
   - 实际使用的来源写入 `.aw/sessions/<agent>.json` 的 `session_source`
-    （`session-arg` / `env:PI_SESSION_ID` / `generated` …）；
+    （`session-arg` / `PI_SESSION_ID` / `DSH_SESSION_ID` / `generated` …）；
   - `proc-<pid>` 只是兜底，审计上能区分“真会话”和“临时兜底”；
 - 服务器进程启动时设置 `AW_AGENT_PID = 本进程 pid`（liveness 用这个）。
+- MCP 调用写会话记录时带 `AW_FROM_MCP=1`，**不写** `.aw/sessions/<agent>.map.json`；
+  映射只由真实会话（终端 / `--session` / `PI_SESSION_ID` 等）刷新。
+
+### 会话↔agent 映射（v1）
+
+`.aw/sessions/<agent>.map.json` 是“会话↔agent”的唯一权威映射：
+
+```json
+{
+  "agent_id": "tree",
+  "session_id": "session-488f...",
+  "session_source": "DSH_SESSION_ID",
+  "host": "PC-A",
+  "cwd": "E:/proj",
+  "pid": 0,
+  "updated_at": "2026-11-10T23:37:00+08:00",
+  "map_version": 1
+}
+```
+
+- 只在真实会话来源下写；`generated` / `mcp` 只代表“某个进程用过这个身份”，不得用于会话定位；
+- 每 agent 一个文件，原子替换；同 `session_id` 60 秒内不重复写；
+- 映射是本机文件，不跨机同步；
+- 映射写入失败只 warn，不影响命令退出码。
 
 ## 1.1 安装（自动写配置）
 

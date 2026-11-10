@@ -928,11 +928,15 @@ def _session_alive(rec: dict, ttl: int = SESSION_TTL_SECONDS) -> bool:
 
 
 SESSION_ENV = (
-    ("AW_SESSION_ID", "env:AW_SESSION_ID"),
-    ("PI_SESSION_ID", "env:PI_SESSION_ID"),
-    ("DSH_SESSION_ID", "env:DSH_SESSION_ID"),
-    ("CLAUDE_SESSION_ID", "env:CLAUDE_SESSION_ID"),
+    ("AW_SESSION_ID", "AW_SESSION_ID"),
+    ("PI_SESSION_ID", "PI_SESSION_ID"),
+    ("DSH_SESSION_ID", "DSH_SESSION_ID"),
+    ("CLAUDE_SESSION_ID", "CLAUDE_SESSION_ID"),
 )
+
+SESSION_MAP_VERSION = 1
+SESSION_MAP_THROTTLE_SECONDS = 60
+SESSION_GENERATED_SOURCES = ("generated", "mcp")
 
 
 def _resolve_session() -> tuple[str, str]:
@@ -945,6 +949,49 @@ def _resolve_session() -> tuple[str, str]:
                 return value, forced
             return value, label
     return "proc-%d" % os.getpid(), "generated"
+
+
+def _map_source(source: str) -> str:
+    value = (source or "").strip()
+    return value[4:] if value.startswith("env:") else value
+
+
+def _write_session_map(root: Path, agent_id: str, record: dict, source: str,
+                       quiet: bool = False) -> None:
+    """写权威映射文件；失败只 warn。
+
+    - 只在真实会话来源下写；generated / mcp / AW_FROM_MCP=1 跳过；
+    - 同 session_id 60 秒内不重复写；
+    - 每 agent 一个文件，write_json 原子替换，无需共享锁。
+    """
+    if os.environ.get("AW_FROM_MCP") == "1":
+        return
+    if (source or "").strip() in SESSION_GENERATED_SOURCES:
+        return
+    session_id = (record.get("session_id") or "").strip()
+    if not session_id:
+        return
+    path = aw_path(root, "sessions", "%s.map.json" % agent_id)
+    old = read_json(path, {})
+    if old.get("session_id") == session_id:
+        age = _age_seconds(old.get("updated_at"))
+        if age is not None and age < SESSION_MAP_THROTTLE_SECONDS:
+            return
+    data = {
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "session_source": _map_source(source),
+        "host": socket.gethostname(),
+        "cwd": str(Path.cwd()),
+        "pid": 0,
+        "updated_at": _now(),
+        "map_version": SESSION_MAP_VERSION,
+    }
+    try:
+        write_json(path, data)
+    except OSError as exc:
+        if not quiet:
+            print("warn: 写会话映射失败（不影响命令）: %s" % exc, file=sys.stderr)
 
 
 def _claim_session_state(rec: dict, claim: dict, ttl: int = SESSION_TTL_SECONDS) -> str:
@@ -1124,6 +1171,14 @@ def resolve_identity(root: Path, role: str = "ba", rebind: bool = False) -> dict
     aw_init(root)
     path = aw_path(root, "sessions", "%s.json" % agent_id)
     old = read_json(path, {})
+    generated = session_source in SESSION_GENERATED_SOURCES
+    mcp_session_id = session_id if generated else ""
+    if generated:
+        old_real = ((old.get("session_id") or "").strip()
+                    and (old.get("session_source") or "").strip() not in SESSION_GENERATED_SOURCES)
+        if old_real:
+            session_id = old["session_id"]
+            session_source = old.get("session_source") or session_source
     agent_pid = int(os.environ.get("AW_AGENT_PID") or 0)
     if not agent_pid and old.get("pid") and pid_alive(int(old["pid"])):
         agent_pid = int(old["pid"])
@@ -1149,7 +1204,15 @@ def resolve_identity(root: Path, role: str = "ba", rebind: bool = False) -> dict
         "last_seen": _now(),
         "source": source,
     }
-    write_json(path, record)
+    if mcp_session_id:
+        record["mcp_session_id"] = mcp_session_id
+    session_written = True
+    try:
+        write_json(path, record)
+    except OSError as exc:
+        session_written = False
+        print("warn: 写会话记录失败（不影响命令）: %s" % exc, file=sys.stderr)
+    _write_session_map(root, agent_id, record, session_source, quiet=not session_written)
     return record
 
 
@@ -1729,6 +1792,10 @@ def cmd_agent(args) -> int:
                 return 3
             print("BOUND %s" % name)
             print("  anchor: %s" % anchor)
+            try:
+                resolve_identity(root)
+            except (GitError, IdentityError) as exc:
+                print("warn: 绑定后刷新会话失败: %s" % exc, file=sys.stderr)
             return 0
         bindings = load_bindings(root)
         bindings.pop(key, None)
@@ -4105,7 +4172,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["AW_SESSION_ID"] = args.session
         os.environ["AW_SESSION_SOURCE"] = "session-arg"
     elif os.environ.get("AW_SESSION_ID"):
-        os.environ.setdefault("AW_SESSION_SOURCE", "env:AW_SESSION_ID")
+        os.environ.setdefault("AW_SESSION_SOURCE", "AW_SESSION_ID")
     if getattr(args, "no_bind", False):
         os.environ["AW_NO_BIND"] = "1"
     if getattr(args, "agent_token", None):

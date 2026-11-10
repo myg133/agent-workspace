@@ -27,6 +27,29 @@ omp
 如果同一 agent 换了 session，旧认领会保留并标记 `superseded`（不 requeue）：
 旧会话可能还在跑，静默退回队列会让两个人做同一个需求。
 
+### 1.1 会话↔agent 权威映射
+
+`.aw/sessions/<agent>.map.json` 是“会话↔agent”的唯一权威映射（v1）：
+
+```json
+{
+  "agent_id": "tree",
+  "session_id": "session-488f...",
+  "session_source": "DSH_SESSION_ID",
+  "host": "PC-A",
+  "cwd": "E:/proj",
+  "pid": 0,
+  "updated_at": "2026-11-10T23:37:00+08:00",
+  "map_version": 1
+}
+```
+
+- 只在真实会话来源下写；`generated` / `mcp` 的记录只代表“某个进程用过这个身份”，
+  **不得用于会话定位**；
+- 每 agent 一个文件，原子替换；同 `session_id` 60 秒内不重复写；
+- 映射是本机文件，不跨机同步；
+- 写失败只 warn，不改变命令退出码。
+
 ## 2. 为什么不能用「一张登记表」认领
 
 旧做法：`git pull → 读 req-registry.md → 写一行 → commit → push`。

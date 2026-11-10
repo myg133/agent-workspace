@@ -39,7 +39,7 @@ def _arg_value(flag: str) -> str:
 
 
 AGENT = (_arg_value("--agent") or os.environ.get("AW_AGENT_ID") or "").strip()
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 PROTOCOL = "2024-11-05"
 _NOTIFY_FLAG = (os.environ.get("AW_MCP_NOTIFY") or "").strip().lower()
 # 默认开启；AW_MCP_NOTIFY=0 / --no-notify 关闭
@@ -89,10 +89,11 @@ def run_aw(argv: list[str], agent: str | None = None, token: str | None = None,
     if token:
         env["AW_AGENT_TOKEN"] = token
     env.setdefault("AW_AGENT_PID", str(os.getpid()))
+    env["AW_FROM_MCP"] = "1"
     if not (os.environ.get("AW_SESSION_ID") or "").strip():
-        for key, label in (("PI_SESSION_ID", "env:PI_SESSION_ID"),
-                           ("DSH_SESSION_ID", "env:DSH_SESSION_ID"),
-                           ("CLAUDE_SESSION_ID", "env:CLAUDE_SESSION_ID")):
+        for key, label in (("PI_SESSION_ID", "PI_SESSION_ID"),
+                           ("DSH_SESSION_ID", "DSH_SESSION_ID"),
+                           ("CLAUDE_SESSION_ID", "CLAUDE_SESSION_ID")):
             value = (os.environ.get(key) or "").strip()
             if value:
                 env["AW_SESSION_ID"] = value
@@ -104,7 +105,7 @@ def run_aw(argv: list[str], agent: str | None = None, token: str | None = None,
     else:
         env["AW_SESSION_ID"] = os.environ["AW_SESSION_ID"]
         env.setdefault("AW_SESSION_SOURCE",
-                       os.environ.get("AW_SESSION_SOURCE") or "env:AW_SESSION_ID")
+                       os.environ.get("AW_SESSION_SOURCE") or "AW_SESSION_ID")
     extra = {}
     if os.name == "nt":
         extra["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
@@ -125,6 +126,10 @@ def tool(name: str, description: str, props: dict, required: list[str] | None = 
         "token": {
             "type": "string",
             "description": "agent 令牌；注册时由 agent register 一次性打印，用于证明身份",
+        },
+        "session": {
+            "type": "string",
+            "description": "会话 id；透传给 aw.py --session（不写映射）",
         },
     }
     properties.update(props)
@@ -504,7 +509,11 @@ def call_tool(name: str, args: dict) -> dict:
             }
     try:
         argv = build_argv(name, args)
-        argv = ["--agent", identity, *argv]
+        prefix = ["--agent", identity]
+        session = str(args.get("session") or "").strip()
+        if session:
+            prefix += ["--session", session]
+        argv = [*prefix, *argv]
     except (KeyError, ValueError) as exc:
         return {"content": [{"type": "text", "text": "参数错误: %s" % exc}], "isError": True}
     try:

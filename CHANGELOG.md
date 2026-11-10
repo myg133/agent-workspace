@@ -2,6 +2,26 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.44.0] - 2026-11-10
+
+### 新增：会话↔agent 映射 v1
+
+- `generated`（`proc-<pid>`）不再覆盖真实 `session_id`：
+  - 真实记录存在时只更新 `last_seen`，并写 `mcp_session_id`；
+  - 无真实记录时才保留 generated 的 `session_id`；
+- 新增 `.aw/sessions/<agent>.map.json`（`map_version: 1`）：
+  - 只在真实会话来源下写；`pid` 固定 0；
+  - `write_json` 原子替换；同 `session_id` 60 秒内不重复写；
+  - 写入失败只 warn，不影响命令退出码；
+- `session_source` 统一写变量名：`AW_SESSION_ID` / `PI_SESSION_ID` /
+  `DSH_SESSION_ID` / `CLAUDE_SESSION_ID` / `session-arg` / `generated`；
+- MCP `run_aw()` 带 `AW_FROM_MCP=1`，不写 map；新增可选参数 `session`
+  透传 `--session`；工具名/参数/返回结构不变；
+- `agent bind` 成功后刷新会话记录与映射；
+- 文档：concurrency / mcp 增加映射契约；README 增加 session map v1；
+- 测试：generated 不覆盖、MCP 5 次调用不改变 map、双 agent 独立 map、
+  换会话更新、MCP `session` 参数不写 map。
+
 ## [1.43.0] - 2026-11-10
 
 ### 新增：omp / pi / DSH 唤醒插件

@@ -427,7 +427,7 @@ class WorkspaceCase(unittest.TestCase):
         data = json.loads((self.repo / ".aw" / "sessions" / "ba-2.json")
                           .read_text(encoding="utf-8"))
         self.assertEqual(data["session_id"], "pi-9")
-        self.assertEqual(data["session_source"], "env:PI_SESSION_ID")
+        self.assertEqual(data["session_source"], "PI_SESSION_ID")
 
     def test_session_generated_is_proc_pid(self):
         run(["agent", "whoami"], self.repo, agent="ba-3", extra_env={
@@ -437,6 +437,88 @@ class WorkspaceCase(unittest.TestCase):
                           .read_text(encoding="utf-8"))
         self.assertTrue(data["session_id"].startswith("proc-"))
         self.assertEqual(data["session_source"], "generated")
+
+    def test_session_map_real_and_generated(self):
+        run(["--session", "map-real", "agent", "whoami"], self.repo, agent="tree")
+        map_path = self.repo / ".aw" / "sessions" / "tree.map.json"
+        first = json.loads(map_path.read_text(encoding="utf-8"))
+        self.assertEqual(first["session_id"], "map-real")
+        self.assertEqual(first["session_source"], "session-arg")
+        self.assertEqual(first["map_version"], 1)
+        self.assertEqual(first["pid"], 0)
+
+        # generated 进程不得覆盖真实 session_id
+        run(["agent", "whoami"], self.repo, agent="tree", extra_env={
+            "AW_SESSION_ID": "", "PI_SESSION_ID": "",
+            "DSH_SESSION_ID": "", "CLAUDE_SESSION_ID": "", "AW_FROM_MCP": "1"})
+        second = json.loads(map_path.read_text(encoding="utf-8"))
+        self.assertEqual(second["session_id"], "map-real")
+        sess = json.loads((self.repo / ".aw" / "sessions" / "tree.json")
+                          .read_text(encoding="utf-8"))
+        self.assertEqual(sess["session_id"], "map-real")
+        self.assertTrue(sess.get("mcp_session_id", "").startswith("proc-"))
+
+    def test_session_map_mcp_five_calls_does_not_change(self):
+        run(["--session", "keep-me", "agent", "whoami"], self.repo, agent="tree")
+        map_path = self.repo / ".aw" / "sessions" / "tree.map.json"
+        before = json.loads(map_path.read_text(encoding="utf-8"))["session_id"]
+        proc = self._mcp(agent=None, extra_env={
+            "PI_SESSION_ID": "", "DSH_SESSION_ID": "", "CLAUDE_SESSION_ID": ""})
+        try:
+            for rid in range(30, 35):
+                call = self._mcp_tool(proc, "agent_whoami", {"agent_id": "tree"}, rid=rid)
+                self.assertFalse(call["result"]["isError"])
+        finally:
+            self._stop_mcp(proc)
+        after = json.loads(map_path.read_text(encoding="utf-8"))["session_id"]
+        self.assertEqual(after, before)
+
+    def test_session_map_two_agents_and_update(self):
+        run(["--session", "s-tree", "agent", "whoami"], self.repo, agent="tree")
+        run(["--session", "s-tree2", "agent", "whoami"], self.repo, agent="tree2")
+        one = json.loads((self.repo / ".aw" / "sessions" / "tree.map.json")
+                         .read_text(encoding="utf-8"))
+        two = json.loads((self.repo / ".aw" / "sessions" / "tree2.map.json")
+                         .read_text(encoding="utf-8"))
+        self.assertEqual(one["session_id"], "s-tree")
+        self.assertEqual(two["session_id"], "s-tree2")
+
+        run(["--session", "s-tree-new", "agent", "whoami"], self.repo, agent="tree")
+        fresh = json.loads((self.repo / ".aw" / "sessions" / "tree.map.json")
+                           .read_text(encoding="utf-8"))
+        self.assertEqual(fresh["session_id"], "s-tree-new")
+
+    def test_session_map_pi_source(self):
+        run(["agent", "whoami"], self.repo, agent="tree", extra_env={
+            "AW_SESSION_ID": "", "PI_SESSION_ID": "pi-map"})
+        data = json.loads((self.repo / ".aw" / "sessions" / "tree.map.json")
+                          .read_text(encoding="utf-8"))
+        self.assertEqual(data["session_id"], "pi-map")
+        self.assertEqual(data["session_source"], "PI_SESSION_ID")
+
+    def test_mcp_session_param_writes_session_not_map(self):
+        proc = self._mcp(agent=None)
+        try:
+            call = self._mcp_tool(proc, "msg_send", {
+                "agent_id": "tree", "session": "mcp-sess",
+                "to": "all", "body": "x", "type": "fyi"}, rid=40)
+            payload = json.loads(call["result"]["content"][0]["text"])
+            self.assertEqual(payload["exit_code"], 0, payload)
+        finally:
+            self._stop_mcp(proc)
+        sess = json.loads((self.repo / ".aw" / "sessions" / "tree.json")
+                          .read_text(encoding="utf-8"))
+        self.assertEqual(sess["session_id"], "mcp-sess")
+        self.assertFalse((self.repo / ".aw" / "sessions" / "tree.map.json").exists())
+
+    def test_session_write_failure_is_soft(self):
+        sessions = self.repo / ".aw" / "sessions"
+        sessions.mkdir(parents=True, exist_ok=True)
+        (sessions / "ba-1.json").mkdir()
+        (sessions / "ba-1.map.json").mkdir()
+        out = run(["claim", "list"], self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertEqual(out.stderr.count("warn:"), 1, out.stderr)
 
     def test_claim_superseded_kept(self):
         run(["queue", "add", "REQ-001"], self.repo)
