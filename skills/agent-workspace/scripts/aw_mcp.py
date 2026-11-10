@@ -21,12 +21,17 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 AW = Path(__file__).resolve().parent / "aw.py"
 AGENT = (os.environ.get("AW_AGENT_ID") or "").strip()
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 PROTOCOL = "2024-11-05"
+NOTIFY = os.environ.get("AW_MCP_NOTIFY") == "1" or "--notify" in sys.argv
+WRITE_LOCK = threading.Lock()
+READY = threading.Event()
 
 
 def log(*args) -> None:
@@ -341,6 +346,63 @@ def _roster_entry(agent: str) -> dict | None:
     return None
 
 
+def _wake_path(agent: str) -> Path | None:
+    env = (os.environ.get("AW_WAKE_DIR") or "").strip()
+    if env:
+        return Path(env).expanduser().resolve() / ("%s.json" % agent)
+    root = _repo_root()
+    if root is None:
+        return None
+    return root / ".aw" / "wake" / ("%s.json" % agent)
+
+
+def _wake_ids(path: Path) -> set[str]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {str(m.get("id")) for m in data.get("messages") or [] if m.get("id")}
+
+
+def notify_loop() -> None:
+    if not NOTIFY:
+        return
+    if not AGENT:
+        log("notify: 没有 AW_AGENT_ID，通知已禁用")
+        return
+    path = _wake_path(AGENT)
+    seen: set[str] = _wake_ids(path) if path and path.exists() else set()
+    if not READY.wait(timeout=30):
+        log("notify: 等待 initialize 超时，通知未启动")
+        return
+    log("notify: watching %s" % path)
+    while True:
+        if path is None:
+            path = _wake_path(AGENT)
+        if path and path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                data = {}
+            for msg in data.get("messages") or []:
+                mid = str(msg.get("id") or "")
+                if not mid or mid in seen:
+                    continue
+                seen.add(mid)
+                notify_message({
+                    "agent": msg.get("agent") or AGENT,
+                    "id": mid,
+                    "from": msg.get("from", ""),
+                    "type": msg.get("type", ""),
+                    "subject": msg.get("subject", ""),
+                    "expect": msg.get("expect", "none"),
+                    "at": msg.get("at", ""),
+                })
+            if len(seen) > 1000:
+                seen = set(list(seen)[-500:])
+        time.sleep(2)
+
+
 def call_tool(name: str, args: dict) -> dict:
     identity = (str(args.get("agent_id") or "").strip()) or AGENT
     if not identity:
@@ -389,14 +451,28 @@ def call_tool(name: str, args: dict) -> dict:
     }
 
 
+def _write(obj: dict) -> None:
+    line = json.dumps(obj, ensure_ascii=False) + "\n"
+    with WRITE_LOCK:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+
+
 def reply(msg_id, result=None, error=None) -> None:
     body = {"jsonrpc": "2.0", "id": msg_id}
     if error is not None:
         body["error"] = error
     else:
         body["result"] = result
-    sys.stdout.write(json.dumps(body, ensure_ascii=False) + "\n")
-    sys.stdout.flush()
+    _write(body)
+
+
+def notify_message(data: dict) -> None:
+    _write({
+        "jsonrpc": "2.0",
+        "method": "notifications/message",
+        "params": {"level": "info", "logger": "aw", "data": data},
+    })
 
 
 def handle(msg: dict) -> None:
@@ -410,8 +486,12 @@ def handle(msg: dict) -> None:
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "aw-mcp", "version": VERSION},
         })
+        READY.set()
         return
-    if method in ("notifications/initialized", "notifications/cancelled"):
+    if method == "notifications/initialized":
+        READY.set()
+        return
+    if method == "notifications/cancelled":
         return
     if method == "ping":
         reply(msg_id, {})
@@ -434,7 +514,10 @@ def main() -> int:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
-    log("aw-mcp %s starting; agent=%s pid=%d" % (VERSION, AGENT or "(missing)", os.getpid()))
+    log("aw-mcp %s starting; agent=%s pid=%d notify=%s"
+        % (VERSION, AGENT or "(missing)", os.getpid(), NOTIFY))
+    if NOTIFY:
+        threading.Thread(target=notify_loop, daemon=True).start()
     for line in sys.stdin:
         line = line.strip()
         if not line:

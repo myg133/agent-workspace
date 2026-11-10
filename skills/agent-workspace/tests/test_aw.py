@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -86,11 +87,14 @@ class WorkspaceCase(unittest.TestCase):
             except Exception:
                 pass
 
-    def _mcp(self, agent="ba-1"):
+    def _mcp(self, agent="ba-1", extra_env=None):
         env = {k: v for k, v in os.environ.items()
-               if k not in ("AW_AGENT_ID", "AW_SESSION_ID", "AW_AGENT_PID")}
+               if k not in ("AW_AGENT_ID", "AW_SESSION_ID", "AW_AGENT_PID",
+                            "AW_MCP_NOTIFY", "AW_WAKE_DIR")}
         if agent:
             env["AW_AGENT_ID"] = agent
+        if extra_env:
+            env.update(extra_env)
         return subprocess.Popen(
             [sys.executable, str(MCP)], cwd=str(self.repo), env=env,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -252,6 +256,30 @@ class WorkspaceCase(unittest.TestCase):
     def _mcp_tool(self, proc, name, args, rid=10):
         return mcp_exchange(proc, {"jsonrpc": "2.0", "id": rid, "method": "tools/call",
                                    "params": {"name": name, "arguments": args}})
+
+    def test_mcp_notify_message(self):
+        wake = self.tmp / "wake"
+        wake.mkdir()
+        proc = self._mcp(extra_env={"AW_MCP_NOTIFY": "1", "AW_WAKE_DIR": str(wake)})
+        timer = None
+        try:
+            mcp_exchange(proc, {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                                "params": {"protocolVersion": "2024-11-05"}})
+            (wake / "ba-1.json").write_text(json.dumps({
+                "agent": "ba-1",
+                "messages": [{"id": "abc12345", "from": "ba-2", "type": "question",
+                              "subject": "ping", "expect": "reply",
+                              "at": "2026-11-10T08:00:00Z"}],
+            }, ensure_ascii=False), encoding="utf-8")
+            timer = threading.Timer(10, proc.kill)
+            timer.start()
+            data = json.loads(proc.stdout.readline())
+            self.assertEqual(data["method"], "notifications/message")
+            self.assertEqual(data["params"]["data"]["id"], "abc12345")
+        finally:
+            if timer is not None:
+                timer.cancel()
+            self._stop_mcp(proc)
 
     def test_mcp_install_config(self):
         cfg = self.tmp / "claude.json"

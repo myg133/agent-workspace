@@ -145,11 +145,18 @@ aw.py watch --stop            # 停掉本机 watcher
 
 ### 2.3 与 MCP 通知的关系
 
-watcher 只写 `.aw/wake/<agent>.json`；MCP 进程读这个文件、发 notification。
-这样 fetch 仍然只有一份，MCP 不联网、不碰 git。
+watcher 只写 `.aw/wake/<agent>.json`；MCP 进程读这个文件、发
+`notifications/message`（`AW_MCP_NOTIFY=1`）。这样 fetch 仍然只有一份，
+MCP 不联网、不碰 git。
+
+通知只带 `id / from / type / expect / subject / at`，不带正文；格式见
+`references/global/mcp.md` 的「主动通知」。
 
 如果 MCP 没有启动，wake 文件仍在，只是没人发通知——消息本身还在 bus 上，
 `msg_inbox` / `msg_wait` 仍然能取到。
+
+**注意**：`notifications/message` 是否变成模型的一轮对话，由宿主决定。
+多数客户端只当日志；不支持时仍要 `msg_inbox` / `msg_wait`。
 
 ## 3. supervisor 脚本
 

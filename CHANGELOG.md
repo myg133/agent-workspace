@@ -2,6 +2,17 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.39.0] - 2026-11-10
+
+### 新增：MCP 主动通知（notifications/message）
+
+- `aw_mcp.py` 支持 `AW_MCP_NOTIFY=1` / `--notify`
+- 后台线程 tail `.aw/wake/<agent>.json`（或 `AW_WAKE_DIR`），新消息发 `notifications/message`
+- initialize 之前不发送；启动时 seed，同 id 只通知一次；只带 id/type/from/expect
+- stdout 写入加锁，通知与工具响应不会交错
+- `mcp.md` 增加「主动通知」；`trigger.md` 说明 watcher → wake → MCP 通知链路
+- 宿主不支持通知时，`msg_inbox` / `msg_wait` 仍是兜底
+
 ## [1.38.1] - 2026-11-10
 
 ### 修复：Windows 下反复弹控制台窗口
