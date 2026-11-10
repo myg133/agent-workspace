@@ -2,6 +2,20 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.43.0] - 2026-11-10
+
+### 新增：omp / pi / DSH 唤醒插件
+
+- `agents/pi/agent/extension/aw-bus.ts`：监听 MCP `notifications/message`，
+  通过 `pi.sendUserMessage` 把 bus 消息变成一次会话轮次
+  - 日志路径跨平台：`~/.omp/logs/aw-bus-bridge.log`，可用 `AW_BUS_LOG` 覆盖
+  - 按 id 去重；不发回复、不改认领
+- `agents/dsh/aw-wake/`：轮询 `.aw/wake/<agent>.json`，调用 `agent.followup()`
+  - 配置改为 `!!js process.env.AW_REPO_ROOT` / `AW_AGENT_ID`，不再写死测试路径
+  - 按 cwd 匹配 DSH 会话；`minIntervalMs` 限流；seen 状态防重放
+- 新增 `references/global/agent-plugins.md`：安装、环境变量、自证日志、故障排查
+- README / SKILL 路由补充插件入口；自测数更新为 91
+
 ## [1.42.1] - 2026-11-10
 
 ### 修复：MCP `msg_send` 的 `reply_by` 参数映射

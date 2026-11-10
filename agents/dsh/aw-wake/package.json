@@ -1,0 +1,23 @@
+{
+  "name": "@local/aw-wake",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Wakes an idle DSH agent when the agent-workspace bus has messages that need action.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

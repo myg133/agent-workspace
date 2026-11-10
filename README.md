@@ -133,13 +133,25 @@ bun run bus-report.ts serve --remote git@github.com:you/your-repo.git --out ./ou
 
 > 这是独立仓库，不属于本 skill；本仓库只负责写 bus，它负责读 bus。
 
+## 唤醒插件（omp / pi / DSH）
+
+watcher 只写 `.aw/wake/<agent>.json`；“有新消息 → 模型起一轮”需要客户端插件：
+
+| 客户端 | 插件 | 机制 |
+|--------|------|------|
+| omp / pi | `agents/pi/agent/extension/aw-bus.ts` | 监听 MCP `notifications/message`，转成一次用户消息 |
+| DSH | `agents/dsh/aw-wake/` | 轮询 wake 文件，调用 `agent.followup()` |
+
+安装、环境变量与自证日志见
+[agent-plugins.md](skills/agent-workspace/references/global/agent-plugins.md)。
+
 ## 自测
 
 ```bash
 python -m unittest discover -s skills/agent-workspace/tests -v
 ```
 
-78 个用例覆盖：布局、巡检、认领并发、消息寻址/游标/回执/离线队列/阻塞等待/低延迟监听、反馈义务与欠回复门禁、契约检查、升级检查、身份绑定与令牌、MCP 握手。
+91 个用例覆盖：布局、巡检、认领并发、消息寻址/游标/回执/离线队列/阻塞等待/低延迟监听、反馈义务与欠回复门禁、契约检查、升级检查、身份/会话绑定与令牌、MCP 握手与通知、唤醒插件。
 全部在临时目录运行，不碰当前仓库。
 
 ## 升级已有项目
