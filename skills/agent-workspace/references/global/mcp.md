@@ -14,7 +14,8 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 
 - **一个 agent 一个终端 / 一个进程**；
 - 身份优先级：`--agent` > `AW_AGENT_ID` > 首次 `tools/call` 的 `agent_id`；
-  若调用带 `session` 且没有显式 `agent_id`，用 `by-session` 反查 agent（映射优先于 env 身份）；
+  仅在既无显式 `agent_id`、环境里也没有 `AW_AGENT_ID` 时才用 `by-session` 反查；
+  声明身份优先，冲突 warn；
 - 会话优先级：`--session` > `AW_SESSION_ID` > `PI_SESSION_ID` > `DSH_SESSION_ID`
   > `CLAUDE_SESSION_ID` > `proc-<pid>`；
   - 实际使用的来源写入 `.aw/sessions/<agent>.json` 的 `session_source`
@@ -59,7 +60,8 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 - `by-session` 最多 500 条 / 保留 7 天，写满清理最旧；`proc-*` 不写反向映射；
 - 同一 `session_id` 已被另一个 agent 占用：不覆盖 `by-session`，当前 map 写
   `session_authoritative: false` 并 warn；
-- `agent whoami --session <SID>` 在无显式身份时用反向映射解析；`--json` 的 `resolved_by` 为 `session-map`；
+- `agent whoami --session <SID>`：已声明身份（`--agent` / `AW_AGENT_ID`）优先；
+  两者都没有时才用反向映射，冲突时保留已声明身份并 warn；`--json` 的 `resolved_by` 为 `session-map`；
 - 消费方读不到反向映射时回退到「唯一 cwd」规则，不得直接拒绝、更不得广播；
 - 映射是本机文件，不跨机同步。
 
@@ -173,6 +175,61 @@ MCP 进程默认启动一个后台线程，tail
 - `agent_id` 是**自报**的，工具只能校验它是否在 roster 里、是否 active，不能证明"你就是他"；
 - 桌面端如果多个会话共用一个 MCP 服务进程，**必须每次带 `agent_id`**，否则无法区分；
 - 这个参数会作为 `--agent` 传给 `aw.py`，行为与 CLI 完全一致。
+
+### 2.1.1 显式仓库：`repo`
+
+每个工具还接受可选的 `repo`：
+
+| 参数 | 说明 |
+|------|------|
+| `repo` | 仓库根路径；透传为全局 `--repo`，必须排在子命令之前 |
+| 省略 `repo` | 使用 MCP 进程的 cwd（与改动前完全一致） |
+
+```json
+{"name": "agent_whoami", "arguments": {
+  "agent_id": "pcA-ba-1",
+  "repo": "D:/proj/my-project"
+}}
+```
+
+路径是否存在、是否 workspace 仓库，统一由 `aw.py` 校验；MCP 层不做路径存在性检查。
+
+### 2.1.2 一个 MCP 服务多个项目
+
+profile 里只配一条 `mcp-client`，`cwd` 指向**任一有效 workspace 仓库**作为默认值：
+
+```json
+{
+  "mcpServers": {
+    "aw": {
+      "command": "python",
+      "args": ["D:/path/to/agent-workspace/skills/agent-workspace/scripts/aw_mcp.py"],
+      "cwd": "D:/proj/default-project"
+    }
+  }
+}
+```
+
+之后每次调用传目标仓库即可操作其它项目，**新项目不需要改 DSH 配置、不需要重启**：
+
+```json
+{"name": "agent_whoami", "arguments": {
+  "agent_id": "pcA-ba-1",
+  "repo": "D:/proj/another-project"
+}}
+```
+
+```json
+{"name": "msg_list", "arguments": {
+  "agent_id": "pcA-ba-1",
+  "repo": "D:/proj/another-project",
+  "all": true
+}}
+```
+
+反例：**不设 `cwd`、调用时也不传 `repo`**，`aw.py` 会退化成宿主进程目录
+（实测可能落到用户主目录并静默创建 `.aw`）。所以 `cwd` 仍必须填一个有效仓库；
+`repo` 只负责“操作哪个项目”，不能替代 `cwd` 的安全默认值。
 
 ## 2.2 令牌：防止冒名
 

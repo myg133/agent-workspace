@@ -183,12 +183,6 @@ map 只能由 CLI 的 `agent whoami` / `claim` 写；MCP 调用被 `AW_FROM_MCP`
 **陈旧策略**：不设硬 TTL。`updated_at` 超过 24 小时只在 debug 写 `stale_hours` 并 warn，**不拒绝**。
 真实陈旧由 `map-offline`（目标会话不存在）和 session id 变化覆盖；硬 TTL 会误伤安静会话。
 
-> **当前实现差异（以 `index.js` 为准）**：`mapDecision` 目前只检查
-> `session_authoritative === false`、`freshSessions` 数量和 `session_id`；
-> 上表的 `map-invalid` / `map-version` / `map-agent-mismatch` / `map-no-session` /
-> `map-no-host`，以及 debug 的 `age_minutes` / `stale_hours`，尚未落地。
-> 在补齐前，这些 reason 不会出现在 `routes`；文档保留 ADR v6 契约，交接时不要另立规则。
-
 ### 3.3 验证
 
 ```powershell
@@ -201,8 +195,8 @@ Get-Content .aw\aw-wake-debug.json -Tail 80
 - `config`：`mode` / `agentId` / `agents` / `repoRoots` / `wakeAll` /
   `sessionId` / `pollMs` / `minIntervalMs` / `ttlMinutes`；
 - `map`：**按 agent 分组的对象**（即使 single 模式也是对象），每项包含
-  `session_id` / `session_authoritative` / `fresh_sessions`；
-  ADR v6 要求的 `age_minutes` / `stale_hours` 目前实现尚未写入，见最终报告；
+  `session_id` / `session_authoritative` / `fresh_sessions` / `age_minutes` / `stale_hours`；
+  `age_minutes` 为 map 距今分钟数；`stale_hours` 仅在超过 24 小时时非 null，只提示不拒绝；
 - `agents`：该仓库内的活跃会话，字段 `id` / `cwd` / `status`；
 - `routes`：每条消息的 `repo` / `agent` / `ids` / `resolve` / `sessions`。
 
@@ -231,7 +225,7 @@ DSH 会话应自动开始一轮并提示用 `msg_inbox` 取正文。
 | 1 | `aw.py watch --status` | RUNNING |
 | 2 | `.aw/wake/<agent>.json` | 有新消息后出现 |
 | 3 | omp 日志 | `recv` + `steer` |
-| 4 | DSH debug | `routes` 有 `resolve`；`map` 有对应 agent 的 `session_id` |
+| 4 | DSH debug | `routes` 有 `resolve`；`map` 有对应 agent 的 `session_id` / `age_minutes` / `stale_hours` |
 | 5 | 会话里再 `msg_inbox` | 能看到同一条消息 |
 | 6 | 不重复 | 同 id 只 wake 一次 |
 
@@ -250,7 +244,7 @@ DSH 会话应自动开始一轮并提示用 `msg_inbox` 取正文。
 | resolve 原因 | 含义 / 检查 |
 |--------------|-------------|
 | `no-map` | 没跑过 CLI `agent whoami`，或 map 不存在/不合规；先跑一次 whoami |
-| `map-version` / `map-not-authoritative` / `map-agent-mismatch` / `map-no-session` / `map-no-host` | map 形状不合规；按提示修 `.aw/sessions/<agent>.map.json`，或删掉重跑 whoami（当前实现尚未全部产生这些 reason） |
+| `map-invalid` / `map-version` / `map-not-authoritative` / `map-agent-mismatch` / `map-no-session` / `map-no-host` | map 形状不合规；按提示修 `.aw/sessions/<agent>.map.json`，或删掉重跑 whoami |
 | `map-offline` | 映射的会话已不存在（换会话/会话关闭）；重跑 whoami 刷新 map |
 | `map-ambiguous:N` | 120 分钟内同一 agent 有 N 个会话；需人工确认，不要广播 |
 | `session-shared` | 两个 agent 的 map 指向同一 session；双方拒绝唤醒（防串号） |
@@ -259,6 +253,3 @@ DSH 会话应自动开始一轮并提示用 `msg_inbox` 取正文。
 | `sessions-file` / `config` | 走 legacy 或 pin；检查对应 `.aw/sessions/<agent>.json` / `sessionId` |
 | DSH 没有 wake | watcher 是否 RUNNING；wake 文件是否存在；`agentId` / `agents` 是否写对 |
 | 重复唤醒 | 是否同时跑了两个 watcher / 两个 MCP 进程 |
-
-> 注：`map-version` 等形状 reason 属于 ADR v6 契约；当前 `index.js` 尚未实现，
-> 见 `3.2.2 的“当前实现差异”。

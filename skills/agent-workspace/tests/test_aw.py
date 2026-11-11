@@ -75,6 +75,70 @@ class WorkspaceCase(unittest.TestCase):
         self.assertIn("branch refs/heads/deploy", wt)
         self.assertTrue((self.repo / "BA" / "dispatch" / "agent-registry.md").exists())
 
+    def test_repo_option_selects_other_workspace(self):
+        other = self.tmp / "other"
+        run(["init", str(other), "--name", "Other"], self.tmp)
+        run(["agent", "whoami"], other, agent="ba-1")
+        out = run(["--repo", str(other), "agent", "whoami", "--json"],
+                  self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        data = json.loads(out.stdout)
+        self.assertEqual(data["repo"], str(other.resolve()))
+
+    def test_repo_omitted_keeps_cwd_workspace(self):
+        out = run(["agent", "whoami", "--json"], self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(json.loads(out.stdout)["repo"], str(self.repo))
+
+    def test_repo_missing_dir_exits_2(self):
+        missing = self.tmp / "missing-repo"
+        out = run(["--repo", str(missing), "agent", "whoami"],
+                  self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 2)
+        self.assertIn(str(missing), out.stderr)
+
+    def test_repo_without_aw_exits_2(self):
+        plain = self.tmp / "plain"
+        plain.mkdir()
+        git(["init", "-q"], plain)
+        out = run(["--repo", str(plain), "agent", "whoami"],
+                  self.repo, agent="ba-1")
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("缺 .aw", out.stderr)
+
+    def test_repo_with_agent_and_session(self):
+        other = self.tmp / "other"
+        run(["init", str(other), "--name", "Other"], self.tmp)
+        run(["agent", "whoami"], other, agent="ba-1")
+        out = run(["--repo", str(other), "--agent", "ba-1",
+                   "--session", "repo-sess", "agent", "whoami", "--json"],
+                  self.repo, agent=None)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        data = json.loads(out.stdout)
+        self.assertEqual(data["repo"], str(other.resolve()))
+        self.assertEqual(data["agent_id"], "ba-1")
+        self.assertEqual(data["session_id"], "repo-sess")
+
+    def test_mcp_repo_reads_target_bus(self):
+        other = self.tmp / "other"
+        run(["init", str(other), "--name", "Other"], self.tmp)
+        run(["agent", "whoami"], other, agent="ba-1")
+        sent = run(["msg", "send", "--to", "ba-2", "--type", "fyi",
+                    "--body", "B-only"], other, agent="ba-1")
+        self.assertEqual(sent.returncode, 0, sent.stderr)
+        proc = self._mcp(agent="ba-1")
+        try:
+            targeted = self._mcp_tool(proc, "msg_list",
+                                      {"repo": str(other), "all": True}, rid=20)
+            payload = json.loads(targeted["result"]["content"][0]["text"])
+            self.assertEqual(payload["exit_code"], 0, payload)
+            self.assertIn("B-only", payload["stdout"])
+            local = self._mcp_tool(proc, "msg_list", {"all": True}, rid=21)
+            local_payload = json.loads(local["result"]["content"][0]["text"])
+            self.assertNotIn("B-only", local_payload["stdout"])
+        finally:
+            self._stop_mcp(proc)
+
     @staticmethod
     def _stop_mcp(proc):
         proc.terminate()
@@ -553,13 +617,20 @@ class WorkspaceCase(unittest.TestCase):
                              .read_text(encoding="utf-8"))
         self.assertFalse(session["session_authoritative"])
 
-    def test_cli_session_map_overrides_env_agent(self):
-        run(["--session", "cli-sid", "agent", "whoami"], self.repo, agent="tree")
+    def test_cli_env_agent_not_overridden_by_session_map(self):
+        run(["--agent", "tree", "--session", "cli-sid", "agent", "whoami"],
+            self.repo, agent=None)
         out = run(["--session", "cli-sid", "agent", "whoami", "--json"],
                   self.repo, agent="other")
+        self.assertEqual(out.returncode, 0, out.stderr)
         data = json.loads(out.stdout)
-        self.assertEqual(data["agent_id"], "tree")
-        self.assertEqual(data["resolved_by"], "session-map")
+        self.assertEqual(data["agent_id"], "other")
+        self.assertEqual(data["resolved_by"], "identity")
+        self.assertIn("保留已声明身份", out.stderr)
+        key = hashlib.sha256(b"cli-sid").hexdigest()[:16]
+        reverse = json.loads((self.repo / ".aw" / "sessions" / "by-session" / (key + ".json"))
+                             .read_text(encoding="utf-8"))
+        self.assertEqual(reverse["agent_id"], "tree")
 
     def test_mcp_session_map_resolves_agent(self):
         run(["--session", "mcp-sid", "agent", "whoami"], self.repo, agent="tree")

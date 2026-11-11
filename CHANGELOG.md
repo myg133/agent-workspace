@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 新增：全局 `--repo`，一个 MCP 服务多个项目
+
+- `aw.py` 新增全局 `--repo`（也可写在子命令后）；不传时行为与原来完全一致；
+- 校验：目录存在、能解析 git 根、根下有 `.aw`，否则 exit 2 且 stderr 带传入路径；
+- `repo_root()` 支持模块级仓库覆盖，worktree 仍折回主仓库根；
+- MCP 每个工具新增可选 `repo`，透传为 `aw.py --repo <R> --agent <A> --session <S> <子命令>`；
+- 文档补充“一个 MCP 服务多个项目”及 cwd 安全默认值说明。
+
 ### 文档：DSH aw-wake 多仓库与 map 契约
 
 - 说明 `repoRoot` / `repoRoots` 可选，仓库由会话 cwd 向上最多 6 层自动发现；

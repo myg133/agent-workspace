@@ -45,7 +45,9 @@ aw.py agent whoami --session <SID> --json
 # {"agent_id":"tree", ..., "resolved_by":"session-map"}
 ```
 
-- 未显式给 `--agent` 时，反向映射优先于 `AW_AGENT_ID` / 终端绑定；
+- **已声明身份优先**：`--agent` / `AW_AGENT_ID` 存在时不会被反向映射改写；
+- 两者都没有时才用反向映射，且映射优先于终端绑定；
+- 已声明身份与映射冲突（session 属于别的 agent）时，保留已声明身份并 warn（ADR-0001 v6 第 7 节）；
 - 解析不到则回退现有身份解析，最终仍缺失才报 `MISSING_AGENT_ID`；
 - `proc-*` 不写反向映射。
 

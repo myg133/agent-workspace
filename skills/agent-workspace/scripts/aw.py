@@ -27,6 +27,9 @@ ROOT_FILES = {".gitignore", "README.md"}
 FEATURE_META = "feature-meta"
 LEGACY_FEATURE_META = ".feature"
 
+# main() 解析 --repo 后设置；只影响 repo_root(None)，显式 start 不受影响
+_REPO_OVERRIDE: Path | None = None
+
 OK, WARN, FAIL = "OK  ", "WARN", "FAIL"
 
 
@@ -87,6 +90,8 @@ def _to_path(raw: str, base: Path | None = None) -> Path:
 
 def repo_root(start: Path | str | None = None) -> Path:
     """返回 workspace 主 worktree 的根目录（任意 worktree 中都成立）。"""
+    if start is None and _REPO_OVERRIDE is not None:
+        return _REPO_OVERRIDE
     try:
         common = git_out("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=start)
     except GitError:
@@ -1924,7 +1929,11 @@ def cmd_agent(args) -> int:
         session = (getattr(args, "session", None) or os.environ.get("AW_SESSION_ID") or "").strip()
         if session:
             mapped = _lookup_session_agent(root, session)
-            if mapped:
+            declared = (os.environ.get("AW_AGENT_ID") or "").strip()
+            if mapped and declared and mapped != declared:
+                print("warn: session %s 属于 %s，与声明的身份 %s 冲突；保留已声明身份"
+                      % (session, mapped, declared), file=sys.stderr)
+            elif mapped and not declared:
                 os.environ["AW_AGENT_ID"] = mapped
                 os.environ["AW_AGENT_SOURCE"] = "session-map"
                 os.environ["AW_AGENT_RESOLVED_BY"] = "session-map"
@@ -4162,6 +4171,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--agent", default=None, help="agent_id（优先于 AW_AGENT_ID）")
     parser.add_argument("--session", default=None,
                         help="session_id（优先于 AW_SESSION_ID / PI_SESSION_ID / DSH_SESSION_ID）")
+    parser.add_argument("--repo", default=None, help="仓库根路径（优先于进程 cwd）")
     parser.add_argument("--agent-token", default=None, help="agent 令牌（优先于 AW_AGENT_TOKEN）")
     parser.add_argument("--no-bind", action="store_true", help="不读写终端绑定（一个终端跑多个 agent 时用）")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -4329,6 +4339,7 @@ def build_parser() -> argparse.ArgumentParser:
     for subparser in _subparser_list(parser):
         subparser.add_argument("--agent", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
         subparser.add_argument("--session", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+        subparser.add_argument("--repo", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
         subparser.add_argument("--agent-token", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
         subparser.add_argument("--no-bind", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
     return parser
@@ -4353,9 +4364,28 @@ def _init_console() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global _REPO_OVERRIDE
     _init_console()
     parser = build_parser()
     args = parser.parse_args(argv)
+    _REPO_OVERRIDE = None
+    if getattr(args, "repo", None):
+        raw_repo = str(args.repo)
+        candidate = Path(raw_repo).expanduser().resolve()
+        if not candidate.is_dir():
+            print("--repo 指向的目录不存在: %s" % raw_repo, file=sys.stderr)
+            return 2
+        try:
+            resolved = repo_root(candidate)
+        except GitError as exc:
+            print("--repo 指向的目录不是 git 仓库: %s（%s）" % (raw_repo, exc),
+                  file=sys.stderr)
+            return 2
+        if not (resolved / ".aw").is_dir():
+            print("--repo 指向的目录不是 agent-workspace 仓库（缺 .aw）: %s" % raw_repo,
+                  file=sys.stderr)
+            return 2
+        _REPO_OVERRIDE = resolved
     if getattr(args, "agent", None):
         os.environ["AW_AGENT_ID"] = args.agent
         os.environ["AW_AGENT_SOURCE"] = "--agent"

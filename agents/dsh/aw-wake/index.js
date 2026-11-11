@@ -431,10 +431,16 @@ export function apply(ctx, config) {
           return '- ' + String(message?.id ?? '') + ' ' + (message?.from ?? '') + ' ' + (message?.type ?? '') + expect + subject
         })
         .join('\n')
+      // 一个 MCP 进程服务多个仓库时，调用方必须带 repo；把仓库和身份写进唤醒消息，
+      // 免得会话被叫醒后还要自己猜（MCP 进程本身没有会话上下文）。
+      const where = group.root ? ' @ ' + group.root : ''
+      const hint = group.root
+        ? '\n\n请用 msg_inbox 拉取（repo=' + group.root + ', agent_id=' + group.agent + '）；纯 fyi 可只确认、不展开。'
+        : '\n\n请用 msg_inbox 拉取；纯 fyi 可只确认、不展开。'
       const text =
-        '[bus] 收到 ' + group.messages.length + ' 条消息（' + group.agent + '）：\n' +
+        '[bus] 收到 ' + group.messages.length + ' 条消息（' + group.agent + where + '）：\n' +
         lines +
-        '\n\n请用 msg_inbox 拉取；纯 fyi 可只确认、不展开。'
+        hint
       for (const target of targets) {
         const key = String(target?.id ?? '')
         if (Date.now() - (lastWakeAt.get(key) ?? 0) < minIntervalMs) continue

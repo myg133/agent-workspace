@@ -131,6 +131,10 @@ def tool(name: str, description: str, props: dict, required: list[str] | None = 
             "type": "string",
             "description": "会话 id；透传给 aw.py --session（不写映射）",
         },
+        "repo": {
+            "type": "string",
+            "description": "仓库根路径（可选）；省略时使用 MCP 进程的 cwd",
+        },
     }
     properties.update(props)
     return {
@@ -528,7 +532,11 @@ def call_tool(name: str, args: dict) -> dict:
             }
     try:
         argv = build_argv(name, args)
-        prefix = ["--agent", identity]
+        prefix = []
+        repo = str(args.get("repo") or "").strip()
+        if repo:
+            prefix += ["--repo", repo]
+        prefix += ["--agent", identity]
         session = str(args.get("session") or "").strip()
         if session:
             prefix += ["--session", session]
