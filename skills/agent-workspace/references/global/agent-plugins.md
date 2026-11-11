@@ -22,7 +22,7 @@ watcher 只写 wake 文件；**把“有新消息”变成“模型起一轮”*
 
 2. 一个 agent 一个进程 / 终端；`AW_AGENT_ID` 指向当前 agent。
 3. omp / pi 还需要配置 MCP `aw`（见 `references/global/mcp.md`）。
-4. DSH 需要 `AW_REPO_ROOT` 指向 workspace 根；cwd 只在没有 map/legacy/config 时作为唯一兜底。
+4. DSH 的仓库由会话 cwd 自动发现（向上最多 6 层找 `.aw/`）；`repoRoot` / `repoRoots` 可选，只用于限定范围，不是必填。
 
 ## 2. omp / pi
 
@@ -113,50 +113,100 @@ dsh plugin --profile web add ./plugins/aw-wake
 `dsh plugin` 只是把参数转发给 profile 里的 pnpm；它会把本地包加入依赖，
 并读取包里的 `dsh.bundle.patch`。
 
-### 3.2 启动环境
+### 3.2 启动环境与仓库发现
 
-```powershell
-$env:AW_REPO_ROOT = "D:\proj\my-project"
-$env:AW_AGENT_ID = "pcA-ba-1"
-dsh web
-```
+**不需要先设 `AW_REPO_ROOT`，`repoRoot` 可省略。** 插件从每个活跃会话的 cwd 自动发现仓库：
+向上最多 6 层查找 `.aw/` 目录，命中即仓库根。因此：
+
+- 会话开在 `<repo>/code` 这类子目录，也能归到 `<repo>` 根；
+- 一台 DSH 可以同时服务多个 workspace，**不需要每个仓库起一个实例**；
+- `repoRoot` / `repoRoots` 只用于**限定监听范围**，不是必填。
 
 插件配置（模板见 `agents/dsh/aw-wake/cordis.patch.yml`）：
 
 ```yaml
-repoRoot: !!js process.env.AW_REPO_ROOT
+# repoRoot / repoRoots 可省略；省略 = 按会话 cwd 自动发现
+# repoRoot: D:/proj/my-project
+# repoRoots:
+#   - D:/proj/a
+#   - D:/proj/b
+
 # 单 agent：填 agentId
-# agentId: !!js process.env.AW_AGENT_ID
+# agentId: pcA-ba-1
 # 多 agent：不填 agentId（或填 "*"），可选 agents 白名单
 # agents: [pcA-ba-1, pcA-ba-2]
 ```
 
-- `repoRoot` 必须是 workspace 根；
+- `repoRoot`：固定一个仓库（单仓库部署时用）；
+- `repoRoots`：数组，限定多个仓库；和 `repoRoot` 可同时出现，合并成监听范围；
+- 不写 `repoRoot` / `repoRoots`：自动发现，适合一台 DSH 服务多个仓库；
 - `agentId` 可选：填了是 **single** 模式；不填 / `*` 是 **multi** 模式，
-  监听 `.aw/wake/*.json` 并按消息里的 `agent` 路由；
+  监听 `.aw/wake/*.json` 并按每条消息自带的 `agent` 字段路由；
 - `agents` 可选白名单，限制 multi 模式只处理列出的收件人；
+- 命令行 / 服务启动可用 `AW_REPO_ROOT` 注入 `repoRoot`；它仍可选，等价于在配置里写 `repoRoot`；
 - 改完重启 DSH。
 
-会话解析顺序（插件 `aw-wake` 已实现，绝不广播）：
+> **桌面版 DSH**：从开始菜单启动通常拿不到 shell 环境变量。
+> 桌面用户建议**不写 `repoRoot`**，让插件自动发现；或在部署副本里直接写死 `repoRoot`。
+> `env` 模板适合命令行 / 服务方式启动。
 
-1. `.aw/sessions/<agentId>.map.json`：`session_authoritative !== false` 且 120 分钟内无冲突 session；
-2. legacy `.aw/sessions/<agentId>.json`：`session_authoritative === true`；
-3. 配置里的显式 `sessionId`（pin）；
-4. single 模式：cwd 匹配且只有**唯一**一个活跃会话匹配 `repoRoot`；
-5. multi 模式 + `agents` 白名单只有一项：允许一次 cwd bootstrap；
-6. 其余情况 → 放弃唤醒并 warn。
+### 3.2.1 会话解析顺序
 
-map 不可用/歧义/目标离线时直接放弃；multi 模式默认不允许 cwd 猜测，避免同 repo 多 BA 串号。
+按 `(repo, agent)` 解析，绝不广播：
+
+1. `<repo>/.aw/sessions/<agent>.map.json` 通过形状校验，且 TTL 内只有一个 session id → `map`
+2. legacy `<repo>/.aw/sessions/<agent>.json` 且 `session_authoritative === true` → `sessions-file`
+3. 配置里的 `sessionId`（pin）→ `config`
+4. **single** 模式（写了 `agentId`）：cwd 唯一命中该仓库内一个活跃会话 → `cwd-unique`
+5. **multi** 模式 + `agents` 白名单只有一项：允许一次 `cwd-bootstrap`（首次还没有 map 时）
+6. 其余一律拒绝并 warn
+
+**仓库归属来自会话 cwd，不是来自配置。** `repoRoot` / `repoRoots` 只裁剪候选范围。
+
+### 3.2.2 map 的形状校验与陈旧提示
+
+消费方读 `.aw/sessions/<agent>.map.json` 前**必须**先做形状校验，任一不满足即拒绝并按原因记录：
+
+| 校验 | 失败 reason |
+|------|-------------|
+| JSON 可解析、字段类型正确、`map_version` 存在 | `map-invalid` |
+| `map_version == 2` | `map-version` |
+| `session_authoritative === true` | `map-not-authoritative` |
+| `agent_id` 与文件名 `<agent>` 一致 | `map-agent-mismatch` |
+| `session_id` 非空且不以 `proc-` 开头 | `map-no-session` |
+| `host` 非空 | `map-no-host` |
+
+**手写 map 的问题**：没有 `aw.py` 的 60 秒节流，也没有后续刷新；形状即使正确，也可能很快变陈旧。
+map 只能由 CLI 的 `agent whoami` / `claim` 写；MCP 调用被 `AW_FROM_MCP` 挡住，写不了 map。
+这是设计，不是缺陷。
+
+**陈旧策略**：不设硬 TTL。`updated_at` 超过 24 小时只在 debug 写 `stale_hours` 并 warn，**不拒绝**。
+真实陈旧由 `map-offline`（目标会话不存在）和 session id 变化覆盖；硬 TTL 会误伤安静会话。
+
+> **当前实现差异（以 `index.js` 为准）**：`mapDecision` 目前只检查
+> `session_authoritative === false`、`freshSessions` 数量和 `session_id`；
+> 上表的 `map-invalid` / `map-version` / `map-agent-mismatch` / `map-no-session` /
+> `map-no-host`，以及 debug 的 `age_minutes` / `stale_hours`，尚未落地。
+> 在补齐前，这些 reason 不会出现在 `routes`；文档保留 ADR v6 契约，交接时不要另立规则。
 
 ### 3.3 验证
 
 ```powershell
-Get-Content .aw\aw-wake-debug.json -Tail 40
+Get-Content .aw\aw-wake-debug.json -Tail 80
 ```
 
-应看到当前 DSH agent 的 `matched: true`；`map` 字段在 single 模式下是单个对象，
-multi 模式下按 agent 分组，包含 `session_id` / `session_authoritative` / `fresh_sessions`；
-`routes` 记录每条消息的 `resolve` 原因。DSH 日志里应出现 `aw-wake: woke ...`。
+`aw-wake-debug.json` 现在包含：
+
+- `repo`：该 debug 文件对应的仓库根；
+- `config`：`mode` / `agentId` / `agents` / `repoRoots` / `wakeAll` /
+  `sessionId` / `pollMs` / `minIntervalMs` / `ttlMinutes`；
+- `map`：**按 agent 分组的对象**（即使 single 模式也是对象），每项包含
+  `session_id` / `session_authoritative` / `fresh_sessions`；
+  ADR v6 要求的 `age_minutes` / `stale_hours` 目前实现尚未写入，见最终报告；
+- `agents`：该仓库内的活跃会话，字段 `id` / `cwd` / `status`；
+- `routes`：每条消息的 `repo` / `agent` / `ids` / `resolve` / `sessions`。
+
+DSH 日志里应出现 `aw-wake: woke ...`。
 
 发消息：
 
@@ -181,7 +231,7 @@ DSH 会话应自动开始一轮并提示用 `msg_inbox` 取正文。
 | 1 | `aw.py watch --status` | RUNNING |
 | 2 | `.aw/wake/<agent>.json` | 有新消息后出现 |
 | 3 | omp 日志 | `recv` + `steer` |
-| 4 | DSH debug | `matched: true` |
+| 4 | DSH debug | `routes` 有 `resolve`；`map` 有对应 agent 的 `session_id` |
 | 5 | 会话里再 `msg_inbox` | 能看到同一条消息 |
 | 6 | 不重复 | 同 id 只 wake 一次 |
 
@@ -195,10 +245,20 @@ DSH 会话应自动开始一轮并提示用 `msg_inbox` 取正文。
 
 ## 6. 故障排查
 
-| 现象 | 检查 |
-|------|------|
-| omp 只有 `bridge loaded` | MCP 是否发 `notifications/message`；`aw_mcp.py` 是否默认开启 |
-| omp 没有 `steer` | 是否重复 id（seen 去重）；MCP 是否绑定了别的 agent |
-| DSH 没有 `matched` | map/legacy 是否有 `session_authoritative: true`；`AW_REPO_ROOT` 与 DSH 会话 cwd 是否一致；debug 的 `map` 字段 |
-| DSH 没有 wake | watcher 是否 RUNNING；wake 文件是否存在；agentId 是否写对 |
+以 `.aw/aw-wake-debug.json` 的 `routes[].resolve` 为准：
+
+| resolve 原因 | 含义 / 检查 |
+|--------------|-------------|
+| `no-map` | 没跑过 CLI `agent whoami`，或 map 不存在/不合规；先跑一次 whoami |
+| `map-version` / `map-not-authoritative` / `map-agent-mismatch` / `map-no-session` / `map-no-host` | map 形状不合规；按提示修 `.aw/sessions/<agent>.map.json`，或删掉重跑 whoami（当前实现尚未全部产生这些 reason） |
+| `map-offline` | 映射的会话已不存在（换会话/会话关闭）；重跑 whoami 刷新 map |
+| `map-ambiguous:N` | 120 分钟内同一 agent 有 N 个会话；需人工确认，不要广播 |
+| `session-shared` | 两个 agent 的 map 指向同一 session；双方拒绝唤醒（防串号） |
+| `ambiguous-cwd` | 同一仓库多个活跃会话且缺 map；跑 whoami 或显式 `sessionId` |
+| `cwd-unique` / `cwd-bootstrap` | cwd 兜底命中；仅 single 模式或单元素 `agents` 白名单允许 |
+| `sessions-file` / `config` | 走 legacy 或 pin；检查对应 `.aw/sessions/<agent>.json` / `sessionId` |
+| DSH 没有 wake | watcher 是否 RUNNING；wake 文件是否存在；`agentId` / `agents` 是否写对 |
 | 重复唤醒 | 是否同时跑了两个 watcher / 两个 MCP 进程 |
+
+> 注：`map-version` 等形状 reason 属于 ADR v6 契约；当前 `index.js` 尚未实现，
+> 见 `3.2.2 的“当前实现差异”。

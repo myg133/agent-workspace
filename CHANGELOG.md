@@ -2,6 +2,15 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [Unreleased]
+
+### 文档：DSH aw-wake 多仓库与 map 契约
+
+- 说明 `repoRoot` / `repoRoots` 可选，仓库由会话 cwd 向上最多 6 层自动发现；
+- 补 multi/single、桌面版 DSH 环境变量、单实例多仓库说明；
+- 补会话解析顺序、map 形状校验 reason、陈旧提示与 routes 排查表；
+- 记录当前实现与 ADR v6 的差距：形状校验与 stale_hours 尚未落地。
+
 ## [1.46.1] - 2026-11-11
 
 ### 降级：MCP `agent_whoami` 明确为身份检查
