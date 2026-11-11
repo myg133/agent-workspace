@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.46.1] - 2026-11-11
+
+### 降级：MCP `agent_whoami` 明确为身份检查
+
+- MCP `agent_whoami` 改为走 `agent whoami --json`；
+- 返回新增 `session_source` / `session_authoritative`；
+- 无真实会话时明确 `session_source: mcp`、`session_authoritative: false`；
+- 工具描述改为：MCP 会话不是权威 session，真实 session 用 CLI 或传 `session`；
+- 文档增加 `agent_whoami` 边界说明；CLI 文本输出不变。
+
 ## [1.46.0] - 2026-11-11
 
 ### 修复：watcher 启动、异常日志、bus fetch、映射冲突

@@ -39,7 +39,7 @@ def _arg_value(flag: str) -> str:
 
 
 AGENT = (_arg_value("--agent") or os.environ.get("AW_AGENT_ID") or "").strip()
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 PROTOCOL = "2024-11-05"
 _NOTIFY_FLAG = (os.environ.get("AW_MCP_NOTIFY") or "").strip().lower()
 # 默认开启；AW_MCP_NOTIFY=0 / --no-notify 关闭
@@ -150,7 +150,7 @@ BOOL = {"type": "boolean"}
 INT = {"type": "integer"}
 
 TOOLS = [
-    tool("agent_whoami", "查看当前 agent 身份、终端锚点与 roster 状态", {}),
+    tool("agent_whoami", "查看 agent 身份；MCP 会话不是权威 session，真实 session 用 CLI", {}),
     tool("agent_roster", "列出仓库名册中的 agent 及本地会话状态（JSON）", {}),
     tool("agent_register", "注册 agent 到仓库名册 BA/plan/agents.json",
          {"name": STR, "role": STR, "host": STR}, ["name"]),
@@ -227,7 +227,7 @@ def _pick(args: dict, *names: str):
 def build_argv(name: str, args: dict) -> list[str]:
     a = args or {}
     if name == "agent_whoami":
-        return ["agent", "whoami"]
+        return ["agent", "whoami", "--json"]
     if name == "agent_roster":
         return ["agent", "roster", "--json"]
     if name == "agent_register":

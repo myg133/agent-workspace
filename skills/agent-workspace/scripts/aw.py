@@ -1939,6 +1939,8 @@ def cmd_agent(args) -> int:
             "repo": str(root),
             "holding": (holding_claim(load_claims(root), ident["agent_id"]) or {}).get("req", ""),
             "source": ident.get("source", "unknown"),
+            "session_source": ident.get("session_source", ""),
+            "session_authoritative": bool(ident.get("session_authoritative", True)),
             "anchor": anchor or "",
             "roster": reg.get("status", "active") if reg else "unregistered",
             "resolved_by": ident.get("resolved_by") or "identity",

@@ -126,6 +126,19 @@ class WorkspaceCase(unittest.TestCase):
         finally:
             self._stop_mcp(proc)
 
+    def test_mcp_whoami_identity_only(self):
+        proc = self._mcp(extra_env={
+            "PI_SESSION_ID": "", "DSH_SESSION_ID": "", "CLAUDE_SESSION_ID": ""})
+        try:
+            call = self._mcp_tool(proc, "agent_whoami", {})
+            payload = json.loads(call["result"]["content"][0]["text"])
+            data = json.loads(payload["stdout"])
+            self.assertEqual(data["agent_id"], "ba-1")
+            self.assertEqual(data["session_source"], "mcp")
+            self.assertFalse(data["session_authoritative"])
+        finally:
+            self._stop_mcp(proc)
+
     def test_schema_lists_tools(self):
         out = run(["schema"], self.repo, agent=None)
         data = json.loads(out.stdout)

@@ -209,11 +209,20 @@ aw.py agent register pcA-ba-1 --role ba --issue-token
 > 但它不会出现在**其他** agent 的上下文里，所以跨会话冒名被挡住了。
 > 注册入口本身仍是信任式的——能写 `BA/plan/agents.json` 的人才能注册。
 
+### 3.0 `agent_whoami` 的边界
+
+MCP `agent_whoami` 返回的是**进程/配置身份**，不是会话身份：
+
+- `session_source=mcp` / `session_authoritative=false`：只能用于确认 agent_id；
+- 真实 `session_id` 请在会话 shell 里跑 `aw.py agent whoami --json`，
+  或给 MCP 调用传 `session`（走反向映射）；
+- 不要用 MCP `agent_whoami` 的 `proc-*` 作为 claim 的会话依据。
+
 ## 3. 工具
 
 | 工具 | 作用 |
 |------|------|
-| `agent_whoami` / `agent_check` / `agent_roster` | 身份、一致性与名册 |
+| `agent_whoami` / `agent_check` / `agent_roster` | 身份、一致性与名册；`agent_whoami` 在 MCP 下**不代表真实 session** |
 | `hook_install` / `hook_status` | pre-push 校验（本机一次） |
 | `agent_register` / `agent_activate` / `agent_deactivate` | 注册与启停 |
 | `agent_publish` | 把名册提交并推送到 demand，其他机器可见 |
