@@ -1,15 +1,10 @@
 // aw-bus: 把 aw MCP 的 notifications/message 转成一次会话轮次
 // 安装位置 ~/.omp/agent/extensions/aw-bus.ts，重启 omp 后生效。
 // 自证日志：~/.omp/logs/aw-bus-bridge.log（loaded / recv / steer / error）
-import { appendFileSync, mkdirSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { appendFileSync } from 'node:fs'
 
 const seen = new Set<string>()
-const LOG = process.env.AW_BUS_LOG || join(homedir(), '.omp', 'logs', 'aw-bus-bridge.log')
-try {
-  mkdirSync(dirname(LOG), { recursive: true })
-} catch {}
+const LOG = '/home/myg133/.omp/logs/aw-bus-bridge.log'
 
 function note(line: string) {
   try {

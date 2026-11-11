@@ -2,11 +2,13 @@
     - id: aw-wake
       name: '@local/aw-wake'
       config:
-        # 由 DSH 启动环境提供，不要写死（见 references/global/agent-plugins.md）
-        repoRoot: !!js process.env.AW_REPO_ROOT
-        agentId: !!js process.env.AW_AGENT_ID
+        repoRoot: 'E:\Dev_tmp\agent-bus-test'
+        agentId: tree
         pollMs: 2000
         minIntervalMs: 10000
+        # 默认唤醒所有新消息（含 fyi）；与 omp 侧行为对齐，避免漏消息。
+        # 想收紧就设 wakeAll: false，再用下面两组规则过滤。
+        wakeAll: true
         wakeTypes:
           - question
           - blocker
