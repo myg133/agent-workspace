@@ -58,6 +58,7 @@ export function apply(ctx, config) {
   const wakeExpect = new Set((cfg.wakeExpect ?? DEFAULT_EXPECT).map(String))
   const pinnedSession = String(cfg.sessionId ?? '').trim()
   const ttlMs = Math.max(1000, Number(cfg.sessionTtlMs ?? SESSION_TTL_MS))
+  const STALE_MAP_MINUTES = 24 * 60
 
   const repos = new Map() // root -> { seen: Set<string> }
   const lastWakeAt = new Map() // session id -> ts
@@ -202,10 +203,24 @@ export function apply(ctx, config) {
     return out
   }
 
+  // 手写的 map 也要过形状检查：缺字段/版本不对/agent 不符一律按 no-map 处理，
+  // 不能因为「文件存在」就相信它（手写 map 没有节流，也没有后续刷新）。
+  function mapProblem(record, agent) {
+    if (!record || typeof record !== 'object') return 'map-invalid'
+    if (Number(record.map_version) !== 2) return 'map-version'
+    if (record.session_authoritative !== true) return 'map-not-authoritative'
+    const recorded = String(record.agent_id ?? '').trim()
+    if (recorded && recorded !== agent) return 'map-agent-mismatch'
+    if (!realId(record.session_id)) return 'map-no-session'
+    if (!String(record.host ?? '').trim()) return 'map-no-host'
+    return ''
+  }
+
   function mapDecision(root, agent) {
     const record = readJson(path.join(sessionsDirOf(root), agent + '.map.json'))
     if (record) {
-      if (record.session_authoritative === false) return { kind: 'refuse', reason: 'map-not-authoritative' }
+      const problem = mapProblem(record, agent)
+      if (problem) return { kind: 'refuse', reason: problem }
       const fresh = freshSessions(record)
       if (fresh.size > 1) return { kind: 'refuse', reason: 'map-ambiguous:' + fresh.size }
       const id = realId(record.session_id)
@@ -266,11 +281,18 @@ export function apply(ctx, config) {
         if (!fileName.endsWith('.map.json')) continue
         const agent = fileName.slice(0, -'.map.json'.length)
         const record = readJson(path.join(sessionsDirOf(root), fileName))
+        const updated = Date.parse(String(record?.updated_at ?? ''))
         maps[agent] = record
           ? {
               session_id: realId(record.session_id),
-              session_authoritative: record.session_authoritative !== false,
+              session_authoritative: record.session_authoritative === true,
               fresh_sessions: [...freshSessions(record)],
+              age_minutes: Number.isFinite(updated) ? Math.round((Date.now() - updated) / 60000) : null,
+              // 只提示不拒绝：硬 TTL 会误伤长期没跑 agent/claim 的安静会话。
+              stale_hours:
+                Number.isFinite(updated) && Date.now() - updated > STALE_MAP_MINUTES * 60000
+                  ? Math.round((Date.now() - updated) / 3600000)
+                  : null,
             }
           : null
       }
@@ -367,20 +389,37 @@ export function apply(ctx, config) {
       groups.set(key, group)
     }
 
-    const routes = []
+    const routesByRepo = new Map()
     for (const group of groups.values()) {
       const groupMembers = members.get(group.root) ?? []
       const { targets, reason } = resolveTargets(group.root, group.agent, groupMembers)
-      routes.push({
+      const route = {
         repo: group.root,
         agent: group.agent,
         ids: group.messages.map(message => String(message?.id ?? '')),
         resolve: reason,
         sessions: targets.map(target => String(target?.id ?? '')),
-      })
+      }
+      const routeList = routesByRepo.get(group.root) ?? []
+      routeList.push(route)
+      routesByRepo.set(group.root, routeList)
+      if (reason === 'map' || reason === 'sessions-file') {
+        const record = readJson(path.join(sessionsDirOf(group.root), group.agent + '.map.json'))
+        const updated = Date.parse(String(record?.updated_at ?? ''))
+        if (Number.isFinite(updated) && Date.now() - updated > STALE_MAP_MINUTES * 60000) {
+          const hours = Math.round((Date.now() - updated) / 3600000)
+          route.stale_hours = hours
+          ctx.logger?.warn?.(
+            'aw-wake: ' + group.agent + ' 的会话映射已 ' + hours + ' 小时未刷新（可能陈旧，仍未拒绝）',
+          )
+        }
+      }
       if (targets.length === 0) {
         ctx.logger?.warn?.(
-          'aw-wake: 跳过 ' + group.agent + ' 的 ' + group.messages.length + ' 条消息（' + group.root + ', ' + reason + '）',
+          'aw-wake: 跳过 ' + group.agent + ' 的 ' + group.messages.length + ' 条消息（' + group.root + ', ' + reason + '）' +
+            (reason === 'no-map' || String(reason).startsWith('ambiguous-cwd')
+              ? '：缺少 .aw/sessions/' + group.agent + '.map.json，需在该 agent 的会话里跑一次 aw.py agent whoami'
+              : ''),
         )
         continue
       }
@@ -409,8 +448,8 @@ export function apply(ctx, config) {
           ctx.logger?.error?.('aw-wake: followup 失败 ' + String(error))
         }
       }
-      writeDebug(group.root, { routes: routes.filter(item => item.repo === group.root) })
     }
+    for (const [root, list] of routesByRepo) writeDebug(root, { routes: list })
     lastRepos = [...roots]
   }
 
