@@ -22,7 +22,7 @@ watcher 只写 wake 文件；**把“有新消息”变成“模型起一轮”*
 
 2. 一个 agent 一个进程 / 终端；`AW_AGENT_ID` 指向当前 agent。
 3. omp / pi 还需要配置 MCP `aw`（见 `references/global/mcp.md`）。
-4. DSH 需要 `AW_REPO_ROOT` 指向 workspace 根，且 DSH 会话 cwd 与它一致。
+4. DSH 需要 `AW_REPO_ROOT` 指向 workspace 根；cwd 只在没有 map/legacy/config 时作为唯一兜底。
 
 ## 2. omp / pi
 
@@ -121,17 +121,32 @@ $env:AW_AGENT_ID = "pcA-ba-1"
 dsh web
 ```
 
-插件配置：
+插件配置（模板见 `agents/dsh/aw-wake/cordis.patch.yml`）：
 
 ```yaml
 repoRoot: !!js process.env.AW_REPO_ROOT
-agentId: !!js process.env.AW_AGENT_ID
+# 单 agent：填 agentId
+# agentId: !!js process.env.AW_AGENT_ID
+# 多 agent：不填 agentId（或填 "*"），可选 agents 白名单
+# agents: [pcA-ba-1, pcA-ba-2]
 ```
 
 - `repoRoot` 必须是 workspace 根；
-- `agentId` 必须是收件 agent；
-- DSH 会话的 cwd 必须等于 `repoRoot`，否则插件找不到目标会话；
+- `agentId` 可选：填了是 **single** 模式；不填 / `*` 是 **multi** 模式，
+  监听 `.aw/wake/*.json` 并按消息里的 `agent` 路由；
+- `agents` 可选白名单，限制 multi 模式只处理列出的收件人；
 - 改完重启 DSH。
+
+会话解析顺序（插件 `aw-wake` 已实现，绝不广播）：
+
+1. `.aw/sessions/<agentId>.map.json`：`session_authoritative !== false` 且 120 分钟内无冲突 session；
+2. legacy `.aw/sessions/<agentId>.json`：`session_authoritative === true`；
+3. 配置里的显式 `sessionId`（pin）；
+4. single 模式：cwd 匹配且只有**唯一**一个活跃会话匹配 `repoRoot`；
+5. multi 模式 + `agents` 白名单只有一项：允许一次 cwd bootstrap；
+6. 其余情况 → 放弃唤醒并 warn。
+
+map 不可用/歧义/目标离线时直接放弃；multi 模式默认不允许 cwd 猜测，避免同 repo 多 BA 串号。
 
 ### 3.3 验证
 
@@ -139,8 +154,9 @@ agentId: !!js process.env.AW_AGENT_ID
 Get-Content .aw\aw-wake-debug.json -Tail 40
 ```
 
-应看到当前 DSH agent 的 `matched: true`；DSH 日志里应出现
-`aw-wake: woke ...`。
+应看到当前 DSH agent 的 `matched: true`；`map` 字段在 single 模式下是单个对象，
+multi 模式下按 agent 分组，包含 `session_id` / `session_authoritative` / `fresh_sessions`；
+`routes` 记录每条消息的 `resolve` 原因。DSH 日志里应出现 `aw-wake: woke ...`。
 
 发消息：
 
@@ -152,7 +168,8 @@ DSH 会话应自动开始一轮并提示用 `msg_inbox` 取正文。
 
 ### 3.4 注意
 
-- 插件按 `repoRoot` 匹配 DSH 会话 cwd；会话在别的目录不会被叫醒；
+- 插件优先用 map/legacy/config 定位会话；multi 模式默认不做 cwd 猜测；
+  single 模式才允许唯一 cwd 兜底；多个会话同 cwd 时放弃唤醒，不广播；
 - `seen` 状态在 `.aw/aw-wake-seen.json`，重启不重放；
 - `minIntervalMs` 默认 10 秒，避免消息 burst 反复打扰；
 - 只 wake，不代替 `msg_inbox` / `msg_reply`。
@@ -182,6 +199,6 @@ DSH 会话应自动开始一轮并提示用 `msg_inbox` 取正文。
 |------|------|
 | omp 只有 `bridge loaded` | MCP 是否发 `notifications/message`；`aw_mcp.py` 是否默认开启 |
 | omp 没有 `steer` | 是否重复 id（seen 去重）；MCP 是否绑定了别的 agent |
-| DSH 没有 `matched` | `AW_REPO_ROOT` 与 DSH 会话 cwd 是否一致 |
+| DSH 没有 `matched` | map/legacy 是否有 `session_authoritative: true`；`AW_REPO_ROOT` 与 DSH 会话 cwd 是否一致；debug 的 `map` 字段 |
 | DSH 没有 wake | watcher 是否 RUNNING；wake 文件是否存在；agentId 是否写对 |
 | 重复唤醒 | 是否同时跑了两个 watcher / 两个 MCP 进程 |

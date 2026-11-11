@@ -2,6 +2,22 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [1.46.0] - 2026-11-11
+
+### 修复：watcher 启动、异常日志、bus fetch、映射冲突
+
+- `watch --ensure` 等待窗口 5s → 20s，并同时检查子进程 pid；
+  watcher 在首次 fetch 前先写 pid/心跳，避免启动期被误判 STOPPED；
+- Windows detach 尝试 `CREATE_BREAKAWAY_FROM_JOB`，Job 不允许时回退；
+- `_watch_loop` 增加顶层异常捕获，异常栈写 `.aw/watch.err.log`；
+- `_bus_fetch` 失败重试一次，仍失败时 stderr 提示 `stale`，不再静默读旧 ref；
+- 同一 `session_id` 被另一个 agent 占用时，`by-session` 不覆盖，
+  当前 map/`session` 写 `session_authoritative: false` 并 warn（ADR #11）；
+- 文档：agent-plugins 补 map → legacy → config → cwd 解析顺序与 debug `map` 字段；
+  trigger 补 watch.err.log、breakaway 与计划任务建议；
+- `agents/dsh/aw-wake` 纳入多 agent 模式（single/multi、按 map 路由、cwd 仅 single 兜底）；
+  该目录此前已有未提交改动，本次一并审阅、语法检查后纳入。
+
 ## [1.45.0] - 2026-11-11
 
 ### 新增：会话↔agent 映射 v3

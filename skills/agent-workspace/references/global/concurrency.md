@@ -53,6 +53,8 @@ omp
 
 - 只在真实会话来源下写；`generated` / `mcp` 的记录只代表“某个进程用过这个身份”，
   **不得用于会话定位**；
+- 同一 `session_id` 已被另一个 agent 占用时：**不覆盖** `by-session`，当前 agent 的 map
+  写 `session_authoritative: false` 并 warn，消费方据此判定冲突；
 - `sessions` 保留最近 8 条；120 分钟内出现不同 `session_id` 时追加并 warn，不覆盖历史；
 - 同 `session_id` 60 秒内不重复写；写失败只 warn，不改变退出码；
 - `by-session` 最多 500 条 / 保留 7 天，写满清理最旧；`proc-*` 不写反向映射；

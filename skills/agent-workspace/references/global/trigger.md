@@ -100,15 +100,20 @@ aw.py watch --ensure --interval 5 --wake-dir .aw/wake
 
 语义：
 
-- `--ensure` 检查状态；没有 RUNNING 就 **detach 一个子进程**（POSIX `setsid` / Windows `DETACHED_PROCESS`），然后返回；
+- `--ensure` 检查状态；没有 RUNNING 就 **detach 一个子进程**（POSIX `setsid` /
+  Windows `DETACHED_PROCESS + CREATE_BREAKAWAY_FROM_JOB`），然后返回；
+- 首次 fetch 可能 6–12 秒：watcher 先写 pid/心跳，`--ensure` 最多等 20 秒并检查 pid；
+  失败时打印 `WATCH_START_FAILED`，不留下半成品进程；
 - watcher 不依附于当前 agent 会话，agent 退出后继续监听；
 - 多个 agent 同时 ensure：文件锁保证只有一个成为 watcher，其余得到 `WATCH_RUNNING`；
 - 机器重启 / watcher 被杀后，下一个 agent 再 `--ensure` 即可恢复；
-- 日志在 `.aw/watch.log`，状态用 `--status` 查。
+- 日志在 `.aw/watch.log`，异常栈在 `.aw/watch.err.log`；状态用 `--status` 查。
 
 边界：
 
 - 容器或强沙箱可能不允许 detach 子进程，这时必须用 supervisor；
+- Windows Electron/DSH 可能把子进程放进 Job Object；`CREATE_BREAKAWAY_FROM_JOB` 被拒绝时
+  只能回退普通 detach，宿主重启会一起结束。**Electron 客户端建议用计划任务当 supervisor**；
 - `--ensure` 只负责“起”，不负责“守护”；要自动重启还是 systemd / 计划任务；
 - 停止用 `aw.py watch --stop`；
 - Windows 下 watcher 及其 `git` 子进程默认用 `CREATE_NO_WINDOW`，不会反复弹控制台；

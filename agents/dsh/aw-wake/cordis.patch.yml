@@ -1,13 +1,19 @@
+# aw-wake：单实例服务多个 agent 的 DSH 唤醒插件（模板）
+# 本文件是上游模板，机器相关的值一律走环境变量，不要在这里写绝对路径。
+#
+# 启动前设置：
+#   AW_REPO_ROOT   workspace 仓库根（必填，且 DSH 会话 cwd 要与它一致）
+#   AW_AGENT_ID    可选，只盯单个 agent 时填；不填 = 多 agent 模式，
+#                  监听 .aw/wake/*.json 并按每条消息自带的 agent 字段路由
 - insert:
     - id: aw-wake
       name: '@local/aw-wake'
       config:
-        repoRoot: 'E:\Dev_tmp\agent-bus-test'
-        agentId: tree
+        repoRoot: !!js process.env.AW_REPO_ROOT
+        # agentId: !!js process.env.AW_AGENT_ID
         pollMs: 2000
         minIntervalMs: 10000
-        # 默认唤醒所有新消息（含 fyi）；与 omp 侧行为对齐，避免漏消息。
-        # 想收紧就设 wakeAll: false，再用下面两组规则过滤。
+        # 默认唤醒所有新消息（含 fyi）；wakeAll: false 时按下面两组规则过滤。
         wakeAll: true
         wakeTypes:
           - question

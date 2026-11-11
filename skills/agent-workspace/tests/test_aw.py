@@ -524,6 +524,22 @@ class WorkspaceCase(unittest.TestCase):
         self.assertEqual(data["session_id"], "rev-1")
         self.assertEqual(data["resolved_by"], "session-map")
 
+    def test_by_session_conflict_not_overwritten(self):
+        run(["--session", "shared", "agent", "whoami"], self.repo, agent="tree")
+        out = run(["--agent", "tree2", "--session", "shared",
+                   "agent", "whoami", "--json"], self.repo, agent=None)
+        self.assertIn("已属于", out.stderr)
+        other = json.loads((self.repo / ".aw" / "sessions" / "tree2.map.json")
+                           .read_text(encoding="utf-8"))
+        self.assertFalse(other["session_authoritative"])
+        key = hashlib.sha256(b"shared").hexdigest()[:16]
+        reverse = json.loads((self.repo / ".aw" / "sessions" / "by-session" / (key + ".json"))
+                             .read_text(encoding="utf-8"))
+        self.assertEqual(reverse["agent_id"], "tree")
+        session = json.loads((self.repo / ".aw" / "sessions" / "tree2.json")
+                             .read_text(encoding="utf-8"))
+        self.assertFalse(session["session_authoritative"])
+
     def test_cli_session_map_overrides_env_agent(self):
         run(["--session", "cli-sid", "agent", "whoami"], self.repo, agent="tree")
         out = run(["--session", "cli-sid", "agent", "whoami", "--json"],

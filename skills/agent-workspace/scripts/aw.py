@@ -1001,7 +1001,7 @@ def _lookup_session_agent(root: Path, session_id: str) -> str:
 
 
 def _write_session_map(root: Path, agent_id: str, record: dict, source: str,
-                       quiet: bool = False) -> None:
+                       quiet: bool = False, authoritative: bool = True) -> None:
     """写权威映射 + 反向映射；失败只 warn。
 
     - 只在真实会话来源下写；generated / mcp / AW_FROM_MCP=1 跳过；
@@ -1020,6 +1020,9 @@ def _write_session_map(root: Path, agent_id: str, record: dict, source: str,
         return
     path = aw_path(root, "sessions", "%s.map.json" % agent_id)
     by_path = _by_session_path(root, session_id)
+    owner = _lookup_session_agent(root, session_id)
+    if owner and owner != agent_id:
+        authoritative = False
     old = read_json(path, {})
     same = old.get("session_id") == session_id and old.get("map_version") == SESSION_MAP_VERSION
     if same and by_path.exists():
@@ -1061,7 +1064,7 @@ def _write_session_map(root: Path, agent_id: str, record: dict, source: str,
         "agent_id": agent_id,
         "session_id": session_id,
         "session_source": _map_source(source),
-        "session_authoritative": True,
+        "session_authoritative": authoritative,
         "sessions": entries,
         "host": socket.gethostname(),
         "cwd": str(Path.cwd()),
@@ -1076,7 +1079,7 @@ def _write_session_map(root: Path, agent_id: str, record: dict, source: str,
         failed = True
         if not quiet:
             print("warn: 写会话映射失败（不影响命令）: %s" % exc, file=sys.stderr)
-    if not session_id.startswith("proc-"):
+    if authoritative and not session_id.startswith("proc-"):
         try:
             write_json(by_path, {
                 "session_id": session_id,
@@ -1309,6 +1312,13 @@ def resolve_identity(root: Path, role: str = "ba", rebind: bool = False) -> dict
     }
     if mcp_session_id:
         record["mcp_session_id"] = mcp_session_id
+    if not generated and os.environ.get("AW_MAP_WRITE") == "1":
+        owner = _lookup_session_agent(root, session_id)
+        if owner and owner != agent_id:
+            authoritative = False
+            record["session_authoritative"] = False
+            print("warn: session %s 已属于 %s，%s 的映射标记为非权威"
+                  % (session_id, owner, agent_id), file=sys.stderr)
     resolved_by = (os.environ.get("AW_AGENT_RESOLVED_BY") or "").strip()
     if resolved_by:
         record["resolved_by"] = resolved_by
@@ -1318,7 +1328,8 @@ def resolve_identity(root: Path, role: str = "ba", rebind: bool = False) -> dict
     except OSError as exc:
         session_written = False
         print("warn: 写会话记录失败（不影响命令）: %s" % exc, file=sys.stderr)
-    _write_session_map(root, agent_id, record, session_source, quiet=not session_written)
+    _write_session_map(root, agent_id, record, session_source,
+                       quiet=not session_written, authoritative=authoritative)
     return record
 
 
@@ -2134,10 +2145,22 @@ def _bus_fetch(root: Path, force: bool = False) -> None:
         return
     if not force and remote_sha == _bus_tip(root):
         return
-    try:
-        git("fetch", "-q", "origin", BUS_BRANCH, cwd=root, check=False, timeout=20)
-    except GitError:
-        pass  # 离线/远端不可达：读本地已有 bus
+    last_error = ""
+    for attempt in range(2):
+        try:
+            proc = git("fetch", "-q", "origin", BUS_BRANCH, cwd=root,
+                       check=False, timeout=20)
+        except GitError as exc:
+            last_error = str(exc)
+        else:
+            if proc.returncode == 0:
+                return
+            last_error = (proc.stderr or "").strip() or "git fetch 返回 %s" % proc.returncode
+        if attempt == 0:
+            time.sleep(0.5)
+    if last_error:
+        print("warn: bus fetch 失败，继续读本地旧 ref（stale）: %s" % last_error,
+              file=sys.stderr)
 
 
 def _bus_tip(root: Path) -> str | None:
@@ -3349,20 +3372,35 @@ def _ensure_watch(root: Path, args) -> int:
         cmd += ["--exec", args.exec]
 
     log = aw_path(root, "watch.log")
+    err = aw_path(root, "watch.err.log")
     log.parent.mkdir(parents=True, exist_ok=True)
-    with open(log, "a", encoding="utf-8") as handle:
+    out_handle = open(log, "a", encoding="utf-8")
+    err_handle = open(err, "a", encoding="utf-8")
+    proc = None
+    try:
         kwargs: dict = {"cwd": str(root), "stdin": subprocess.DEVNULL,
-                        "stdout": handle, "stderr": handle}
+                        "stdout": out_handle, "stderr": err_handle}
         if os.name == "nt":
-            flags = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
-            flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
-            kwargs["creationflags"] = flags
+            base = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+            base |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+            breakaway = getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000)
+            try:
+                proc = subprocess.Popen(cmd, creationflags=base | breakaway, **kwargs)
+            except OSError:
+                # Job 不允许 breakaway（常见于 Electron/DSH）：回退
+                proc = subprocess.Popen(cmd, creationflags=base, **kwargs)
         else:
             kwargs["start_new_session"] = True
-        subprocess.Popen(cmd, **kwargs)
+            proc = subprocess.Popen(cmd, **kwargs)
+    finally:
+        out_handle.close()
+        err_handle.close()
 
-    for _ in range(20):
+    # 首次 fetch 可能 6-12s；给 20s，并同时看 pid
+    for _ in range(80):
         time.sleep(0.25)
+        if proc.poll() is not None:
+            break
         state = _watch_status_data(root)
         if state["status"] == "RUNNING":
             if args.json:
@@ -3371,7 +3409,20 @@ def _ensure_watch(root: Path, args) -> int:
             else:
                 print("WATCH_STARTED pid=%s wake_dir=%s" % (state["pid"], state["wake_dir"]))
             return 0
-    print("WATCH_START_FAILED 见 %s" % log, file=sys.stderr)
+    if proc.poll() is None:
+        if args.json:
+            print(json.dumps({"status": "STARTED", "pid": proc.pid,
+                              "wake_dir": str(root / wake), "state": "pending"},
+                             ensure_ascii=False))
+        else:
+            print("WATCH_STARTED pid=%s（状态尚未写入，见 %s）" % (proc.pid, err))
+        return 0
+    tail = ""
+    try:
+        tail = err.read_text(encoding="utf-8", errors="replace")[-1000:]
+    except OSError:
+        pass
+    print("WATCH_START_FAILED 见 %s%s" % (err, ("\n" + tail) if tail else ""), file=sys.stderr)
     return 3
 
 
@@ -3394,16 +3445,10 @@ def cmd_watch(args) -> int:
         return 3
 
 
-def _watch_loop(root: Path, state_path: Path, args) -> int:
+def _watch_loop_body(root: Path, state_path: Path, args) -> int:
     state = read_json(state_path, {})
     seen = set(state.get("seen") or [])
     first = not state_path.exists()
-
-    messages = load_bus_messages(root, fetch=not args.no_fetch)
-    if first:
-        seen = {m.get("id") for m in messages if m.get("id")}
-        state["seeded_at"] = _now()
-        print("WATCH_READY 已初始化，跳过 %d 条历史消息" % len(seen), file=sys.stderr)
 
     wake_dir = None
     if getattr(args, "wake_dir", ""):
@@ -3412,6 +3457,7 @@ def _watch_loop(root: Path, state_path: Path, args) -> int:
             wake_dir = root / wake_dir
         wake_dir.mkdir(parents=True, exist_ok=True)
 
+    # 先写 pid/心跳：首次 fetch 可能 6-12s，--status 不能一直 UNKNOWN
     state.update({
         "pid": os.getpid(),
         "started_at": state.get("started_at") or _now(),
@@ -3420,6 +3466,12 @@ def _watch_loop(root: Path, state_path: Path, args) -> int:
         "last_fetch": _now(),
     })
     write_json(state_path, state)
+
+    messages = load_bus_messages(root, fetch=not args.no_fetch)
+    if first:
+        seen = {m.get("id") for m in messages if m.get("id")}
+        state["seeded_at"] = _now()
+        print("WATCH_READY 已初始化，跳过 %d 条历史消息" % len(seen), file=sys.stderr)
 
     children: list[subprocess.Popen] = []
     while True:
@@ -3481,6 +3533,17 @@ def _watch_loop(root: Path, state_path: Path, args) -> int:
         if args.once:
             return 0
         time.sleep(max(1, args.interval))
+
+def _watch_loop(root: Path, state_path: Path, args) -> int:
+    try:
+        return _watch_loop_body(root, state_path, args)
+    except Exception:
+        import traceback
+
+        traceback.print_exc()
+        print("WATCH_FATAL watcher 异常退出（见 stderr / watch.err.log）", file=sys.stderr)
+        return 1
+
 
 # ---------------------------------------------------------------- schema
 

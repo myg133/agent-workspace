@@ -57,6 +57,8 @@ agent 客户端 ──stdio──► aw_mcp.py（每个 agent 一个进程）
 - `sessions` 保留最近 8 条；120 分钟内出现不同 `session_id` 时追加并 warn，不覆盖历史；
 - 同 `session_id` 60 秒内不重复写；写失败只 warn，退出码不变；
 - `by-session` 最多 500 条 / 保留 7 天，写满清理最旧；`proc-*` 不写反向映射；
+- 同一 `session_id` 已被另一个 agent 占用：不覆盖 `by-session`，当前 map 写
+  `session_authoritative: false` 并 warn；
 - `agent whoami --session <SID>` 在无显式身份时用反向映射解析；`--json` 的 `resolved_by` 为 `session-map`；
 - 消费方读不到反向映射时回退到「唯一 cwd」规则，不得直接拒绝、更不得广播；
 - 映射是本机文件，不跨机同步。
