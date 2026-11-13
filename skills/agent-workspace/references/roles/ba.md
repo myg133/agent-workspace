@@ -163,6 +163,10 @@ msg_reply {"id": "<id>", "body": "..."}
 
 同时并行：QA 生成测试用例、Dev 开工（两者可同时进行，QA 的用例作为 Dev 的输入补丁）。
 
+> **Dev 是无状态执行者**：BA 持有 claim 和 worktree；Dev 完成 handoff 后退出，
+> 不等待 QA/CI。不要把"Dev 进程还在"当作状态；状态只在 claim、`status.md` 和
+> `feature-meta/verification-report.md` 里。
+
 ## 5.1 状态流转操作
 
 ```bash
@@ -174,11 +178,13 @@ git push origin demand
 
 | 触发 | 动作 |
 |------|------|
-| Dev 报完成 | `进行中 → 待验证`，派 QA Pre-merge |
-| QA 报告通过 | `待验证 → 已验证`，通知 Dev 开 PR |
-| QA 报告不通过 | `待验证 → 已退回`，写 `return_reason`，通知 Dev 修 |
+| Dev 报完成 | `进行中 → 待验证`，派 QA Pre-merge；Dev 已退出，不再等待 |
+| QA 报告通过 | `待验证 → 已验证`；BA 触发 PR（可 spawn 短 Dev 或授权后自己 push） |
+| QA 报告不通过 | `待验证 → 已退回`，写 `return_reason`；**spawn 新 Dev**，只带 report + return_reason |
 | PR 合并 + Post-merge 通过 | `已验证 → 已完成`，回收 worktree |
 | 用户取消 | `* → 已取消`，强制回收 |
+
+> 返工不复用旧 Dev 对话；新 Dev 从 worktree + 上一版报告恢复上下文。
 
 ## 6. 回收
 

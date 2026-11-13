@@ -143,6 +143,10 @@ last_seen 在 TTL 内                → alive
 **默认严格 1**。如果你的流程需要"1 个开发 + 1 个等待"，用 `blocked` 显式标记，
 而不是偷偷再领一个——后者会让队列和看板全部失真。
 
+> **当前实现说明**：CLI 只创建 `active`；`blocked` / `review` 还没有
+> `claim block` / `claim review` 子命令，不要手工改 `.aw/claims/*.json`。
+> `claim` 始终属于 BA；无状态 Dev 退出**不会**释放 WIP。
+
 ## 7. 巡检（doctor）
 
 ```bash
