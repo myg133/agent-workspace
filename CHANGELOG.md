@@ -4,17 +4,23 @@
 
 ## [Unreleased]
 
-### 新增：single-repo 模式（单仓 + 独立文档仓）
+### 新增：workspace 模式接入消息通道（本地 inbox + bus + MQTT）
 
-- 新增 `skills/agent-workspace/single/` 子树：
-  - `aw_single.py`：本地 claim、queue、feature worktree、本地消息、wake、presence；
-  - bus v2：代码仓库 orphan `bus` 分支，一条消息一个文件；
-  - MQTT transport：paho-mqtt 2.2.0 vendor，支持 presence / 自动降级 bus；
-  - DSH / omp 唤醒插件、setup 与环境变量说明。
-- 主 `SKILL.md` 增加两种形态路由：
-  - workspace：`scripts/aw.py`；
-  - single：`single/scripts/aw_single.py`。
-- CI 同时跑 workspace 与 single 测试。
+- `msg send` 先写 `.aw/inbox/<agent>/<id>.json`，再 publish MQTT（可选），最后写 bus 审计；
+  `msg inbox / wait / watch` 读取 bus + 本地 inbox 并集，按 id 去重；
+- `transport.mode` 支持 `auto / mqtt / bus / local`；默认 `auto`：没有 MQTT 配置时行为与旧版一致；
+- MQTT：paho-mqtt 2.2.0 vendor（`skills/agent-workspace/vendor`），topic
+  `aw/v1/<project>/agent/<agent>/inbox|presence`，QoS 1，presence retained；
+- `aw.py watch` 配了 MQTT 时实时订阅，未配置时仍轮询 bus；断线自动降级；
+- 新增 `aw.py transport status/set/test`、`aw.py agent presence`；
+- 新增 `references/global/transport.md`，更新 `messaging.md / trigger.md / mcp.md`；
+- 测试覆盖 local 模式、本机 inbox、auto 降级、presence、transport 配置。
+
+### 变更：single 模式移到独立仓库
+
+- 移除 `skills/agent-workspace/single/` 子树（原 `9badcf4` 的整体复制合并）；
+- single 模式保留在独立仓库 `agent-workspace-single`，与本 skill 的 workspace 模式分开维护；
+- 本 skill 只保留 workspace 模式；消息通道语义两边一致。
 
 ### 新增：全局 `--repo`，一个 MCP 服务多个项目
 

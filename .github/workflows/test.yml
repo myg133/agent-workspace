@@ -20,8 +20,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: compile
-        run: python -m py_compile skills/agent-workspace/scripts/aw.py skills/agent-workspace/scripts/aw_mcp.py skills/agent-workspace/single/scripts/aw_single.py
+        run: python -m py_compile skills/agent-workspace/scripts/aw.py skills/agent-workspace/scripts/aw_mcp.py
       - name: workspace tests
         run: python -m unittest discover -s skills/agent-workspace/tests -v
-      - name: single tests
-        run: python -m unittest discover -s skills/agent-workspace/single/tests -v
+      - name: vendor paho import
+        run: python -c "import sys; sys.path.insert(0, 'skills/agent-workspace/vendor'); import paho.mqtt.client as mqtt; print(mqtt.__file__)"

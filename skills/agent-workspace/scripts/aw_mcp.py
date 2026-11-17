@@ -39,7 +39,7 @@ def _arg_value(flag: str) -> str:
 
 
 AGENT = (_arg_value("--agent") or os.environ.get("AW_AGENT_ID") or "").strip()
-VERSION = "1.5.1"
+VERSION = "1.6.0"
 PROTOCOL = "2024-11-05"
 _NOTIFY_FLAG = (os.environ.get("AW_MCP_NOTIFY") or "").strip().lower()
 # 默认开启；AW_MCP_NOTIFY=0 / --no-notify 关闭
@@ -176,7 +176,7 @@ TOOLS = [
     tool("claim_list", "列出当前所有认领", {}),
     tool("claim_doctor", "巡检认领：多领、死会话、缺 worktree；可修复",
          {"repair": BOOL}),
-    tool("msg_send", "发送 BA 间消息（走后端 bus 空 commit）",
+    tool("msg_send", "发送 BA 间消息（本地 inbox + bus 审计 + 可选 MQTT）",
          {"to": {**STR, "description": "agent_id / all / role:ba，逗号分隔"},
           "body": STR, "type": {**STR, "enum": ["fyi", "question", "blocker", "handoff",
                                                 "contract-change", "contract-ack", "decision"]},
@@ -194,13 +194,16 @@ TOOLS = [
           "sender": STR, "consume": BOOL, "json": BOOL}),
     tool("msg_show", "按 id 查看单条消息", {"id": STR}, ["id"]),
     tool("msg_ack", "对契约变更回执", {"id": STR, "reject": BOOL, "note": STR}, ["id"]),
-    tool("msg_list", "列出 bus 上的消息（含已读，用于审计）",
+    tool("msg_list", "列出消息（bus + 本地 inbox；含已读，用于审计）",
          {"all": BOOL, "limit": INT, "json": BOOL}),
     tool("msg_pending", "列出等我还账的消息（expect=ack/reply 且尚未回复）",
          {"overdue": {**INT, "description": "只看超过 N 小时的消息"}}),
     tool("msg_reply", "回复某条消息；自动带 re / thread / 收件人",
          {"id": STR, "body": STR, "type": STR}, ["id", "body"]),
     tool("msg_flush", "把离线队列推到 bus 分支", {}),
+    tool("agent_presence", "查看在线状态（本地 session + MQTT presence 缓存）",
+         {"json": BOOL}),
+    tool("transport_status", "查看消息通道：mode / bus / MQTT / project_id", {"json": BOOL}),
     tool("contract_check", "检查契约版本 pin、consumer 覆盖与未 ack 变更",
          {"strict": BOOL, "no_fetch": BOOL, "json": BOOL}),
     tool("verify", "校验 workspace 硬约束", {"strict": BOOL, "json": BOOL}),
@@ -278,6 +281,10 @@ def build_argv(name: str, args: dict) -> list[str]:
         return argv
     if name == "claim_list":
         return ["claim", "list"]
+    if name == "agent_presence":
+        return ["agent", "presence", "--json"]
+    if name == "transport_status":
+        return ["transport", "status", "--json"]
     if name == "claim_doctor":
         return ["claim", "doctor"] + (["--repair"] if a.get("repair") else [])
     if name == "msg_send":

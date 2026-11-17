@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "agent-workspace",
-  "version": "1.47.0",
-  "description": "Git worktree based multi-agent collaboration workspace, plus a single-repo profile for conventional repositories and separate docs repos: flat worktree layout, orphan root container, role workflows, requirement state machine, worktree lifecycle, verify/audit/init CLI, local bus/MQTT transport.",
+  "version": "1.48.0",
+  "description": "Git worktree based multi-agent collaboration workspace: flat worktree layout, orphan root container, role workflows, requirement state machine, worktree lifecycle, verify/audit/init CLI, and a message channel with local inbox, Git bus audit, optional MQTT realtime and presence.",
   "author": {
     "name": "myg133"
   },

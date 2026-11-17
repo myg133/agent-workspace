@@ -15,6 +15,7 @@
 | 目录越干越乱 | 仓库根只是容器，业务代码永远在 `code/` |
 | 状态靠聊天记录 | 需求状态写进 `BA/demands/REQ-xxx/status.md`，随 Git 持久化 |
 | 干了什么没人知道 | 提交信息带需求号与 session，`git log` 就是审计日志 |
+| 跨机协作靠人喊 | 本地 inbox + `bus` 审计 + 可选 MQTT 实时；断线自动退回轮询 |
 
 ## 适用范围
 
@@ -31,10 +32,11 @@
 | 形态 | 适用 | 入口 |
 |------|------|------|
 | **workspace** | 多需求并行、需要 `code/ BA/ Deploy/` 和 `demand/bus` 分支 | `scripts/aw.py` |
-| **single** | 已有传统 `main/develop/feature/*` 仓库、文档在另一个仓库、单机/多机 | `single/scripts/aw_single.py` |
+| **single** | 已有传统 `main/develop/feature/*` 仓库、文档在另一个仓库、单机/多机 | 独立 skill `agent-workspace-single` |
 
-single 模式不改造代码仓库，`.aw/` 放本地根，支持本地消息、bus v2、可选 MQTT。
-说明见 [single/README.md](skills/agent-workspace/single/README.md)。
+single 模式不改造代码仓库，`.aw/` 放本地根，支持本地消息、bus v2、可选 MQTT；
+它已拆到独立仓库 [agent-workspace-single](https://github.com/myg133/agent-workspace-single)，
+不在本仓库内。两种模式都使用同一套消息通道语义（本地 inbox / bus / MQTT / presence）。
 
 > 本仓库是**插件源码**，自身不套用该规范（普通 `main` + PR）。所以在仓库根跑
 > `aw.py verify` 会提示"不是 workspace 仓库"，属正常。

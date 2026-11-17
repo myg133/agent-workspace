@@ -1216,6 +1216,125 @@ class WorkspaceCase(unittest.TestCase):
         self.assertEqual(out.returncode, 1)
         self.assertIn("不存在", out.stdout)
 
+
+    # ---- 消息通道：本地 inbox / transport / presence ----
+    def _set_transport(self, data):
+        path = self.repo / ".aw" / "config.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+    def _bus_count(self):
+        out = git(["rev-list", "--count", "bus"], self.repo)
+        return out.stdout.strip() if out.returncode == 0 else "0"
+
+    def test_transport_status_defaults(self):
+        out = run(["transport", "status", "--json"], self.repo, agent=None)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        data = json.loads(out.stdout)
+        self.assertEqual(data["mode"], "auto")
+        self.assertTrue(data["bus_enabled"])
+        self.assertFalse(data["mqtt_configured"])
+        self.assertTrue(data["paho"])
+        self.assertTrue(data["project_id"].startswith("p-"))
+
+    def test_transport_set_and_disable(self):
+        out = run(["transport", "set", "--mqtt-host", "127.0.0.1",
+                   "--mqtt-port", "1883", "--no-mqtt-tls"], self.repo, agent=None)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        cfg = json.loads((self.repo / ".aw" / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(cfg["mqtt"]["host"], "127.0.0.1")
+        self.assertEqual(cfg["mqtt"]["port"], 1883)
+        self.assertFalse(cfg["mqtt"]["tls"])
+        self.assertTrue(cfg["mqtt"]["enabled"])
+        status = json.loads(run(["transport", "status", "--json"],
+                                self.repo, agent=None).stdout)
+        self.assertTrue(status["mqtt_configured"])
+        run(["transport", "set", "--mqtt-disable"], self.repo, agent=None)
+        status = json.loads(run(["transport", "status", "--json"],
+                                self.repo, agent=None).stdout)
+        self.assertFalse(status["mqtt_configured"])
+
+    def test_local_mode_does_not_write_bus(self):
+        self._set_transport({"transport": {"mode": "local"}})
+        before = self._bus_count()
+        sent = run(["msg", "send", "--to", "ba-test", "--body", "local-only"],
+                   self.repo, agent="ba-test")
+        self.assertEqual(sent.returncode, 0, sent.stderr)
+        self.assertIn("SENT_LOCAL", sent.stdout)
+        self.assertEqual(self._bus_count(), before)
+        inbox = json.loads(run(["msg", "inbox", "--json"], self.repo,
+                               agent="ba-test").stdout)
+        self.assertEqual(inbox["count"], 1)
+        self.assertEqual(inbox["messages"][0]["body"], "local-only")
+        self.assertEqual(list((self.repo / ".aw" / "outbox").glob("*.md")), [])
+
+    def test_local_inbox_watch_once(self):
+        folder = self.repo / ".aw" / "inbox" / "ba-test"
+        folder.mkdir(parents=True, exist_ok=True)
+        msg = {
+            "id": "abc12345", "from": "ba-2", "to": ["ba-test"],
+            "at": "2026-11-17T00:00:00Z", "type": "question",
+            "expect": "reply", "body": "only-local", "subject": "local",
+        }
+        (folder / "abc12345.json").write_text(json.dumps(msg), encoding="utf-8")
+        out = run(["msg", "watch", "--once", "--json"], self.repo, agent="ba-test")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("only-local", out.stdout)
+        inbox = json.loads(run(["msg", "inbox", "--json"], self.repo,
+                               agent="ba-test").stdout)
+        self.assertEqual(inbox["count"], 1)
+        self.assertEqual(inbox["messages"][0]["id"], "abc12345")
+        again = run(["msg", "watch", "--once", "--json"], self.repo, agent="ba-test")
+        self.assertEqual(again.returncode, 3)
+
+    def test_auto_falls_back_to_bus_when_mqtt_down(self):
+        self._set_transport({
+            "transport": {"mode": "auto"},
+            "mqtt": {"enabled": True, "host": "127.0.0.1", "port": 1, "tls": False},
+        })
+        sent = run(["msg", "send", "--to", "ba-test", "--body", "fallback"],
+                   self.repo, agent="ba-test")
+        self.assertEqual(sent.returncode, 0, sent.stdout + sent.stderr)
+        self.assertIn("降级", sent.stderr)
+        self.assertEqual(self._bus_count(), "1")
+        state = json.loads((self.repo / ".aw" / "transport-state.json").read_text(encoding="utf-8"))
+        self.assertGreater(state["mqtt_down_until"], 0)
+
+    def test_mqtt_failure_keeps_bus_audit(self):
+        self._set_transport({
+            "transport": {"mode": "mqtt"},
+            "mqtt": {"enabled": True, "host": "127.0.0.1", "port": 1, "tls": False},
+        })
+        out = run(["msg", "send", "--to", "ba-test", "--body", "mqtt-fail"],
+                  self.repo, agent="ba-test")
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("bus 状态", out.stderr)
+        self.assertEqual(self._bus_count(), "1")
+        inbox = json.loads(run(["msg", "inbox", "--json"], self.repo,
+                               agent="ba-test").stdout)
+        self.assertEqual(inbox["count"], 1)
+
+    def test_presence_local_session(self):
+        run(["agent", "whoami"], self.repo, agent="ba-test")
+        out = run(["agent", "presence", "--json"], self.repo, agent="ba-test")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        rows = json.loads(out.stdout)["agents"]
+        self.assertEqual([r["agent"] for r in rows], ["ba-test"])
+        self.assertEqual(rows[0]["status"], "online")
+        self.assertEqual(rows[0]["source"], "local")
+        cache = self.repo / ".aw" / "presence"
+        cache.mkdir(parents=True, exist_ok=True)
+        (cache / "ba-remote.json").write_text(json.dumps({
+            "agent": "ba-remote", "role": "ba", "status": "online",
+            "host": "other-pc", "pid": 1, "ts": "2099-01-01T00:00:00Z", "ttl_s": 90,
+        }), encoding="utf-8")
+        merged = json.loads(run(["agent", "presence", "--json"], self.repo,
+                                agent="ba-test").stdout)["agents"]
+        self.assertEqual([r["agent"] for r in merged], ["ba-remote", "ba-test"])
+        remote = next(r for r in merged if r["agent"] == "ba-remote")
+        self.assertEqual(remote["source"], "mqtt")
+        self.assertEqual(remote["status"], "online")
+
     # ---- 升级检查 ----
     def test_upgrade_clean(self):
         out = run(["upgrade"], self.repo)

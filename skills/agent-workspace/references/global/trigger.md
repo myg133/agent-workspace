@@ -52,8 +52,22 @@ aw.py watch --interval 5 --exec /path/to/start-agent.sh
 - 首次启动会 **seed**，跳过历史消息，不重放；
 - 状态在 `.aw/watch-state.json`（pid / 心跳 / wake_dir）；
 - 单机文件锁，重复启动输出 `WATCH_RUNNING`；
-- 只 `git fetch`，不调用模型；
+- 配了 MQTT 时订阅实时 inbox（约 1 秒）；没配时只 `git fetch`；
+- 两种方式都不调用模型；
 - `--wake-dir .aw/wake` 会把每个 agent 的唤醒事件写成 `.aw/wake/<agent>.json`，供 MCP 转通知。
+
+### 2.0 实时层（可选 MQTT）
+
+```bash
+aw.py transport set --mqtt-host 192.168.1.10 --mqtt-port 1883 --no-mqtt-tls
+aw.py transport test
+aw.py watch --ensure --interval 5 --wake-dir .aw/wake
+```
+
+- `transport.mode=auto`：有 broker 就 MQTT + bus 审计，没有就退回 bus；
+- MQTT 只负责实时与 presence，bus 仍是审计事实；
+- 断线后 watcher 仍按 `--interval` 轮询 bus，不会漏消息；
+- 详见 [transport.md](transport.md)。
 
 ### 2.1 一台 PC 多个 agent
 

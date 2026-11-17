@@ -20,6 +20,9 @@ watcher 只写 wake 文件；**把“有新消息”变成“模型起一轮”*
    aw.py watch --status
    ```
 
+   配了 MQTT 时 watcher 订阅实时 inbox，wake 延迟约 1 秒；没配时按 `--interval` 轮询 bus，
+   插件行为不变。
+
 2. 一个 agent 一个进程 / 终端；`AW_AGENT_ID` 指向当前 agent。
 3. omp / pi 还需要配置 MCP `aw`（见 `references/global/mcp.md`）。
 4. DSH 的仓库由会话 cwd 自动发现（向上最多 6 层找 `.aw/`）；`repoRoot` / `repoRoots` 可选，只用于限定范围，不是必填。

@@ -1,4 +1,8 @@
-# BA 间消息（bus 分支）
+# BA 间消息（本地 inbox + bus + 可选 MQTT）
+
+消息通道分三层：**本地 inbox**（投递缓存）、**bus 分支**（审计 + 跨机兜底）、
+**MQTT**（实时 + presence）。三层按消息 id 去重，任意一层先到都能读；
+配置与协议细节见 [transport.md](transport.md)。
 
 ## 0. 谁能写 bus
 
@@ -23,21 +27,34 @@
 错误: bus 只允许 BA / Planner 使用；子 agent 请与你的 BA 交互，不要直接发消息。
 ```
 
-## 1. 为什么统一走 bus
+## 1. 为什么还需要 bus
 
 | 方案 | 冲突 | 历史噪音 | 跨机 | 结论 |
 |------|------|---------|------|------|
-| 写文件不提交 | 无 | 无 | ❌ 不共享 | 仅限同机 |
+| 只写本地文件 | 无 | 无 | ❌ 不共享 | 仅作投递缓存 |
 | 提交到 demand | 有 | **严重**（80 条/天） | ✅ | 污染需求历史 |
-| **空 commit 到 bus** | **无** | 隔离在独立分支 | ✅ | ✅ |
+| **空 commit 到 bus** | **无** | 隔离在独立分支 | ✅ | **审计事实** |
+| MQTT | 无 | 无 | ✅ | 实时层，会断线/丢包 |
+
+三层组合：
+
+```text
+本地 inbox  → 同机立即可读、离线可读
+MQTT        → 跨机实时唤醒；失败由 bus 补
+bus         → 不可变审计 + 跨机兜底；MQTT 只是加速
+```
 
 bus 是**零文件的 orphan 分支**，每条消息一个空 commit。约 250 字节/条，一个月 0.5MB。
+没有配 MQTT 时，bus 同时承担投递职责，行为和旧版本一致。
 
 ## 2. 分支约定
 
 ```text
 refs/heads/bus      # orphan，tree 为空，永远不 checkout
 ```
+
+> bus 是审计事实，不是唯一投递路径。MQTT/本地 inbox 失败或没配置时，
+> 消息仍然通过 bus 送达；bus 被 force-push 抹掉则历史审计不可恢复。
 
 三条铁律：
 
@@ -47,7 +64,20 @@ refs/heads/bus      # orphan，tree 为空，永远不 checkout
 
 ## 3. 消息格式
 
-commit message 本身就是消息：
+bus 上 commit message 就是消息；本地 inbox 与 MQTT payload 是同一组字段的 JSON：
+
+```json
+{
+  "id": "a1b2c3d4", "from": "pcA-ba-1", "to": ["pcB-ba-1"],
+  "cc": ["pcA-ba-2"], "at": "2026-10-21T07:40:12Z",
+  "type": "contract-change", "expect": "ack",
+  "ref": "BA/contracts/user-api/v3.md @ 4f2a9c1",
+  "contract": "user-api", "version": "3",
+  "subject": "user-api v3", "body": "…"
+}
+```
+
+bus commit message 形式：
 
 ```text
 [msg] contract-change user-api -> pcB-ba-1
@@ -229,13 +259,24 @@ aw.py msg inbox [--all] [--sender X] [--since 2026-10-21T00:00:00Z] [--full] [--
 aw.py msg list  [--all] [--limit N]
 aw.py msg ack <id> [--ok|--reject] [--note "附言"]
 aw.py msg flush           # 重试 outbox 里的未发送消息
+
+# 通道配置（不写 JSON；没有 broker 时 auto 就是 bus）
+aw.py transport status
+aw.py transport set --mqtt-host 192.168.1.10 --mqtt-port 1883 --no-mqtt-tls
+aw.py transport test
+aw.py transport set --mode local
+
+# 在线状态（本地 session + MQTT retained 缓存）
+aw.py agent presence
 ```
 
 退出码：`0` 已发送/已读；`3` 已排队（网络失败）、被拒绝或无消息。
 
 ## 6. 离线与并发
 
+- **先写本地 inbox**：同机 agent 立刻能读；即使后续网络全失败也不丢。
 - **发送先落 `.aw/outbox/`**：push 成功才删除；失败返回 `QUEUED`，下次 send/inbox 自动重试。
+- **MQTT 只是加速**：publish 失败时 `auto` 降级 bus；`mqtt` 模式直接报错。
 - **并发推送**：push 被拒 → 重新 fetch → 基于最新 tip 重放 outbox → 再 push（最多 4 次）。
 - **读取先探针**：先 `ls-remote` 只查远端引用（~100ms），与本地 tip 一致就跳过 fetch；解析结果缓存在 `.aw/bus-cache/`，只解析游标之后的新提交，不再每次扫全历史。
 - **永不 rebase / force**：远端历史只增不改，消息顺序 = push 顺序。
@@ -246,8 +287,11 @@ aw.py msg flush           # 重试 outbox 里的未发送消息
 **本机状态，不走 git**：`.aw/msg-read/<agent_id>.json` 记录"已读过哪些消息 id"。
 
 ```text
-未读 = bus 上所有消息 - 已读 id 集合
+未读 = (bus 消息 ∪ 本地 inbox 消息) - 已读 id 集合
 ```
+
+合并按消息 `id` 去重：bus 优先，只在本地 inbox、还没进 bus 的消息追加在末尾。
+MQTT 先到不会丢；bus 追上后同 id 自动合并。
 
 为什么不用 `(at, id)` 时间游标（1.7.0 及更早）：
 
@@ -287,6 +331,7 @@ BA 不会主动读——所以分两层：
 |----|------|
 | **门禁** | `claim next` 发现未读 → `UNREAD_MESSAGES`，exit 4，不读不许领新任务 |
 | **Notifier** | 只读子 agent，跑 `msg inbox --json --no-advance` 整理摘要交回 BA（不推进游标） |
+| **watcher / MQTT** | 只负责叫醒；消息仍是 bus + 本地 inbox 的事实 |
 
 Notifier 的硬限制（只读、不回复、不 ack）见 `references/roles/notifier.md`。
 
@@ -317,11 +362,13 @@ Notifier 的硬限制（只读、不回复、不 ack）见 `references/roles/not
 **空闲时不要让模型醒着。** 比 `msg_wait` 更省的是 watcher：
 
 ```bash
-# 每台机器一个，只 fetch、不调模型；有新消息时拉起对应 agent
-aw.py watch --interval 5 --exec ./start-agent.sh
+# 每台机器一个；有 MQTT 时实时收，没配 MQTT 时只 fetch；都不调模型
+aw.py watch --ensure --interval 5 --exec ./start-agent.sh --wake-dir .aw/wake
+aw.py watch --status
 ```
 
-详见 `references/global/trigger.md`。
+配了 MQTT 时 watcher 订阅 inbox，延迟约 1 秒；bus 仍按 `--interval` 轮询兜底。
+详见 [trigger.md](trigger.md) 与 [transport.md](transport.md)。
 
 只有在客户端不支持长工具调用时，才退回定时轮询；不要把它当默认。
 
@@ -357,3 +404,5 @@ aw.py msg watch --interval 2      # 常驻：有新消息就打印到 stdout
 | 4 BA × 20 条/天 | ~20 KB/天 |
 | 一年 | ~7 MB |
 | 拉取成本 | 增量 fetch，只有新 commit |
+| MQTT 延迟 | ~1 s（watcher 订阅） |
+| bus 兜底 | MQTT 断线后按 `--interval` 轮询 |

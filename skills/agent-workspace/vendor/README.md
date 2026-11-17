@@ -30,7 +30,7 @@ import paho.mqtt.client as mqtt
 2. 替换 `vendor/paho/`；
 3. 替换 `vendor/LICENSES/paho-mqtt/`；
 4. 更新 `VERSION` 与本文的 sha256；
-5. 跑 `tests/test_aw_single.py` 里的 import 测试。
+5. 跑 `tests/test_aw.py` 里的 transport 测试。
 
 不要直接修改 `vendor/paho` 源码；需要 patch 时单独记录在 `vendor/patches/`。
 
@@ -38,4 +38,4 @@ import paho.mqtt.client as mqtt
 
 - 不希望每个 agent 机器都执行 `pip install`；
 - paho 是纯 Python，无 C 扩展，适合直接随仓库分发；
-- MQTT 只在 watcher 中使用，客户端插件仍然只读本地文件。
+- MQTT 在 watcher 订阅、`msg send` 发布时使用，客户端插件仍然只读本地文件。

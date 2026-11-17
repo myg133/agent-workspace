@@ -2,8 +2,8 @@
 name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
-  short-description: Git worktree / 单仓双模式多 Agent 协作
-  version: 1.47.0
+  short-description: Git worktree 多 Agent 协作（workspace 模式）
+  version: 1.48.0
 ---
 
 # Agent Workspace
@@ -16,20 +16,22 @@ Planner 定方向、BA 写需求、Dev 写代码、QA 只验证、Deploy 只管�
 ### 1. workspace 模式（本目录主流程）
 
 适合大型、多需求并行项目：workspace 根 + `code/ BA/ Deploy/` 平铺 worktree，
-需求/状态在 `demand` 分支，消息在 `bus` 分支。
+需求/状态在 `demand` 分支；消息走本地 inbox + `bus` 审计，可选 MQTT 实时。
 
 入口：`scripts/aw.py`，文档在 `references/`。
 
-### 2. single 模式（传统单仓 + 独立文档仓）
+### 2. single 模式（独立 skill，不在本目录）
 
 适合已有传统 `main/develop/feature/*` 仓库、文档在另一个仓库、单机/多机协作：
 
 - 不改造代码仓库；
 - `.aw/` 放本地根；
 - 本地消息 + Git bus v2 + 可选 MQTT；
-- 入口：`single/scripts/aw_single.py`，说明见 `single/README.md`。
+- 入口在独立仓库 `agent-workspace-single`（`scripts/aw_single.py`），
+  不要在本 skill 里找 single 脚本。
 
-> 先判断项目形态，再选脚本；两种模式的 claim/worktree 语义不同，不要混用。
+> 先判断项目形态，再选 skill；两种模式的 claim/worktree 语义不同，不要混用。
+> **消息通道（本地 inbox / bus / MQTT / presence）两种模式都有**；本目录是 workspace 模式。
 
 ## 30 秒上手
 
@@ -102,8 +104,9 @@ python <skill-path>/scripts/aw.py audit
 7. 多 BA 同机协作：每个会话必须带稳定的 `AW_AGENT_ID`；**一个 agent 同时只能持有 1 个认领**，
    由 `aw.py claim` 强制（先进 `ALREADY_HOLDING`，不是靠提醒）。
 8. 认领是创建 worktree 的唯一入口：禁止手工 `git worktree add` 绕过认领。
-9. BA 间消息只走 `bus` 分支的空 commit；**契约/决策才进 `demand`**，不要把对话提交到 demand。
-   **只有 BA / Planner 能写 bus**；Dev/QA/Deploy/Explore 等子 agent 一律通过自己的 BA 转达。
+9. BA 间消息：本地 inbox 先落盘，`bus` 分支空 commit 做审计与跨机兜底，MQTT 只做实时（可选）；
+   **契约/决策才进 `demand`**，不要把对话提交到 demand。
+   **只有 BA / Planner 能写消息**；Dev/QA/Deploy/Explore 等子 agent 一律通过自己的 BA 转达。
    发消息必须声明 `expect`（none/ack/reply）；需要反馈的用 `msg_pending` 跟踪，禁止原地干等。
    **欠回复会挡住新认领**（exit 4）和 `agent exit`（exit 3），先 `msg_reply` / `msg_ack` 结清。
    消息里的路径一律用**仓库相对路径**（`BA/contracts/...`），禁止本机绝对路径。
@@ -256,8 +259,10 @@ MCP 侧对应 `schema {}`。需要自己写 watchdog / 轮询前，先确认 `aw
 | `aw.py upgrade` | 旧项目升级检查（只读）：补什么/清什么/改什么 | 0 无需动作，1 有待处理 |
 | `aw.py doctor` | 一页巡检：workspace/拓扑/认领/队列/契约/模式 | 0 正常，1 有 FAIL |
 | `aw.py stats [--json]` | 运营指标：WIP、队列年龄、ack 中位数、每 REQ 提问数 | 0 |
-| `aw.py watch [--ensure] [--status] [--stop] [--wake-dir]` | bus 监听；`--ensure` 首个 agent 后台起；`--status` 查心跳 | 0 / 3 |
+| `aw.py watch [--ensure] [--status] [--stop] [--wake-dir]` | 消息监听（MQTT 实时 + bus 兜底）；`--ensure` 首个 agent 后台起；`--status` 查心跳 | 0 / 3 |
 | `aw.py msg watch` | 单 agent 收件箱监听；`--once` 有消息 0、无消息 3 | 0 / 3 |
+| `aw.py transport status/set/test` | 消息通道：mode / bus / MQTT / project_id | 0 / 1 / 3 |
+| `aw.py agent presence` | 本地 session + MQTT presence 缓存 | 0 |
 | `aw.py schema` | 机器可读工具清单（MCP + CLI），避免读源码 | 0 |
 | `aw.py hook install` | 安装 pre-push 校验（每个 clone 一次） | 0 |
 | `aw.py msg doctor` | 扫描 bus 历史：无头 / 缺 expect / 超长 / 绝对路径 | 0 干净，1 有问题 |
@@ -302,7 +307,8 @@ Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输�
 | `references/global/state-machine.md` | 状态机、单一写入者、门禁 |
 | `references/global/concurrency.md` | 多 BA：身份、WIP=1 认领、锁、doctor |
 | `references/global/platform-notes.md` | Windows / macOS / Linux / WSL 差异 |
-| `references/global/messaging.md` | BA 间消息：bus 分支、格式、寻址、ack |
+| `references/global/messaging.md` | BA 间消息：本地 inbox + bus + MQTT、格式、寻址、ack |
+| `references/global/transport.md` | 消息通道配置：auto/mqtt/bus/local、project_id、presence |
 | `references/global/mcp.md` | MCP stdio 适配层：配置、工具、返回格式 |
 | `references/global/contracts.md` | 契约版本、消费方 pin、检查规则 |
 | `references/global/identity.md` | agent 名称的优先级、强制人工指定 |

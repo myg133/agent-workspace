@@ -288,6 +288,7 @@ MCP `agent_whoami` 返回的是**进程/配置身份**，不是会话身份：
 | `msg_wait` | 阻塞等新消息（≤120 秒，默认不消费） |
 | `contract_check` | 契约门禁 |
 | `verify` / `audit` / `doctor` / `stats` | 自检与指标 |
+| `agent_presence` / `transport_status` | 在线状态、消息通道（只读） |
 | `queue_add` / `queue_list` / `queue_sync` | 队列 |
 
 参数与 CLI 一一对应；schema 里有枚举与必填项，agent 不需要读源码。
@@ -323,6 +324,8 @@ agent 运行时不要 shell 调 `aw.py`；用同名工具。参数名基本一�
 | `aw.py agent whoami` | `agent_whoami` | |
 | `aw.py agent check` | `agent_check` | |
 | `aw.py agent roster` | `agent_roster` | |
+| `aw.py agent presence` | `agent_presence` | 本地 session + MQTT 缓存 |
+| `aw.py transport status` | `transport_status` | 只读；配置用 CLI `transport set` |
 | `aw.py agent register` | `agent_register` | |
 | `aw.py agent activate/deactivate` | `agent_activate` / `agent_deactivate` | |
 | `aw.py agent publish` | `agent_publish` | |

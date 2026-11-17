@@ -97,6 +97,22 @@ aw.py watch --ensure --interval 5 --wake-dir .aw/wake
 - 不想让 MCP 发通知：`AW_MCP_NOTIFY=0` 或 `--no-notify`；
 - 宿主是否把通知变成一轮对话由客户端决定；不支持时用 `msg_inbox` / `msg_wait`。
 
+### Q8 要不要 MQTT 实时？
+
+**默认不需要**：没有 `mqtt.host` 时 `auto` 就是 bus 轮询，行为和旧版本一致。
+团队跨机、希望"消息秒到"再配：
+
+```bash
+aw.py transport status
+aw.py transport set --mqtt-host 192.168.1.10 --mqtt-port 1883 --no-mqtt-tls
+aw.py transport test
+aw.py watch --ensure --interval 5 --wake-dir .aw/wake   # 重启 watcher 才会订阅
+```
+
+- MQTT 只是实时层；bus 仍是审计事实，断线自动退回轮询；
+- 密码放 `AW_MQTT_PASSWORD`，不要写进配置；
+- 详见 [transport.md](../global/transport.md)。
+
 ## 2. 推荐流程
 
 ### 新项目（solo、本地）
