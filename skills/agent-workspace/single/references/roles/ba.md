@@ -28,6 +28,16 @@
 5. `aw_single.py claim next`；
 6. 把 worktree 路径、docs 路径、base sha 交给 Dev。
 
+## 3.1 子 agent 环境
+
+spawn Dev/QA 时不要让它继承父会话的唤醒身份：
+
+- 推荐给子 agent 独立 `AW_AGENT_ID`（如 `ba-2-qa`）；
+- 或至少设置 `AW_WAKE_DISABLE=1`；
+- 子 agent 不改 docs/status/claim，只读任务输入。
+
+否则子 agent 会继承父 agent 的 `AW_AGENT_ID`，可能收到发给父会话的 wake。
+
 ## 4. 派 Dev
 
 briefing 必须自包含：

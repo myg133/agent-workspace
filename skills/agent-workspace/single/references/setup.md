@@ -39,6 +39,7 @@ python scripts/aw_single.py init \
 | `AW_SINGLE_ROOT` | 否 | 本地根目录；omp 插件默认从 cwd 向上找 `.aw/config.json` |
 | `AW_ROLE` | 否 | `ba` / `planner` / `dev` / `qa`，写入 session 和 presence |
 | `AW_MQTT_PASSWORD` | 否 | MQTT 密码；配置中的 `password_env` 默认指向它 |
+| `AW_WAKE_DISABLE` | 否 | 设为 `1` 时插件不唤醒；子 agent 推荐设置 |
 | `AW_OMP_WAKE_LOG` | 否 | omp 插件日志路径覆盖 |
 
 不要把密码写进 `.aw/config.json`。

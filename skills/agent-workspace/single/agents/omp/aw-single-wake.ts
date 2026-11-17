@@ -46,6 +46,30 @@ export default function (pi) {
   const seen = new Set()
   let lastWakeAt = 0
 
+  function pidAlive(pid) {
+    if (!pid || pid <= 0) return false
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch (error) {
+      return error?.code === 'EPERM'
+    }
+  }
+
+  if (['1', 'true', 'yes'].includes(String(process.env.AW_WAKE_DISABLE || '').toLowerCase())) {
+    note('disabled AW_WAKE_DISABLE=1 agent=' + agent)
+    return
+  }
+
+  // 一个 agent 只能有一个主进程持有唤醒权；子 agent 继承 AW_AGENT_ID 时
+  // 不能抢走父会话的 wake。
+  const existing = readJson(sessionPath)
+  if (existing && Number(existing.pid) > 0 && Number(existing.pid) !== process.pid &&
+      pidAlive(Number(existing.pid))) {
+    note('wake-disabled not-owner agent=' + agent + ' owner=' + existing.pid + ' me=' + process.pid)
+    return
+  }
+
   function writeSession(pid) {
     try {
       mkdirSync(dirname(sessionPath), { recursive: true })

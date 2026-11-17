@@ -80,7 +80,33 @@ aw_single.py presence --json
 
 `status` 为 `online` / `offline`。MQTT presence 发布由 watcher 负责，后续接入。
 
-## 5. 不要重复唤醒
+## 5. 子 agent 与唤醒所有权
+
+一个 agent 只能有一个主进程持有唤醒权。
+
+插件加载时会读 `.aw/sessions/<agent>.json`：
+
+- 如果里面的 `pid` 还活着，且不是当前进程 → 判定自己是子进程/重复会话；
+- 直接关闭唤醒，日志写：
+  `wake-disabled not-owner agent=ba-2 owner=<pid> me=<pid>`；
+- 不会覆盖父会话的 session。
+
+因此 BA spawn 的 QA/Dev 即使继承了 `AW_AGENT_ID=ba-2`，也不会再收到发给 ba-2 的 wake。
+
+更稳妥的做法是 spawn 时设置：
+
+```text
+AW_WAKE_DISABLE=1
+```
+
+或者给子 agent 独立身份：
+
+```text
+AW_AGENT_ID=ba-2-qa
+AW_ROLE=qa
+```
+
+## 6. 不要重复唤醒
 
 - 用插件时，不要再给 `watch` 加 `--exec`；
 - 同一 agent 只装一个 wake 插件；
