@@ -2,14 +2,34 @@
 name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
-  short-description: Git worktree 多 Agent 协作工作区
-  version: 1.46.1
+  short-description: Git worktree / 单仓双模式多 Agent 协作
+  version: 1.47.0
 ---
 
 # Agent Workspace
 
 一套"用 Git 当状态层"的多 Agent 开发工作流：**一个需求 = 一个 worktree = 一个容器**，
 Planner 定方向、BA 写需求、Dev 写代码、QA 只验证、Deploy 只管部署，所有状态落在 Git 里。
+
+## 两种项目形态
+
+### 1. workspace 模式（本目录主流程）
+
+适合大型、多需求并行项目：workspace 根 + `code/ BA/ Deploy/` 平铺 worktree，
+需求/状态在 `demand` 分支，消息在 `bus` 分支。
+
+入口：`scripts/aw.py`，文档在 `references/`。
+
+### 2. single 模式（传统单仓 + 独立文档仓）
+
+适合已有传统 `main/develop/feature/*` 仓库、文档在另一个仓库、单机/多机协作：
+
+- 不改造代码仓库；
+- `.aw/` 放本地根；
+- 本地消息 + Git bus v2 + 可选 MQTT；
+- 入口：`single/scripts/aw_single.py`，说明见 `single/README.md`。
+
+> 先判断项目形态，再选脚本；两种模式的 claim/worktree 语义不同，不要混用。
 
 ## 30 秒上手
 

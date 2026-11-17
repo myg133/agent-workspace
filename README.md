@@ -26,6 +26,16 @@
 
 衡量标准只有一个：**维护 worktree 的成本 < 上下文隔离带来的收益**。
 
+## 两种形态
+
+| 形态 | 适用 | 入口 |
+|------|------|------|
+| **workspace** | 多需求并行、需要 `code/ BA/ Deploy/` 和 `demand/bus` 分支 | `scripts/aw.py` |
+| **single** | 已有传统 `main/develop/feature/*` 仓库、文档在另一个仓库、单机/多机 | `single/scripts/aw_single.py` |
+
+single 模式不改造代码仓库，`.aw/` 放本地根，支持本地消息、bus v2、可选 MQTT。
+说明见 [single/README.md](skills/agent-workspace/single/README.md)。
+
 > 本仓库是**插件源码**，自身不套用该规范（普通 `main` + PR）。所以在仓库根跑
 > `aw.py verify` 会提示"不是 workspace 仓库"，属正常。
 

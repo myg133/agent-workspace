@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### 新增：single-repo 模式（单仓 + 独立文档仓）
+
+- 新增 `skills/agent-workspace/single/` 子树：
+  - `aw_single.py`：本地 claim、queue、feature worktree、本地消息、wake、presence；
+  - bus v2：代码仓库 orphan `bus` 分支，一条消息一个文件；
+  - MQTT transport：paho-mqtt 2.2.0 vendor，支持 presence / 自动降级 bus；
+  - DSH / omp 唤醒插件、setup 与环境变量说明。
+- 主 `SKILL.md` 增加两种形态路由：
+  - workspace：`scripts/aw.py`；
+  - single：`single/scripts/aw_single.py`。
+- CI 同时跑 workspace 与 single 测试。
+
 ### 新增：全局 `--repo`，一个 MCP 服务多个项目
 
 - `aw.py` 新增全局 `--repo`（也可写在子命令后）；不传时行为与原来完全一致；

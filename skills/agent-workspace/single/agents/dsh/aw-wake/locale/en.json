@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Agent Workspace wake-up",
+    "description": "Wakes an idle agent when the agent-workspace bus has messages that need action."
+  }
+}
