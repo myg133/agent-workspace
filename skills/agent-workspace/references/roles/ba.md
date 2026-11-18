@@ -78,7 +78,10 @@ audit {}
    acceptance.md（模板 acceptance.md.tpl，每条 AC 可测）
    status.md（模板 status.md.tpl）
    decisions.md（模板 decisions.md.tpl，BA 自决记录）
-5. 派 QA 生成测试用例 → 写入 test-cases/（由 BA 提交）
+5. 派 QA 生成**风险用例** → 写入 test-cases/（由 BA 提交）：
+   - 每个 AC 最多 1 条主路径 + 必要边界；
+   - 低风险 AC 标“手工验证 / 暂不自动化”，写清理由；
+   - 总预算见 [testing.md](../global/testing.md)。
 6. 状态推到 已就绪，commit+push
 ```
 
@@ -155,13 +158,14 @@ msg_reply {"id": "<id>", "body": "..."}
 需求：REQ-001 <名称>
 工作区：<repo-root>/feature-REQ-001（分支 feature/REQ-001，基于 develop@<sha>）
 需求文档：<repo-root>/BA/demands/REQ-001-login/{demand,acceptance,design-summary}.md
-测试用例：<repo-root>/BA/demands/REQ-001-login/test-cases/
+风险用例：<repo-root>/BA/demands/REQ-001-login/test-cases/
+测试预算：新增 ≤3；默认只跑 fast / related；full 不跑（交 QA/CI）
 约束：只改本 worktree；不 merge；不引入新依赖；完成后回报，不改 status.md
 ```
 
 派单前若对代码现状不熟 → 先派 Explore，把 `path:line` 证据附进 briefing。
 
-同时并行：QA 生成测试用例、Dev 开工（两者可同时进行，QA 的用例作为 Dev 的输入补丁）。
+同时并行：QA 生成风险用例、Dev 开工（两者可同时进行，QA 的用例作为 Dev 的输入补丁）。
 
 > **Dev 是无状态执行者**：BA 持有 claim 和 worktree；Dev 完成 handoff 后退出，
 > 不等待 QA/CI。不要把"Dev 进程还在"当作状态；状态只在 claim、`status.md` 和

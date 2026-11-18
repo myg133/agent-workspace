@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作（workspace 模式）
-  version: 1.48.0
+  version: 1.49.0
 ---
 
 # Agent Workspace
@@ -119,6 +119,9 @@ python <skill-path>/scripts/aw.py audit
     合并前 `aw.py contract check` 必须通过。
 14. `develop` 只通过 PR 合并；`main` 只从 `release` 合并。
 15. 命令铁律：`git checkout --orphan` 之后用 `git reset`，**绝不用 `git rm -rf .`**（会删工作区文件）。
+16. **测试按风险测，不按覆盖率测**：每个任务新增测试 ≤3；Bug 修复 1 条回归；重构 0 条；
+    Dev 默认只跑 fast / related，full 交给 QA / CI；停止条件与预算见
+    `references/global/testing.md`。
 
 ## 我该读什么
 
@@ -126,10 +129,10 @@ python <skill-path>/scripts/aw.py audit
 |------|------|------|------|
 | **Planner** | 主 | `references/roles/planner.md` | `global/state-machine.md`、`global/messaging.md` |
 | **单人 / 单 BA** | 主 | `references/roles/planner.md` §0.2 | 无需 Planner，BA 可代行规划 |
-| **BA** | 主 | `references/roles/ba.md` | `global/concurrency.md`、`global/state-machine.md` |
+| **BA** | 主 | `references/roles/ba.md` | `global/concurrency.md`、`global/state-machine.md`、`global/testing.md` |
 | **Guide** | 主 | `references/roles/guide.md` | `global/messaging.md`（只读） |
-| **Dev** | 子 | `references/roles/dev.md` | `global/paths.md` |
-| **QA** | 子 | `references/roles/qa.md` | `global/state-machine.md`（写入权） |
+| **Dev** | 子 | `references/roles/dev.md` | `global/paths.md`、`global/testing.md` |
+| **QA** | 子 | `references/roles/qa.md` | `global/testing.md`、`global/state-machine.md`（写入权） |
 | **Deploy** | 子 | `references/roles/deploy.md` | `lifecycle/release.md` |
 | **Explore** | 子 | `references/roles/explore.md` | `global/paths.md` |
 | 第一次接入 / 初始化 | `references/init/onboarding.md` | `aw.py onboard` |
@@ -307,6 +310,7 @@ Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输�
 | `references/global/state-machine.md` | 状态机、单一写入者、门禁 |
 | `references/global/concurrency.md` | 多 BA：身份、WIP=1 认领、锁、doctor |
 | `references/global/platform-notes.md` | Windows / macOS / Linux / WSL 差异 |
+| `references/global/testing.md` | 测试克制：预算、选层、停止条件、三档执行、测试审计 |
 | `references/global/messaging.md` | BA 间消息：本地 inbox + bus + MQTT、格式、寻址、ack |
 | `references/global/transport.md` | 消息通道配置：auto/mqtt/bus/local、project_id、presence |
 | `references/global/mcp.md` | MCP stdio 适配层：配置、工具、返回格式 |

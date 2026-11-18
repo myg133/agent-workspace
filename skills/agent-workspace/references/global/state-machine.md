@@ -62,7 +62,7 @@ git push origin demand      # 失败 → pull --rebase → 重试（≤3 次）
 
 | 门禁 | 条件 | 不满足时 |
 |------|------|---------|
-| 可以开工（`已就绪 → 进行中`） | `demand.md` + `acceptance.md` 非空，测试用例已生成 | 退回 `已评审` |
+| 可以开工（`已就绪 → 进行中`） | `demand.md` + `acceptance.md` 非空，风险用例已生成（见 `testing.md`） | 退回 `已评审` |
 | 可以送审（`进行中 → 待验证`） | Dev 自验通过，`feature-meta/verification-report.md` 存在 | 留在 `进行中` |
 | 可以开 PR（`待验证 → 已验证`） | QA Pre-merge 报告结论为通过 | 置 `已退回` |
 | 可以合并 | `已验证` + CI 绿 | 阻塞 |

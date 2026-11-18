@@ -45,7 +45,9 @@ ls  <repo-root>/BA/demands/REQ-001-*/test-cases/
 
 ## 3. Step 2 实现
 
-- 先写测试再写实现（TDD），测试至少覆盖 QA 用例里的边界项。
+- 先按 [testing.md](../global/testing.md) 做风险判断：这次最可能坏什么、现有测试能否覆盖。
+- 只为**改动面 + 可能回归的边界**写 1–3 条测试；不追求每条 AC 都自动化。
+- 核心算法、并发、权限、Bug 回归可先写测试；CRUD / 配置 / UI 不强制 TDD。
 - 小步提交，信息带需求号：`[Dev] 实现邮箱校验 (关联: REQ-001)`。
 - 更新 `CHANGELOG.md` 的 Unreleased 段。
 - 中间产物（调试脚本、实验代码、笔记）放 `.local/`，不要提交。
@@ -55,12 +57,12 @@ ls  <repo-root>/BA/demands/REQ-001-*/test-cases/
 以下项目必须在**本进程退出前**通过：
 
 ```text
-1. 追溯性矩阵：每条 AC → 代码位置 → 测试位置 → PASS/FAIL
+1. 追溯性矩阵：每条 AC → 代码位置 → 测试位置 / 手工验证 / 未验证
    写入 feature-meta/traceability.md
-2. 单元测试全绿（不依赖数据库/外部服务）
+2. fast lane 单测全绿；related 测试通过（详见 testing.md 的三档执行）
 3. Lint 通过；无 TODO/FIXME；无 console.log/debugger
 4. 无硬编码密钥；新增依赖已获批准
-5. 覆盖率：整体 ≥ 80%，关键模块 ≥ 90%
+5. 测试预算：新增测试 ≤3；未跑 full / 集成项写明命令、原因和状态
 6. 写入 feature-meta/verification-report.md（含 Handoff 段）
 ```
 
@@ -82,7 +84,8 @@ ls  <repo-root>/BA/demands/REQ-001-*/test-cases/
 REQ-001 开发完成
 - 分支: feature/REQ-001 @ <sha>
 - 改动: N 文件 / +X -Y 行
-- 快速门禁: 单测 42/42，lint PASS，覆盖率 87%
+- 快速门禁: fast 12/12，related 3/3，lint PASS
+- 测试预算: 新增 2 条（上限 3）；full 未跑（CI）
 - 异步验证: 集成 0/8（待 QA/CI），E2E 未跑
 - 偏离: 需求未提及但必要的改动（列清单，没有就写"无"）
 - 风险: 已知边界问题
@@ -131,3 +134,6 @@ git push origin --delete feature/REQ-001
 - 圈复杂度 ≤ 10，认知复杂度 ≤ 15。
 - 不提交 secrets / 大二进制。
 - 改不动就问，不要扩大 scope。
+- **不默认跑全量测试**；fast / related 通过即停，full 交给 QA/CI。
+- **不修与本次 diff 无关的失败**；记录 `pre-existing` 后继续。
+- 测试预算与停止条件见 [testing.md](../global/testing.md)。

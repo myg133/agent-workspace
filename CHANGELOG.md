@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### 新增：测试克制规范（按风险测，不按覆盖率测）
+
+- 新增 `references/global/testing.md`：测试预算、选层、停止条件、失败分诊、三档执行、测试审计与度量；
+- Dev：默认只跑 fast / related，不默认跑 full；每任务新增测试 ≤3；Bug 修复 1 条回归；重构 0 条；
+- QA：full 只在 merge 前跑一次；新增测试审计（慢/重复/实现耦合/flaky），不替 Dev 补测试；
+- BA：验收标准增加风险、验证层级、是否自动化、最便宜的验证；
+- 更新 `roles/dev.md`、`roles/qa.md`、`roles/ba.md`、`acceptance.md.tpl`、`verification-report.md.tpl`；
+- 删除“整体覆盖率 ≥80% / 关键模块 ≥90%”这类 agent 目标，改用变更行覆盖或风险覆盖。
+
 ### 新增：workspace 模式接入消息通道（本地 inbox + bus + MQTT）
 
 - `msg send` 先写 `.aw/inbox/<agent>/<id>.json`，再 publish MQTT（可选），最后写 bus 审计；
