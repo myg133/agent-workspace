@@ -6,6 +6,18 @@
 > CLI 等价命令见 `references/global/mcp.md`；agent 不要 shell 调 `aw.py`。
 > 例外：`bootstrap` / `token` 是人类的运维动作，只能 CLI。
 
+## 0.0 会话预算
+
+Planner 最容易变成"开一整天"的会话：读 roadmap、刷 backlog、等消息、顺手改 status。
+
+- 规划会话默认 **≤60 轮 / 8 万上下文**；到阈值先写 handoff，再开新会话；
+- 只读计划、队列、ADR、必要的需求摘要，不要每次扫全仓库；
+- 例行巡检 / 状态同步用低成本模型；只有跨需求取舍、架构决策才用强模型；
+- 一个会话只解决一个规划问题（排优先级 / 定范围 / 解冲突），不要边规划边实现；
+- 没有新决策就结束，不要"挂着等消息"。
+
+完整预算见 [session-budget.md](../global/session-budget.md)。
+
 ## 0. 启用（含第一个 Planner）
 
 Planner 不是常驻服务，就是一个以 `planner` 角色启动的 agent。

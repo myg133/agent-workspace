@@ -137,3 +137,6 @@ git push origin --delete feature/REQ-001
 - **不默认跑全量测试**；fast / related 通过即停，full 交给 QA/CI。
 - **不修与本次 diff 无关的失败**；记录 `pre-existing` 后继续。
 - 测试预算与停止条件见 [testing.md](../global/testing.md)。
+- 单会话默认 ≤60 轮 / 8 万上下文；到阈值写 handoff 并退出，不要开一整天。
+- 只读任务卡列出的文件；不要开头就扫全仓库。
+- 会话与子 Agent 预算见 [session-budget.md](../global/session-budget.md)。

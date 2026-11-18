@@ -17,6 +17,7 @@
 | 干了什么没人知道 | 提交信息带需求号与 session，`git log` 就是审计日志 |
 | 跨机协作靠人喊 | 本地 inbox + `bus` 审计 + 可选 MQTT 实时；断线自动退回轮询 |
 | Agent 为覆盖率写一堆测试 | 测试预算 + fast/related/full 分层；默认不跑全量，按风险测 |
+| 多 Agent 只开会、不产出 | 会话轮数/上下文/子 Agent 预算 + 模型路由；无 diff 不 spawn |
 
 ## 适用范围
 

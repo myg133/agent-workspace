@@ -160,6 +160,8 @@ msg_reply {"id": "<id>", "body": "..."}
 需求文档：<repo-root>/BA/demands/REQ-001-login/{demand,acceptance,design-summary}.md
 风险用例：<repo-root>/BA/demands/REQ-001-login/test-cases/
 测试预算：新增 ≤3；默认只跑 fast / related；full 不跑（交 QA/CI）
+会话任务卡：按 assets/templates/session-card.md.tpl 填预算/允许读/退出条件
+子 Agent：最多 2 个；没有 diff 预期的任务不 spawn
 约束：只改本 worktree；不 merge；不引入新依赖；完成后回报，不改 status.md
 ```
 

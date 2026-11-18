@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### 新增：会话与子 Agent 预算（工具无关）
+
+- 新增 `references/global/session-budget.md`：会话轮数 / 上下文 / 子 Agent / 模型路由 / 停止条件 / 度量；
+- 主会话默认 ≤60 轮 / 8 万上下文，硬上限 100 轮 / 10 万；到阈值 handoff 换新会话；
+- 每个 REQ 最多 2–3 个子 Agent；没有 diff 预期的任务不 spawn；
+- 探索 / 文档 / status 使用低成本模型，复杂实现 / 关键 review 才用强模型；
+- 新增 `assets/templates/session-card.md.tpl`，BA/Planner 派单时附会话任务卡；
+- 更新 `SKILL.md`、Planner/BA/Dev/QA 角色文档与 testing.md 交叉引用。
+
 ### 新增：测试克制规范（按风险测，不按覆盖率测）
 
 - 新增 `references/global/testing.md`：测试预算、选层、停止条件、失败分诊、三档执行、测试审计与度量；
