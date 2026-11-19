@@ -64,6 +64,18 @@
 - 不要轮询、不要等待子 Agent 完成后再开一轮"看看"；
 - 子 Agent 的结果由父会话在下一轮统一消费。
 
+### 3.4 换班用 handoff / resume
+
+常驻 BA / Planner 换班时不要新建 agent_id，也不要直接删 session：
+
+~~~text
+旧会话: agent handoff -> 停进程
+新会话: 同一 AW_AGENT_ID -> agent whoami -> agent resume
+~~~
+
+handoff 会记录未读/待回复消息、claim、下一步，保留 claim，不推进已读。
+完整协议与状态边界见 [handoff.md](handoff.md)。
+
 ## 4. 会话任务卡
 
 每次开新会话（或 spawn 子 Agent）先填这张卡：

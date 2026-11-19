@@ -1314,6 +1314,55 @@ class WorkspaceCase(unittest.TestCase):
                                agent="ba-test").stdout)
         self.assertEqual(inbox["count"], 1)
 
+    def test_agent_handoff_and_resume(self):
+        sent = run(["msg", "send", "--to", "ba-test", "--type", "question",
+                    "--body", "handoff-test"], self.repo, agent="ba-2")
+        self.assertEqual(sent.returncode, 0, sent.stderr)
+        watched = run(["msg", "watch", "--once", "--json"], self.repo, agent="ba-test")
+        self.assertEqual(watched.returncode, 0, watched.stderr)
+        old = run(["agent", "handoff", "--note", "shift end",
+                   "--next-step", "answer the question", "--json"],
+                  self.repo, agent="ba-test")
+        self.assertEqual(old.returncode, 0, old.stderr)
+        data = json.loads(old.stdout)
+        self.assertEqual(data["agent_id"], "ba-test")
+        self.assertEqual(data["current_req"], "")
+        self.assertGreaterEqual(len(data["unresolved"]), 1)
+        self.assertTrue((self.repo / ".aw" / "handoff" / "ba-test.json").exists())
+        sess = json.loads((self.repo / ".aw" / "sessions" / "ba-test.json")
+                          .read_text(encoding="utf-8"))
+        self.assertEqual(sess.get("status"), "offline")
+        self.assertFalse((self.repo / ".aw" / "msg-notified" / "ba-test.json").exists())
+        self.assertFalse((self.repo / ".aw" / "msg-notified" / "ba-test.json").exists())
+
+        new = run(["agent", "resume", "--json"], self.repo, agent="ba-test",
+                  extra_env={"AW_SESSION_ID": "sess-ba-test-new"})
+        self.assertEqual(new.returncode, 0, new.stderr)
+        resumed = json.loads(new.stdout)
+        self.assertEqual(resumed["resumed_session_id"], "sess-ba-test-new")
+        self.assertTrue(resumed["unresolved"])
+        inbox = json.loads(run(["msg", "inbox", "--json"], self.repo,
+                               agent="ba-test").stdout)
+        self.assertEqual(inbox["count"], 1)
+        self.assertEqual(inbox["messages"][0]["body"], "handoff-test")
+
+    def test_agent_resume_without_handoff(self):
+        out = run(["agent", "resume", "--json"], self.repo, agent="ba-test")
+        self.assertEqual(out.returncode, 3)
+        self.assertIn("NO_HANDOFF", out.stdout)
+
+    def test_handoff_keeps_claim(self):
+        self.assertEqual(run(["queue", "add", "REQ-001"], self.repo,
+                             agent="ba-test").returncode, 0)
+        claimed = run(["claim", "next"], self.repo, agent="ba-test")
+        self.assertEqual(claimed.returncode, 0, claimed.stderr)
+        out = run(["agent", "handoff", "--json"], self.repo, agent="ba-test")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        data = json.loads(out.stdout)
+        self.assertEqual(data["current_req"], "REQ-001")
+        claims = run(["claim", "list"], self.repo, agent="ba-test")
+        self.assertIn("REQ-001", claims.stdout)
+
     def test_presence_local_session(self):
         run(["agent", "whoami"], self.repo, agent="ba-test")
         out = run(["agent", "presence", "--json"], self.repo, agent="ba-test")

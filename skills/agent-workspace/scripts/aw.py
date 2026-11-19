@@ -1708,6 +1708,146 @@ def _finish_claim(root: Path, req: str, ident: dict) -> int:
     return 0
 
 
+HANDOFF_VERSION = 1
+
+
+def _handoff_path(root: Path, agent_id: str) -> Path:
+    return aw_path(root, "handoff", "%s.json" % agent_id)
+
+
+def _handoff_message(meta: dict, status: str) -> dict:
+    fields = ("id", "from", "to", "cc", "at", "type", "expect", "subject",
+              "ref", "thread", "contract", "version", "deadline")
+    row = {k: meta.get(k) for k in fields if meta.get(k)}
+    row["status"] = status
+    return row
+
+
+def _claim_public(claim: dict | None) -> dict | None:
+    if not claim:
+        return None
+    return {k: v for k, v in claim.items() if k != "_path"}
+
+
+def _collect_handoff(root: Path, ident: dict, fetch: bool = True) -> dict:
+    """收集交接所需状态；只读，不推进已读。"""
+    messages = load_all_messages(root, ident["agent_id"], fetch=fetch)
+    mine = [m for m in messages if _is_mine(m, ident)]
+    read = _read_ids(root, ident["agent_id"], messages)
+    answered = {m.get("re") for m in messages if m.get("re")}
+    unread_ids = {m.get("id") for m in mine
+                  if m.get("id") and m["id"] not in read}
+    pending_ids = {
+        m.get("id") for m in mine
+        if m.get("id") and m.get("from") != ident["agent_id"]
+        and m.get("expect") in ("ack", "reply") and m["id"] not in answered
+    }
+    rows = []
+    for m in mine:
+        mid = m.get("id")
+        if not mid:
+            continue
+        flags = []
+        if mid in unread_ids:
+            flags.append("unread")
+        if mid in pending_ids:
+            flags.append("pending")
+        if flags:
+            rows.append(_handoff_message(m, "+".join(flags)))
+    rows.sort(key=lambda m: (m.get("at", ""), m.get("id", "")))
+
+    claims = [c for c in load_claims(root)
+              if c.get("agent_id") == ident["agent_id"]
+              and c.get("state") in CLAIM_STATES]
+    claim = claims[0] if claims else None
+    sess = read_json(aw_path(root, "sessions", "%s.json" % ident["agent_id"]), {})
+    return {
+        "version": HANDOFF_VERSION,
+        "agent_id": ident["agent_id"],
+        "from_session_id": ident["session_id"],
+        "created_at": _now(),
+        "cwd": str(Path.cwd()),
+        "claim": _claim_public(claim),
+        "current_req": (claim or {}).get("req", ""),
+        "unread_ids": sorted(x for x in unread_ids if x),
+        "pending_ids": sorted(x for x in pending_ids if x),
+        "unresolved": rows,
+        "session": sess,
+    }
+
+
+def _clear_notified(root: Path, agent_id: str) -> None:
+    """清掉唤醒去重状态，让新会话还能被未读消息叫醒。"""
+    path = _notify_state_path(root, agent_id)
+    if not path.exists():
+        return
+    with FileLock(aw_path(root, "locks", "msg-notified.lock"), timeout=30):
+        path.unlink(missing_ok=True)
+
+
+def _agent_handoff(root: Path, ident: dict, args) -> int:
+    data = _collect_handoff(root, ident, fetch=not getattr(args, "no_fetch", False))
+    data["reason"] = getattr(args, "note", "") or ""
+    data["next_step"] = getattr(args, "next_step", "") or ""
+    path = _handoff_path(root, ident["agent_id"])
+    write_json(path, data)
+
+    sess_path = aw_path(root, "sessions", "%s.json" % ident["agent_id"])
+    sess = read_json(sess_path, {})
+    if sess:
+        sess.update({"status": "offline", "ended_at": _now(), "handoff_at": _now()})
+        write_json(sess_path, sess)
+    _clear_notified(root, ident["agent_id"])
+
+    if getattr(args, "json", False):
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    else:
+        n_unread = len(data["unread_ids"])
+        n_pending = len(data["pending_ids"])
+        print("HANDOFF %s" % ident["agent_id"])
+        print("  file      : %s" % path)
+        print("  claim     : %s" % (data["current_req"] or "-"))
+        print("  unresolved: %d（unread %d / pending %d）"
+              % (len(data["unresolved"]), n_unread, n_pending))
+        print("  session   : %s -> offline" % ident["session_id"])
+        print("  next      : 停止本会话；新会话用同一个 AW_AGENT_ID 启动，然后 agent resume")
+    return 0
+
+
+def _agent_resume(root: Path, ident: dict, args) -> int:
+    path = _handoff_path(root, ident["agent_id"])
+    data = read_json(path, None)
+    if not isinstance(data, dict):
+        print("NO_HANDOFF %s（先运行 agent handoff）" % ident["agent_id"])
+        return 3
+    if data.get("agent_id") and data["agent_id"] != ident["agent_id"]:
+        print("HANDOFF_MISMATCH 文件属于 %s，当前是 %s"
+              % (data["agent_id"], ident["agent_id"]), file=sys.stderr)
+        return 3
+    data["resumed_at"] = _now()
+    data["resumed_session_id"] = ident["session_id"]
+    write_json(path, data)
+    _clear_notified(root, ident["agent_id"])
+
+    if getattr(args, "json", False):
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    else:
+        claim = data.get("claim") or {}
+        print("RESUMED %s" % ident["agent_id"])
+        print("  session   : %s" % ident["session_id"])
+        print("  claim     : %s" % (claim.get("req") or data.get("current_req") or "-"))
+        print("  unresolved: %d" % len(data.get("unresolved") or []))
+        if data.get("reason"):
+            print("  reason    : %s" % data["reason"])
+        if data.get("next_step"):
+            print("  next step : %s" % data["next_step"])
+        ids = [m.get("id") for m in (data.get("unresolved") or []) if m.get("id")]
+        if ids:
+            print("  messages  : %s" % ", ".join(ids[:10]))
+            print("  next      : msg show <id> / msg inbox（先别清空未处理消息）")
+    return 0
+
+
 def cmd_agent(args) -> int:
     root = repo_root()
     aw_init(root)
@@ -1948,6 +2088,12 @@ def cmd_agent(args) -> int:
         save_bindings(root, bindings)
         print("UNBOUND %s" % anchor)
         return 0
+
+    if action in ("handoff", "resume"):
+        ident = resolve_identity(root)
+        if action == "handoff":
+            return _agent_handoff(root, ident, args)
+        return _agent_resume(root, ident, args)
 
     if action == "whoami" and not getattr(args, "agent", None):
         session = (getattr(args, "session", None) or os.environ.get("AW_SESSION_ID") or "").strip()
@@ -4395,6 +4541,8 @@ CLI_ONLY = [
     {"name": "msg watch", "summary": "单 agent 收件箱监听（--once exit 0/3）", "audience": "agent"},
     {"name": "mcp", "summary": "检测 / 安装 MCP 配置", "audience": "human"},
     {"name": "agent bootstrap", "summary": "名册为空时抢占第一个 Planner", "audience": "human"},
+    {"name": "agent handoff", "summary": "换班：记录未读/claim，保留 claim", "audience": "agent"},
+    {"name": "agent resume", "summary": "新会话恢复 handoff，不消费消息", "audience": "agent"},
     {"name": "agent token", "summary": "轮换 agent 令牌", "audience": "human"},
     {"name": "schema", "summary": "输出本清单（机器可读）", "audience": "any"},
 ]
@@ -5059,7 +5207,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_agent.add_argument("action",
                          choices=["whoami", "check", "bind", "unbind", "register", "roster",
                                   "activate", "deactivate", "exit", "publish", "token",
-                                   "bootstrap", "presence"],
+                                   "bootstrap", "presence", "handoff", "resume"],
                          nargs="?", default="whoami")
     p_agent.add_argument("name", nargs="?", default="")
     p_agent.add_argument("--force", action="store_true", help="bind 强制改绑 / exit 强制退出")
@@ -5070,6 +5218,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_agent.add_argument("--message", default="", help="publish 的提交信息")
     p_agent.add_argument("--token", default="", help="register 时指定 token（启用校验）")
     p_agent.add_argument("--issue-token", action="store_true", help="register 时自动生成 token")
+    p_agent.add_argument("--note", default="", help="handoff 备注（换班原因 / 上下文）")
+    p_agent.add_argument("--next-step", default="", help="handoff 下一步")
+    p_agent.add_argument("--no-fetch", action="store_true", help="handoff 不 fetch bus")
     p_agent.set_defaults(func=cmd_agent)
 
     p_doctor = sub.add_parser("doctor", help="一页巡检：workspace/拓扑/认领/队列/契约")

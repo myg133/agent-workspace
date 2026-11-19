@@ -162,6 +162,7 @@ msg_reply {"id": "<id>", "body": "..."}
 测试预算：新增 ≤3；默认只跑 fast / related；full 不跑（交 QA/CI）
 会话任务卡：按 assets/templates/session-card.md.tpl 填预算/允许读/退出条件
 子 Agent：最多 2 个；没有 diff 预期的任务不 spawn
+换班：agent handoff 记录未处理消息；新会话同一 AW_AGENT_ID，agent resume
 约束：只改本 worktree；不 merge；不引入新依赖；完成后回报，不改 status.md
 ```
 

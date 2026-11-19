@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 新增：会话换班 handoff / resume（工具无关）
+
+- `aw.py agent handoff`：收集未读/待回复消息、claim、session，写 `.aw/handoff/<agent>.json`；
+  保留 claim、停止旧 session、清 `msg-notified`，不推进已读；
+- `aw.py agent resume`：同一 `AW_AGENT_ID` 的新会话读取 handoff，打印 claim/未处理消息/下一步；
+- 新增 `references/global/handoff.md`，说明 agent_id / session / inbox / claim 的状态边界与常见错误；
+- SKILL、Planner/BA 角色文档补充换班命令；版本 `1.51.0`。
+
 ### 新增：会话与子 Agent 预算（工具无关）
 
 - 新增 `references/global/session-budget.md`：会话轮数 / 上下文 / 子 Agent / 模型路由 / 停止条件 / 度量；

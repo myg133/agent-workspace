@@ -330,6 +330,7 @@ agent 运行时不要 shell 调 `aw.py`；用同名工具。参数名基本一�
 | `aw.py agent activate/deactivate` | `agent_activate` / `agent_deactivate` | |
 | `aw.py agent publish` | `agent_publish` | |
 | `aw.py agent exit` | `agent_exit` | |
+| `aw.py agent handoff/resume` | —（CLI only） | 换班要写 session map；MCP 不写 map |
 | `aw.py agent bind/unbind` | — | MCP 用 `agent_id` 参数，不需要绑定 |
 | `aw.py agent bootstrap` | — | 人类一次性操作，仅 CLI |
 | `aw.py agent token` | — | 人类运维，仅 CLI |
