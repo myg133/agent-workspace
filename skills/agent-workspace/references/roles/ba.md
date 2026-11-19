@@ -25,6 +25,19 @@ BA 只做**业务探索**：需求、验收、文档、接口、依赖、风险�
 
 规则见 [exploration.md](../global/exploration.md)。
 
+### 任务预检
+
+下派前先判断任务大小：
+
+- 1 个模块、≤5 个文件、1 组 AC → 可直接派；
+- 2–3 个模块 / 接口不清 → 先派 Explore；
+- 跨 3 个以上模块、DB + API + UI、迁移 + 契约 → **必须拆**；
+- 说不出“改哪些文件、怎么验证” → 不派 Dev，先 Explore。
+
+任务卡必须写：切片目标、预期文件、预期 diff、AC 子集、依赖、验证命令、预算、停止条件。
+
+规则见 [task-sizing.md](../global/task-sizing.md)。
+
 ## 1.1 注册自己（每个 agent 第一次启动）
 
 BA **自己注册**，不需要 Planner 代劳：
@@ -174,7 +187,8 @@ msg_reply {"id": "<id>", "body": "..."}
 会话任务卡：按 assets/templates/session-card.md.tpl 填预算/允许读/退出条件
 探索 owner：BA 只做业务探索；代码探索交 Explore/Dev
 Evidence：按 assets/templates/exploration-evidence.md.tpl 附已确认/待验证/不要重读
-子 Agent：最多 2 个；没有 diff 预期的任务不 spawn
+BA 预检：切片目标 / 预期文件 / 预期 diff / AC 子集 / 预算
+子 Agent：最多 2 个；没有 diff 预期的任务不 spawn；超过切片预算就拆
 换班：agent handoff 记录未处理消息；新会话同一 AW_AGENT_ID，agent resume
 约束：只改本 worktree；不 merge；不引入新依赖；完成后回报，不改 status.md
 ```

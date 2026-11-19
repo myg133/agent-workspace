@@ -147,7 +147,8 @@ REQ / 任务：
 - 同一个文件不要反复全量读；需要时读 diff 或指定行；
 - 到 8 万上下文先压缩 / 交接，不要等到 30 万；
 - 一个会话只围绕一个主题，避免多任务交叉污染；
-- 探索分工与 evidence 交接见 [exploration.md](exploration.md)，不要 BA 和子 Agent 重复探索。
+- 探索分工与 evidence 交接见 [exploration.md](exploration.md)，不要 BA 和子 Agent 重复探索；
+- 任务预检与开工自检见 [task-sizing.md](task-sizing.md)，compaction 不是正常状态。
 
 ## 8. 什么时候停
 

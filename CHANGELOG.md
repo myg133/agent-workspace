@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 新增：任务预检与开工自检（工具无关）
+
+- 新增 `references/global/task-sizing.md`：BA 负责任务大小/切片/预算，子 Agent 只做开工自检；
+- 大任务信号：跨 3+ 模块、8+ 文件、DB+API+UI、说不出改哪些文件 → 先 Explore 或拆切片；
+- 子 Agent 自检：evidence 对 HEAD、入口存在、测试命令可执行；失败返回 `EVIDENCE_STALE` / `TASK_TOO_BIG`；
+- 预算：20/30–40 轮、6–8 万/10 万上下文、**第一次 compaction 就停**；
+- SKILL 新增硬规则 #20，BA/Dev/QA、session-card、session-budget 同步；版本 `1.53.0`。
+
 ### 新增：探索权唯一（工具无关）
 
 - 新增 `references/global/exploration.md`：BA 只做业务探索，Explore/Dev 是代码探索唯一 owner；

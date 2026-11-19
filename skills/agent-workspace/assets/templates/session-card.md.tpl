@@ -11,6 +11,8 @@
 - **模型策略**：探索 ___；实现 ___；验证 ___
 - **探索 owner**：BA / Explore / Dev
 - **已有 evidence**：路径 / 已确认项
+- **BA 预检**：切片 / 预期文件 / 预期 diff / AC 子集 / 依赖
+- **子 Agent 开工自检**：evidence / HEAD / entry / test command
 - **不要重读**：文件 / 目录
 - **退出条件**：diff / 报告 / 决策 / 阻塞
 - **交接**：文件 / commit / 下一会话
