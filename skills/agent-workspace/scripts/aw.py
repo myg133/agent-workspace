@@ -4516,14 +4516,30 @@ def _watch_loop_body(root: Path, state_path: Path, args) -> int:
             _stop_mqtt_bridge(root, cfg, client)
 
 def _watch_loop(root: Path, state_path: Path, args) -> int:
-    try:
-        return _watch_loop_body(root, state_path, args)
-    except Exception:
-        import traceback
+    import traceback
 
-        traceback.print_exc()
-        print("WATCH_FATAL watcher 异常退出（见 stderr / watch.err.log）", file=sys.stderr)
-        return 1
+    if getattr(args, "once", False):
+        try:
+            return _watch_loop_body(root, state_path, args)
+        except Exception:
+            traceback.print_exc()
+            print("WATCH_FATAL 单轮 watcher 异常退出（见 stderr / watch.err.log）",
+                  file=sys.stderr)
+            return 1
+
+    streak = 0
+    while True:
+        try:
+            return _watch_loop_body(root, state_path, args)
+        except KeyboardInterrupt:
+            return 0
+        except Exception as exc:
+            streak += 1
+            traceback.print_exc()
+            delay = min(60, 2 * streak)
+            print("WATCH_CYCLE_FAILED %s: %s；%ds 后重启"
+                  % (type(exc).__name__, exc, delay), file=sys.stderr)
+            time.sleep(delay)
 
 
 # ---------------------------------------------------------------- schema

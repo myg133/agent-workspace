@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 修复：watcher 因单次 git fetch 超时退出
+
+- `aw_single.py`：`git()` 捕获 `subprocess.TimeoutExpired`，转为 `ToolError`，不再让异常穿透；
+- `aw_single.py`：watcher 每轮包 `except Exception`，失败只记 warn + traceback，继续下一轮；
+- 心跳每轮必写，失败不会停止心跳；连续失败按 1/10/100 次限流日志；
+- `aw.py`：常驻 watcher 外层增加重启保护，单次异常不再直接退出；
+- 新增 `test_git_timeout_raises_tool_error`；single 全量 24 tests OK，workspace watch 测试 3 tests OK。
+
 ### 新增：任务预检与开工自检（工具无关）
 
 - 新增 `references/global/task-sizing.md`：BA 负责任务大小/切片/预算，子 Agent 只做开工自检；
