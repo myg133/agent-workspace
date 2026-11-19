@@ -19,6 +19,7 @@
 | Agent 为覆盖率写一堆测试 | 测试预算 + fast/related/full 分层；默认不跑全量，按风险测 |
 | 多 Agent 只开会、不产出 | 会话轮数/上下文/子 Agent 预算 + 模型路由；无 diff 不 spawn |
 | 常驻 BA 换班丢消息 | `agent handoff` / `agent resume` 复用 agent_id，保留 claim 和未处理消息 |
+| BA 和子 Agent 重复探索 | 探索权唯一：BA 只做业务探索，Explore/Dev 是代码探索 owner；任务卡带 evidence |
 
 ## 适用范围
 

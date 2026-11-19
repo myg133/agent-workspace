@@ -14,6 +14,17 @@
 | 派单对象 | Dev / QA / Deploy / Explore 子 Agent |
 | 状态权 | **独占** `status.md` |
 
+## 1.0 探索权
+
+BA 只做**业务探索**：需求、验收、文档、接口、依赖、风险。
+
+- 不深读实现、不画完整调用链；需要实现级理解就派 Explore/Dev；
+- 如果为了写验收必须读代码，只读到“够用”，并把结论写成 evidence；
+- 一个任务里不要出现“BA 深读一遍 + 子 Agent 再读一遍”；
+- 派单时把 evidence 和“不要重读”的文件写进任务卡。
+
+规则见 [exploration.md](../global/exploration.md)。
+
 ## 1.1 注册自己（每个 agent 第一次启动）
 
 BA **自己注册**，不需要 Planner 代劳：
@@ -161,6 +172,8 @@ msg_reply {"id": "<id>", "body": "..."}
 风险用例：<repo-root>/BA/demands/REQ-001-login/test-cases/
 测试预算：新增 ≤3；默认只跑 fast / related；full 不跑（交 QA/CI）
 会话任务卡：按 assets/templates/session-card.md.tpl 填预算/允许读/退出条件
+探索 owner：BA 只做业务探索；代码探索交 Explore/Dev
+Evidence：按 assets/templates/exploration-evidence.md.tpl 附已确认/待验证/不要重读
 子 Agent：最多 2 个；没有 diff 预期的任务不 spawn
 换班：agent handoff 记录未处理消息；新会话同一 AW_AGENT_ID，agent resume
 约束：只改本 worktree；不 merge；不引入新依赖；完成后回报，不改 status.md

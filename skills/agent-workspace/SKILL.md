@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作（workspace 模式）
-  version: 1.51.0
+  version: 1.52.0
 ---
 
 # Agent Workspace
@@ -129,6 +129,9 @@ python <skill-path>/scripts/aw.py audit
 18. **换班不换 agent_id**：用 `agent handoff` 记录未处理消息、claim 和下一步；
     新会话用同一个 `AW_AGENT_ID` 启动后 `agent resume`。不要新建 agent_id，
     不要用 `agent exit --force` 处理未结束的 claim。详见 `references/global/handoff.md`。
+19. **探索权唯一**：BA 只做业务/文档/接口探索；代码探索由 Explore/Dev 唯一 owner。
+    Fresh 子 Agent 默认零上下文，任务卡必须带 evidence 和“不要重读”清单；
+    不允许 BA 深读一遍、子 Agent 再重读一遍。详见 `references/global/exploration.md`。
 
 ## 我该读什么
 
@@ -136,12 +139,12 @@ python <skill-path>/scripts/aw.py audit
 |------|------|------|------|
 | **Planner** | 主 | `references/roles/planner.md` | `global/state-machine.md`、`global/messaging.md`、`global/session-budget.md`、`global/handoff.md` |
 | **单人 / 单 BA** | 主 | `references/roles/planner.md` §0.2 | 无需 Planner，BA 可代行规划 |
-| **BA** | 主 | `references/roles/ba.md` | `global/concurrency.md`、`global/state-machine.md`、`global/testing.md`、`global/session-budget.md`、`global/handoff.md` |
+| **BA** | 主 | `references/roles/ba.md` | `global/concurrency.md`、`global/state-machine.md`、`global/testing.md`、`global/session-budget.md`、`global/handoff.md`、`global/exploration.md` |
 | **Guide** | 主 | `references/roles/guide.md` | `global/messaging.md`（只读） |
-| **Dev** | 子 | `references/roles/dev.md` | `global/paths.md`、`global/testing.md`、`global/session-budget.md` |
-| **QA** | 子 | `references/roles/qa.md` | `global/testing.md`、`global/session-budget.md`、`global/state-machine.md`（写入权） |
+| **Dev** | 子 | `references/roles/dev.md` | `global/paths.md`、`global/testing.md`、`global/session-budget.md`、`global/exploration.md` |
+| **QA** | 子 | `references/roles/qa.md` | `global/testing.md`、`global/session-budget.md`、`global/exploration.md`、`global/state-machine.md`（写入权） |
 | **Deploy** | 子 | `references/roles/deploy.md` | `lifecycle/release.md` |
-| **Explore** | 子 | `references/roles/explore.md` | `global/paths.md` |
+| **Explore** | 子 | `references/roles/explore.md` | `global/paths.md`、`global/exploration.md` |
 | 第一次接入 / 初始化 | `references/init/onboarding.md` | `aw.py onboard` |
 | 初始化项目 | `references/init/new-project.md` | `global/layout.md` |
 | 迁移仓库 | `references/init/migrate-project.md` | — |
@@ -319,6 +322,7 @@ Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输�
 | `references/global/platform-notes.md` | Windows / macOS / Linux / WSL 差异 |
 | `references/global/testing.md` | 测试克制：预算、选层、停止条件、三档执行、测试审计 |
 | `references/global/session-budget.md` | 会话与子 Agent 预算：轮数、上下文、模型路由、子 Agent 门槛 |
+| `references/global/exploration.md` | 探索权唯一：BA/Explore/Dev 分工、evidence 包、fresh 子 Agent 契约 |
 | `references/global/handoff.md` | 换班协议：`agent handoff` / `agent resume`、状态边界、常见错误 |
 | `references/global/messaging.md` | BA 间消息：本地 inbox + bus + MQTT、格式、寻址、ack |
 | `references/global/transport.md` | 消息通道配置：auto/mqtt/bus/local、project_id、presence |

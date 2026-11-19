@@ -45,6 +45,9 @@ ls  <repo-root>/BA/demands/REQ-001-*/test-cases/
 
 ## 3. Step 2 实现
 
+- 先读任务卡的 evidence（已确认 / 待验证 / 不要重读）；默认自己零上下文；
+- 不要因为“不熟悉”重扫全仓库；只验证待验证项和本次 diff 相关文件；
+- evidence 不足时先说明缺什么，再扩大读取；不要静默重读；
 - 先按 [testing.md](../global/testing.md) 做风险判断：这次最可能坏什么、现有测试能否覆盖。
 - 只为**改动面 + 可能回归的边界**写 1–3 条测试；不追求每条 AC 都自动化。
 - 核心算法、并发、权限、Bug 回归可先写测试；CRUD / 配置 / UI 不强制 TDD。
@@ -137,6 +140,7 @@ git push origin --delete feature/REQ-001
 - **不默认跑全量测试**；fast / related 通过即停，full 交给 QA/CI。
 - **不修与本次 diff 无关的失败**；记录 `pre-existing` 后继续。
 - 测试预算与停止条件见 [testing.md](../global/testing.md)。
+- 探索权与 evidence 规则见 [exploration.md](../global/exploration.md)。
 - 单会话默认 ≤60 轮 / 8 万上下文；到阈值写 handoff 并退出，不要开一整天。
 - 只读任务卡列出的文件；不要开头就扫全仓库。
 - 会话与子 Agent 预算见 [session-budget.md](../global/session-budget.md)。

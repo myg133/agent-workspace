@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 新增：探索权唯一（工具无关）
+
+- 新增 `references/global/exploration.md`：BA 只做业务探索，Explore/Dev 是代码探索唯一 owner；
+- Fresh 子 Agent 默认零上下文，任务卡必须带 evidence（已确认/待验证/不要重读）；
+- 不允许 BA 深读一遍、子 Agent 再重读一遍；QA 验证 diff/AC，不重新探索架构；
+- 新增 `assets/templates/exploration-evidence.md.tpl`，session-card 增加探索 owner/evidence/不要重读；
+- 更新 BA/Explore/Dev/QA 角色、SKILL、session-budget；版本 `1.52.0`。
+
 ### 新增：会话换班 handoff / resume（工具无关）
 
 - `aw.py agent handoff`：收集未读/待回复消息、claim、session，写 `.aw/handoff/<agent>.json`；

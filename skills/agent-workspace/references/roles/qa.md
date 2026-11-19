@@ -17,10 +17,11 @@
 1. 读 <repo-root>/BA/demands/REQ-xxx/{demand,acceptance}.md
 2. 读 test-cases/，核对关键 TC 是否有测试或手工验证证据；低风险 TC 允许不自动化
 3. 逐条 AC 追代码：AC → 实现 → 测试 / 手工验证 / 未验证
-4. 跑测试：先 related；full 只在 merge 前跑一次（见 [testing.md](../global/testing.md)）
-5. 代码审查清单（下表）
-6. 测试审计：慢、重复、实现耦合、flaky（只报告，不修）
-7. 出报告，交 BA
+4. 先读 evidence 和 diff；验证不是重新探索，只有高风险/证据冲突才扩大读取；
+5. 跑测试：先 related；full 只在 merge 前跑一次（见 [testing.md](../global/testing.md)）
+6. 代码审查清单（下表）
+7. 测试审计：慢、重复、实现耦合、flaky（只报告，不修）
+8. 出报告，交 BA
 ```
 
 ## 3. 审查清单
@@ -116,5 +117,6 @@ QA 不替 Dev 补测试，但要在报告里指出测试套件的成本：
 - **不替 Dev 补测试**；不因总覆盖率不足退回，除非关键 AC 完全没有任何验证。
 - **full 只在 merge 前跑一次**；无关失败标 `pre-existing`，不要求 Dev 修。
 - 测试预算与停止条件见 [testing.md](../global/testing.md)。
+- 验证不是重新探索：先读 evidence + diff；只有高风险/证据冲突才扩大读取。规则见 [exploration.md](../global/exploration.md)。
 - 验证会话默认 ≤30 轮 / 6 万上下文；只读 diff、AC、关键文件，不要重扫全仓库。
 - 会话与子 Agent 预算见 [session-budget.md](../global/session-budget.md)。
