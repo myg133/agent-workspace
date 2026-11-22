@@ -96,12 +96,61 @@
   .stat .v{font:800 clamp(30px,3.4vw,46px)/1 var(--mono); color:var(--ink); letter-spacing:-.02em}
   .stat .l{font-size:12.5px; color:var(--dim); letter-spacing:.12em; text-transform:uppercase; margin-top:8px}
 
+  /* interactive */
+  .poll{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .poll-opt{position:relative;display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;
+    border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:10px;padding:10px 13px;
+    text-align:left;color:var(--ink);cursor:pointer;overflow:hidden}
+  .poll-opt:hover{border-color:rgba(62,224,194,.42);background:rgba(62,224,194,.05)}
+  .poll-opt .k{font:700 11px/1 var(--mono);color:var(--cyan);z-index:2}
+  .poll-opt .tx{font-size:15.5px;color:#d7e1f7;z-index:2}
+  .poll-opt .cnt{font:700 12px/1 var(--mono);color:var(--muted);z-index:2}
+  .poll-opt .pbar{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(62,224,194,.12);z-index:1;transition:width .2s}
+  .poll-foot{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--dim);margin-top:6px}
+  .linkbtn{border:0;background:none;color:var(--cyan);font:600 12px/1 var(--mono);cursor:pointer;padding:4px}
+  .checklist{display:flex;flex-direction:column;gap:9px}
+  .check{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;
+    padding:10px 12px;background:rgba(255,255,255,.025);cursor:pointer}
+  .check:hover{border-color:rgba(255,184,107,.35)}
+  .check input{accent-color:var(--cyan);width:16px;height:16px;margin-top:3px;flex:none}
+  .check strong{display:block;font-size:15.5px;color:#e2e9f8}
+  .check small{display:block;font-size:12px;line-height:1.45;color:var(--dim);margin-top:2px}
+  .score{font:800 54px/1 var(--mono);color:var(--cyan);letter-spacing:-.04em;margin-top:8px}
+  .score span{font-size:20px;color:var(--dim);letter-spacing:0}
+  .calc{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+  .control{margin:14px 0}
+  .control .top{display:flex;justify-content:space-between;gap:12px;font:600 12px/1.3 var(--mono);color:var(--muted);margin-bottom:8px}
+  .control input[type=range]{width:100%;accent-color:var(--cyan);cursor:pointer}
+  .readout{background:#070d19;border:1px solid var(--line);border-radius:14px;padding:18px 20px;min-height:156px}
+  .readout .big{font:800 42px/1 var(--mono);letter-spacing:-.04em;color:var(--cyan)}
+  .readout .lab{font:600 10px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-top:8px}
+  .readout .sub{font-size:12px;line-height:1.6;color:var(--muted);margin-top:12px;border:0;padding:0;background:none;display:block}
+  .gauge{height:16px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin:16px 0 10px}
+  .gauge i{display:block;height:100%;width:42%;background:var(--cyan);transition:width .2s,background .2s}
+  .gauge-text{display:flex;justify-content:space-between;align-items:center;font:600 12px/1.4 var(--mono);color:var(--dim)}
+  .gauge-text b{font-size:18px;color:var(--ink)}
+  .timer{display:flex;align-items:baseline;gap:12px;margin:8px 0 14px;justify-content:center}
+  .timer .clock{font:800 64px/1 var(--mono);letter-spacing:-.06em;color:var(--ink)}
+  .timer .unit{font:600 11px/1 var(--mono);letter-spacing:.12em;color:var(--dim)}
+  .timer-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  .timer-btns button{border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:8px;padding:8px 12px;
+    font:600 12px/1 var(--mono);cursor:pointer;color:#c7d1e8}
+  .timer-btns button:hover{border-color:var(--cyan);color:var(--cyan)}
+  .anchor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+  .anchor{border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.025);padding:16px 18px}
+  .anchor .k{font:700 10px/1 var(--mono);letter-spacing:.14em;color:var(--violet);text-transform:uppercase}
+  .anchor h3{margin:8px 0 5px;font-size:19px}
+  .anchor p{font-size:13.5px;line-height:1.5;color:var(--muted)}
+  .anchor .q{margin-top:9px;font:600 11px/1.4 var(--mono);color:var(--amber)}
+  @media (max-width:900px){ .calc,.anchor-grid{grid-template-columns:1fr} }
+
   /* cover */
   .cover{justify-content:center}
   .cover .eyebrow{font:600 12px/1 var(--mono); letter-spacing:.3em; color:var(--cyan); margin-bottom:28px}
   .cover h1{font-size:clamp(46px,6.4vw,88px)}
   .cover h1 span{color:var(--cyan)}
-  .cover .sub{margin-top:26px; font-size:clamp(17px,1.5vw,22px); color:var(--muted); max-width:820px; line-height:1.7}
+  .cover .sub{margin-top:26px; font-size:clamp(17px,1.5vw,22px); color:var(--muted); max-width:820px; line-height:1.7;
+    border:0; padding:0; background:none; border-radius:0; display:block; width:auto}
   .cover .meta{margin-top:44px; display:flex; gap:26px; align-items:center; color:var(--dim); font:500 12px/1 var(--mono); letter-spacing:.1em}
   .cover .meta .dot{width:4px;height:4px;border-radius:50%;background:var(--dim)}
   .cover::after{
@@ -1092,6 +1141,28 @@ POST /login 增加可选 mfaToken</pre>
     </div>
   </section>
 
+<section class="slide">
+    <div class="wrap">
+      <div class="kicker">互动 · 算一笔账</div>
+      <h2>哪个杠杆最大？</h2>
+      <div class="calc" style="margin-top:6px">
+        <div class="card">
+          <div class="control"><div class="top"><span>轮数</span><b id="calcTurnsVal">60</b></div><input id="calcTurns" type="range" min="10" max="200" value="60"></div>
+          <div class="control"><div class="top"><span>每轮上下文</span><b id="calcCtxVal">100k</b></div><input id="calcCtx" type="range" min="10" max="400" value="100"></div>
+          <div class="control"><div class="top"><span>缓存命中率</span><b id="calcHitVal">0%</b></div><input id="calcHit" type="range" min="0" max="100" value="0"></div>
+          <p class="muted" style="font-size:12px">缓存读按 10% 输入单价估算；真实价格以模型为准。</p>
+        </div>
+        <div class="readout">
+          <div class="big" id="calcRel">100</div>
+          <div class="lab">相对基线成本</div>
+          <div class="sub" id="calcSub">有效 token：6,030,000</div>
+          <div class="sub">基线：60 轮 × 100k × 无缓存</div>
+        </div>
+      </div>
+      <div class="quote" style="margin-top:16px">先问“轮数能不能减半”，再问“单价能不能减半”。</div>
+    </div>
+  </section>
+
   <!-- 新演进：四道预算 -->
   <section class="slide">
     <div class="wrap">
@@ -1120,6 +1191,20 @@ POST /login 增加可选 mfaToken</pre>
         </div>
       </div>
       <div class="quote" style="margin-top:20px">不是少做事，是少做重复的事。</div>
+    </div>
+  </section>
+
+<section class="slide">
+    <div class="wrap">
+      <div class="kicker">思维工具 · 四问</div>
+      <h2>开一个会话前，先问四句</h2>
+      <div class="grid g2" style="margin-top:8px">
+        <div class="card"><div class="n">01 必要性</div><h3>这件事必须做吗？</h3><p>不做会怎样？能不能缩小范围？</p></div>
+        <div class="card"><div class="n">02 时机</div><h3>必须现在做吗？</h3><p>能不能等接口稳定、依赖合入？</p></div>
+        <div class="card"><div class="n">03 主体</div><h3>必须由这个会话做吗？</h3><p>能不能换短会话、子 Agent、脚本？</p></div>
+        <div class="card"><div class="n">04 上下文</div><h3>必须带这么多上下文吗？</h3><p>哪些是稳定事实，哪些是任务状态，哪些可以外置？</p></div>
+      </div>
+      <p class="lead" style="margin-top:18px">四个“必须”里，只要有一个是否，成本结构就会变。</p>
     </div>
   </section>
 
@@ -1227,22 +1312,18 @@ POST /login 增加可选 mfaToken</pre>
       <div class="kicker">决策框架</div>
       <h2>什么时候才该做平台</h2>
       <div class="grid g2">
-        <div>
-          <ul class="clean amber">
-            <li><strong>多租户 / 跨组织</strong>：需要权限、配额、隔离</li>
-            <li><strong>SLA 与可观测性</strong>：要保证 99.9%，要指标看板</li>
-            <li><strong>非技术用户</strong>：不能要求他们装 Python、读 SKILL</li>
-            <li><strong>合规审计强制</strong>：需要集中留存与签名</li>
-          </ul>
+        <div class="checklist">
+          <label class="check"><input type="checkbox" data-fit><span><strong>多租户 / 跨组织</strong><small>需要权限、配额、隔离</small></span></label>
+          <label class="check"><input type="checkbox" data-fit><span><strong>SLA 与可观测性</strong><small>要保证 99.9%，要指标看板</small></span></label>
+          <label class="check"><input type="checkbox" data-fit><span><strong>非技术用户</strong><small>不能要求他们装 Python、读 SKILL</small></span></label>
+          <label class="check"><input type="checkbox" data-fit><span><strong>合规审计强制</strong><small>需要集中留存与签名</small></span></label>
         </div>
         <div class="card" style="display:flex;flex-direction:column;justify-content:center">
-          <div class="n">经验法则</div>
-          <p style="font-size:19px;line-height:1.7;color:#dbe6ff">
-            上面四条<strong class="cyan">命中两条</strong>，再谈平台；<br>
-            只命中一条，先用 Skill 顶住。
-          </p>
+          <div class="n">现场自查 · 勾选命中项</div>
+          <div class="score"><span id="fitScore">0</span><span>/4</span></div>
+          <p id="fitVerdict" style="font-size:18px;line-height:1.6;color:#dbe6ff;margin-top:8px">一条都没命中：先用 Skill。</p>
           <div class="hr"></div>
-          <p class="muted" style="font-size:14px">平台不是"更高级的 Skill"，是另一类产品。</p>
+          <p class="muted" style="font-size:14px">命中两条，再谈平台；平台不是“更高级的 Skill”，是另一类产品。</p>
         </div>
       </div>
     </div>
@@ -1268,6 +1349,34 @@ POST /login 增加可选 mfaToken</pre>
     </div>
   </section>
 
+<section class="slide">
+    <div class="wrap">
+      <div class="kicker">互动 · 3 分钟</div>
+      <h2>拆一个你最近的长会话</h2>
+      <div class="grid g2" style="margin-top:8px">
+        <div>
+          <ul class="clean">
+            <li>它开了多久？多少轮？</li>
+            <li>每轮大概背多少上下文？</li>
+            <li>有几个子 Agent？</li>
+            <li>最终产出了什么 diff / 决策？</li>
+            <li>最大的一次浪费是什么？</li>
+          </ul>
+          <p class="muted" style="margin-top:14px;font-size:13px">不用精确；写下数量级，就能看出结构。</p>
+        </div>
+        <div class="card" style="text-align:center;display:flex;flex-direction:column;justify-content:center">
+          <div class="timer"><div class="clock" id="clock2">03:00</div><div class="unit">MIN</div></div>
+          <div class="timer-btns">
+            <button data-timer-start2>开始</button>
+            <button data-timer-pause2>暂停</button>
+            <button data-timer-reset2>重置</button>
+          </div>
+          <p class="muted" style="margin-top:12px;font-size:12px">3 分钟，写关键词即可。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- 16 建议 -->
   <section class="slide">
     <div class="wrap">
@@ -1281,6 +1390,20 @@ POST /login 增加可选 mfaToken</pre>
         <div class="card"><div class="n">05 可靠性</div><h3>常驻进程不能死</h3><p>单次 fetch 超时、presence 失败、磁盘抖动都不能终止 watcher。</p></div>
         <div class="card" style="border-color:rgba(62,224,194,.25)"><div class="n">下一步</div><h3>先做 2 任务 pilot</h3><p>记录成本、轮数、返工；验证身份/claim/worktree 不串，再扩到 3–5 个。</p></div>
       </div>
+    </div>
+  </section>
+
+<section class="slide">
+    <div class="wrap">
+      <div class="kicker">锚点 · 今天不展开</div>
+      <h2>把问题留在这里</h2>
+      <div class="anchor-grid">
+        <div class="anchor"><div class="k">ANCHOR A · 后续专题</div><h3>Prompt Cache</h3><p>前缀复用、cache write / read、TTL、命中率。</p><div class="q">为什么缓存命中率上不去？</div></div>
+        <div class="anchor"><div class="k">ANCHOR B · 后续专题</div><h3>KV Cache 与推理</h3><p>prefill / decode、显存、batch、上下文长度。</p><div class="q">长上下文为什么更吃显存？</div></div>
+        <div class="anchor"><div class="k">ANCHOR C · 后续专题</div><h3>会话树 / Fork</h3><p>base checkpoint、身份、claim、worktree 隔离。</p><div class="q">对话树为什么不等于所有权树？</div></div>
+        <div class="anchor"><div class="k">ANCHOR D · 后续专题</div><h3>度量与实验</h3><p>账本、对照实验、每合并 REQ 成本。</p><div class="q">怎么证明优化真的有效？</div></div>
+      </div>
+      <p class="muted" style="margin-top:18px;font-size:14px">今天只埋锚点，不展开机制；后续按专题单独分享。</p>
     </div>
   </section>
 
@@ -1353,10 +1476,17 @@ POST /login 增加可选 mfaToken</pre>
     <div class="wrap">
       <div class="eyebrow">DISCUSSION</div>
       <h1 style="font-size:clamp(38px,5vw,64px)">你们的多 Agent<br>卡在哪一步？</h1>
-      <div class="sub" style="margin-top:24px">
+      <div class="sub" style="margin-top:18px">
         是<strong class="cyan">协调</strong>、是<strong class="amber">门禁</strong>、还是<strong class="violet">事实</strong>没有版本？
       </div>
-      <div class="meta" style="margin-top:40px">
+      <div class="poll" data-poll style="max-width:900px;margin-top:20px">
+        <button class="poll-opt" data-key="coord"><span class="k">01</span><span class="tx">协调 / 组织：人多但决策慢</span><span class="cnt">0</span><i class="pbar"></i></button>
+        <button class="poll-opt" data-key="gate"><span class="k">02</span><span class="tx">门禁 / 契约：规则写不进工具</span><span class="cnt">0</span><i class="pbar"></i></button>
+        <button class="poll-opt" data-key="truth"><span class="k">03</span><span class="tx">事实 / 版本：状态没有唯一写者</span><span class="cnt">0</span><i class="pbar"></i></button>
+        <button class="poll-opt" data-key="cost"><span class="k">04</span><span class="tx">成本 / 上下文：功能没做多少，token 没少耗</span><span class="cnt">0</span><i class="pbar"></i></button>
+      </div>
+      <div class="poll-foot" style="max-width:900px"><span>现场点击累加，不联网。</span><button class="linkbtn" data-poll-reset>重置</button></div>
+      <div class="meta" style="margin-top:24px">
         <span>agent-workspace</span><span class="dot"></span>
         <span>github.com/myg133/agent-workspace</span><span class="dot"></span>
         <span>v1.53</span><span class="dot"></span>
@@ -1368,7 +1498,7 @@ POST /login 增加可选 mfaToken</pre>
 </div>
 
 <div class="hud">
-  <div class="num" id="num">01 / 35</div>
+  <div class="num" id="num">01 / 39</div>
   <div class="bar"><i id="bar"></i></div>
   <div class="num" id="pct">3%</div>
 </div>
@@ -1400,6 +1530,8 @@ POST /login 增加可选 mfaToken</pre>
   function prev(){ show(i - 1); }
 
   document.addEventListener('keydown', function(e){
+    var t = e.target;
+    if (t && t.closest && t.closest('input,textarea,select,button')) return;
     if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); next(); }
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
     else if (e.key === 'Home') { e.preventDefault(); show(0); }
@@ -1411,9 +1543,88 @@ POST /login 增加可选 mfaToken</pre>
   });
 
   document.addEventListener('click', function(e){
-    if (e.target.closest('a')) return;
+    if (e.target.closest('a,button,input,label,select,textarea')) return;
     if (e.clientX > window.innerWidth / 2) next(); else prev();
   });
+
+  document.querySelectorAll('[data-poll]').forEach(function(poll){
+    var counts = {};
+    var opts = Array.prototype.slice.call(poll.querySelectorAll('.poll-opt'));
+    function refresh(){
+      var total = 0;
+      opts.forEach(function(o){ total += counts[o.getAttribute('data-key')] || 0; });
+      opts.forEach(function(o){
+        var n = counts[o.getAttribute('data-key')] || 0;
+        o.querySelector('.cnt').textContent = n;
+        o.querySelector('.pbar').style.width = (total ? (n / total * 100) : 0) + '%';
+      });
+    }
+    opts.forEach(function(o){
+      o.addEventListener('click', function(){
+        var k = o.getAttribute('data-key');
+        counts[k] = (counts[k] || 0) + 1;
+        refresh();
+      });
+    });
+    var reset = poll.parentNode.querySelector('[data-poll-reset]');
+    if (reset) reset.addEventListener('click', function(){ counts = {}; refresh(); });
+    refresh();
+  });
+
+  var calcTurns = document.getElementById('calcTurns');
+  var calcCtx = document.getElementById('calcCtx');
+  var calcHit = document.getElementById('calcHit');
+  function calc(){
+    if (!calcTurns || !calcCtx || !calcHit) return;
+    var t = +calcTurns.value, c = +calcCtx.value, h = +calcHit.value / 100;
+    document.getElementById('calcTurnsVal').textContent = t;
+    document.getElementById('calcCtxVal').textContent = c + 'k';
+    document.getElementById('calcHitVal').textContent = Math.round(h * 100) + '%';
+    var prompt = t * c * 1000;
+    var effective = prompt * (1 - h * 0.9);
+    var output = t * 500;
+    var total = effective + output;
+    var base = 60 * 100 * 1000 + 60 * 500;
+    document.getElementById('calcRel').textContent = Math.round(total / base * 100);
+    document.getElementById('calcSub').textContent = '有效 token：' + Math.round(total).toLocaleString('en-US');
+  }
+  [calcTurns, calcCtx, calcHit].forEach(function(el){ if (el) el.addEventListener('input', calc); });
+  calc();
+
+  var fitInputs = Array.prototype.slice.call(document.querySelectorAll('[data-fit]'));
+  function fit(){
+    if (!fitInputs.length) return;
+    var n = fitInputs.filter(function(x){ return x.checked; }).length;
+    document.getElementById('fitScore').textContent = n;
+    var verdict = document.getElementById('fitVerdict');
+    if (n >= 3) { verdict.textContent = '命中 ' + n + ' 条：该考虑平台了，先算运维成本。'; verdict.style.color = 'var(--amber)'; }
+    else if (n === 2) { verdict.textContent = '命中 2 条：平台可以立项，但先补 Skill 边界。'; verdict.style.color = 'var(--cyan)'; }
+    else { verdict.textContent = n === 0 ? '一条都没命中：先用 Skill。' : '只命中 1 条：先用 Skill 顶住。'; verdict.style.color = '#dbe6ff'; }
+  }
+  fitInputs.forEach(function(x){ x.addEventListener('change', fit); });
+  fit();
+
+  var seconds2 = 180;
+  var timer2 = null;
+  var clock2 = document.getElementById('clock2');
+  function paint2(){
+    if (!clock2) return;
+    var m = Math.floor(seconds2 / 60), s = seconds2 % 60;
+    clock2.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  var start2 = document.querySelector('[data-timer-start2]');
+  var pause2 = document.querySelector('[data-timer-pause2]');
+  var reset2 = document.querySelector('[data-timer-reset2]');
+  if (start2) start2.addEventListener('click', function(){
+    if (timer2) return;
+    timer2 = setInterval(function(){
+      if (seconds2 <= 0) { clearInterval(timer2); timer2 = null; return; }
+      seconds2--; paint2();
+    }, 1000);
+  });
+  if (pause2) pause2.addEventListener('click', function(){ if (timer2) { clearInterval(timer2); timer2 = null; } });
+  if (reset2) reset2.addEventListener('click', function(){ if (timer2) { clearInterval(timer2); timer2 = null; } seconds2 = 180; paint2(); });
+  paint2();
 
   var start = parseInt((location.hash || '').replace('#', ''), 10);
   show(isNaN(start) ? 0 : start - 1);
