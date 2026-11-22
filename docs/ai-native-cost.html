@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI-Native 的成本结构 · 从 token 到会话</title>
+<style>
+  :root{
+    --paper:#f7f4ec;
+    --paper-2:#efe9dc;
+    --card:#fffdf8;
+    --ink:#17191f;
+    --muted:#5d6472;
+    --line:#d9d2c2;
+    --line-2:#c9c0ad;
+    --teal:#0f766e;
+    --teal-soft:#d9f1ec;
+    --amber:#b45309;
+    --amber-soft:#fbe8cf;
+    --violet:#6d28d9;
+    --violet-soft:#ebe4fc;
+    --red:#b91c1c;
+    --red-soft:#f8dddd;
+    --sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --mono:"Cascadia Code","SFMono-Regular",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:#0d0f14;color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  body{overflow:hidden}
+  button,input{font:inherit}
+  #stage{position:fixed;inset:0;display:grid;place-items:center;background:
+    radial-gradient(circle at 20% 0%,rgba(15,118,110,.16),transparent 34%),
+    radial-gradient(circle at 90% 100%,rgba(109,40,217,.14),transparent 34%),
+    #0d0f14}
+  #deck{width:1280px;height:720px;position:relative;background:var(--paper);border-radius:3px;overflow:hidden;
+    box-shadow:0 40px 100px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.06);transform-origin:center}
+  #deck:before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.55;
+    background-image:
+      linear-gradient(rgba(23,25,31,.045) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(23,25,31,.045) 1px,transparent 1px);
+    background-size:32px 32px;
+    mask-image:linear-gradient(to bottom,rgba(0,0,0,.8),transparent 88%)}
+  .slide{position:absolute;inset:0;z-index:2;padding:50px 68px 64px;display:flex;flex-direction:column;
+    opacity:0;visibility:hidden;transform:translateY(10px)}
+  .slide.active{opacity:1;visibility:visible;transform:none}
+  .cover{align-items:flex-start;justify-content:center;background:
+    radial-gradient(circle at 12% 18%,rgba(15,118,110,.13),transparent 38%),
+    radial-gradient(circle at 88% 78%,rgba(180,83,9,.10),transparent 44%)}
+  .kicker{display:flex;align-items:center;gap:12px;font:700 11px/1 var(--mono);letter-spacing:.16em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:18px}
+  .kicker:before{content:"";width:28px;height:2px;background:var(--teal);display:block}
+  .kicker.amber:before{background:var(--amber)}
+  .kicker.violet:before{background:var(--violet)}
+  h1{font-size:82px;line-height:.96;letter-spacing:-.055em;margin:0;font-weight:800}
+  h1 .accent{color:var(--teal)}
+  h2{font-size:48px;line-height:1.05;letter-spacing:-.04em;margin:0 0 18px;font-weight:800}
+  h3{font-size:21px;line-height:1.3;margin:0 0 8px;letter-spacing:-.02em}
+  p{font-size:18px;line-height:1.62;margin:0;color:var(--muted)}
+  .lede{font-size:22px;line-height:1.6;color:#353a45;max-width:980px}
+  .small{font-size:14px;line-height:1.55;color:var(--muted)}
+  .mono{font-family:var(--mono)}
+  .cyan{color:var(--teal)}
+  .amberc{color:var(--amber)}
+  .violetc{color:var(--violet)}
+  .redc{color:var(--red)}
+  .cover-top{display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:64px}
+  .cover-top .tag{font:600 11px/1 var(--mono);letter-spacing:.12em;color:var(--muted);border:1px solid var(--line-2);
+    border-radius:999px;padding:7px 11px;background:rgba(255,255,255,.35)}
+  .cover-meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}
+  .pill{font:600 12px/1 var(--mono);letter-spacing:.04em;padding:8px 11px;border:1px solid var(--line-2);
+    border-radius:999px;color:#414855;background:rgba(255,255,255,.45)}
+  .cover-note{position:absolute;left:68px;bottom:58px;font:500 12px/1.5 var(--mono);color:var(--muted)}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .split{display:grid;grid-template-columns:1.08fr .92fr;gap:34px;align-items:start}
+  .card{background:rgba(255,253,248,.82);border:1px solid var(--line);border-radius:16px;padding:20px 22px;
+    box-shadow:0 8px 30px rgba(23,25,31,.035)}
+  .card.soft{background:rgba(255,255,255,.42);box-shadow:none}
+  .card.teal{border-color:rgba(15,118,110,.28);background:rgba(217,241,236,.42)}
+  .card.amber{border-color:rgba(180,83,9,.28);background:rgba(251,232,207,.42)}
+  .card.violet{border-color:rgba(109,40,217,.25);background:rgba(235,228,252,.42)}
+  .card.red{border-color:rgba(185,28,28,.25);background:rgba(248,221,221,.38)}
+  .n{font:700 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  .quote{border-left:3px solid var(--teal);padding:10px 0 10px 18px;font-size:24px;line-height:1.55;
+    color:#252a33;font-weight:650;letter-spacing:-.02em}
+  .quote.amber{border-left-color:var(--amber)}
+  .quote.violet{border-left-color:var(--violet)}
+  .quote.smallq{font-size:19px;font-weight:500}
+  .stats{display:flex;gap:34px;flex-wrap:wrap;margin:6px 0 0}
+  .stat .v{font:800 38px/1 var(--mono);letter-spacing:-.04em;color:var(--ink)}
+  .stat .v span{font-size:15px;letter-spacing:0}
+  .stat .l{font:600 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:9px}
+  .bar-list{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+  .bar-row{display:grid;grid-template-columns:170px 1fr 66px;gap:12px;align-items:center}
+  .bar-row .lab{font:600 12px/1.3 var(--mono);color:#4d5462}
+  .bar-row .track{height:12px;border-radius:999px;background:#e6dfd1;overflow:hidden}
+  .bar-row .fill{height:100%;border-radius:999px;background:var(--teal)}
+  .bar-row .fill.amber{background:var(--amber)}
+  .bar-row .fill.violet{background:var(--violet)}
+  .bar-row .fill.red{background:var(--red)}
+  .bar-row .val{font:700 12px/1 var(--mono);color:#4d5462;text-align:right}
+  pre{font:13px/1.65 var(--mono);background:#171a20;color:#eee7d7;border-radius:14px;padding:18px 20px;
+    margin:0;white-space:pre-wrap;box-shadow:0 12px 30px rgba(23,25,31,.12)}
+  code{font:12px/1.4 var(--mono);background:rgba(23,25,31,.07);border:1px solid rgba(23,25,31,.08);
+    border-radius:5px;padding:2px 5px}
+  ul.clean{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+  ul.clean li{position:relative;padding-left:20px;font-size:16.5px;line-height:1.5;color:#3f4653}
+  ul.clean li:before{content:"";position:absolute;left:0;top:.62em;width:7px;height:7px;border-radius:2px;
+    background:var(--teal);opacity:.9}
+  ul.clean.amber li:before{background:var(--amber)}
+  ul.clean.violet li:before{background:var(--violet)}
+  ul.clean.red li:before{background:var(--red)}
+  .table{width:100%;border-collapse:collapse;margin-top:4px}
+  .table th{text-align:left;font:700 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);padding:0 10px 10px;border-bottom:1px solid var(--line-2)}
+  .table td{font-size:15px;line-height:1.45;padding:10px;border-bottom:1px solid rgba(217,210,194,.65);vertical-align:top}
+  .table tr:last-child td{border-bottom:none}
+  .tag{display:inline-block;font:700 10px/1 var(--mono);letter-spacing:.08em;padding:5px 7px;border-radius:5px;text-transform:uppercase}
+  .tag.t{color:var(--teal);background:var(--teal-soft)}
+  .tag.a{color:var(--amber);background:var(--amber-soft)}
+  .tag.v{color:var(--violet);background:var(--violet-soft)}
+  .tag.r{color:var(--red);background:var(--red-soft)}
+  .center{display:flex;flex-direction:column;justify-content:center}
+  .fillh{flex:1}
+  .hud{position:absolute;left:68px;right:68px;bottom:24px;z-index:9;display:flex;align-items:center;gap:14px;
+    font:600 10.5px/1 var(--mono);letter-spacing:.12em;color:var(--muted);pointer-events:none}
+  .hud .track{height:2px;flex:1;background:rgba(23,25,31,.10);overflow:hidden;border-radius:2px}
+  .hud .track i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--violet));transition:width .25s}
+  .hud .page{color:#424957}
+  .navhint{position:absolute;right:26px;top:24px;z-index:9;font:500 10.5px/1.5 var(--mono);color:#727988;text-align:right;pointer-events:none}
+  .navhint b{color:#444b58}
+  .notes{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:60;display:none;
+    width:min(1120px,92vw);max-height:26vh;overflow:auto;background:#151922;color:#e7e0d3;border:1px solid rgba(255,255,255,.12);
+    border-radius:12px;padding:14px 18px;font:13px/1.6 var(--sans);box-shadow:0 20px 50px rgba(0,0,0,.4)}
+  body.notes-on .notes{display:block}
+  .notes .nt{font:700 9.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:#8e98a8;margin-bottom:8px}
+  .help{position:fixed;inset:0;z-index:80;display:none;place-items:center;background:rgba(8,10,14,.72);backdrop-filter:blur(6px)}
+  .help.open{display:grid}
+  .help .panel{width:min(520px,90vw);background:var(--paper);border-radius:16px;padding:24px 26px;box-shadow:0 30px 80px rgba(0,0,0,.35)}
+  .help h3{font-size:24px;margin-bottom:12px}
+  .help .row{display:flex;justify-content:space-between;gap:20px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .help .row:last-child{border-bottom:none}
+  .help .row b{font-family:var(--mono);font-size:12px}
+  .poll{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+  .poll-opt{position:relative;display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;
+    border:1px solid var(--line);background:rgba(255,255,255,.62);border-radius:11px;padding:10px 13px;text-align:left;cursor:pointer;overflow:hidden}
+  .poll-opt:hover{border-color:rgba(15,118,110,.45)}
+  .poll-opt .k{font:700 11px/1 var(--mono);color:var(--teal)}
+  .poll-opt .tx{font-size:15.5px;color:#2e3540;z-index:2}
+  .poll-opt .cnt{font:700 12px/1 var(--mono);color:var(--muted);z-index:2}
+  .poll-opt .pbar{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(15,118,110,.13);z-index:1;transition:width .25s}
+  .poll-foot{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-top:4px}
+  .linkbtn{border:0;background:none;color:var(--teal);font:600 12px/1 var(--mono);cursor:pointer;padding:4px}
+  .calc{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+  .control{margin:15px 0}
+  .control .top{display:flex;justify-content:space-between;gap:12px;font:600 12px/1.3 var(--mono);color:#414855;margin-bottom:8px}
+  .control input[type=range]{width:100%;accent-color:var(--teal);cursor:pointer}
+  .readout{background:#171a20;color:#eee7d7;border-radius:14px;padding:18px 20px;min-height:156px}
+  .readout .big{font:800 40px/1 var(--mono);letter-spacing:-.04em;color:#b8f3e8}
+  .readout .lab{font:600 10px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#8d98a8;margin-top:7px}
+  .readout .sub{font-size:12px;line-height:1.6;color:#b9c0cc;margin-top:12px}
+  .gauge{height:18px;border-radius:999px;background:#e5ded1;overflow:hidden;margin:16px 0 10px}
+  .gauge i{display:block;height:100%;width:42%;background:var(--teal);transition:width .2s,background .2s}
+  .gauge-text{display:flex;justify-content:space-between;align-items:center;font:600 12px/1.4 var(--mono);color:var(--muted)}
+  .gauge-text b{font-size:18px;color:var(--ink)}
+  .timer{display:flex;align-items:baseline;gap:14px;margin:10px 0 14px}
+  .timer .clock{font:800 64px/1 var(--mono);letter-spacing:-.06em;color:var(--ink)}
+  .timer .unit{font:600 11px/1 var(--mono);letter-spacing:.12em;color:var(--muted)}
+  .timer-btns{display:flex;gap:8px;flex-wrap:wrap}
+  .timer-btns button{border:1px solid var(--line-2);background:rgba(255,255,255,.6);border-radius:8px;padding:8px 12px;font:600 12px/1 var(--mono);cursor:pointer;color:#39404c}
+  .timer-btns button:hover{border-color:var(--teal);color:var(--teal)}
+  .anchor-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .anchor{display:block;text-align:left;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.56);
+    padding:17px 18px;cursor:pointer;transition:.2s;color:inherit}
+  .anchor:hover{transform:translateY(-2px);border-color:rgba(109,40,217,.45);box-shadow:0 10px 24px rgba(23,25,31,.07)}
+  .anchor .k{font:700 10px/1 var(--mono);letter-spacing:.14em;color:var(--violet);text-transform:uppercase}
+  .anchor h3{margin:9px 0 5px;font-size:18px}
+  .anchor p{font-size:13.5px;line-height:1.5}
+  .anchor .go{display:inline-block;margin-top:9px;font:600 10.5px/1 var(--mono);color:var(--muted);letter-spacing:.08em}
+  .appendix .return{position:absolute;right:68px;bottom:44px}
+  .return button{border:1px solid var(--line-2);background:rgba(255,255,255,.65);border-radius:7px;padding:8px 12px;
+    font:600 11px/1 var(--mono);cursor:pointer;color:#424957}
+  .return button:hover{border-color:var(--teal);color:var(--teal)}
+  .cover .rule{width:100%;height:1px;background:linear-gradient(90deg,var(--line-2),transparent);margin:30px 0 20px}
+  .note{font-size:12.5px;line-height:1.55;color:#6b7280}
+  @media (max-width:900px){ .navhint{display:none} }
+  @media print{
+    html,body{background:#fff;overflow:visible}
+    #stage{display:block;background:#fff}
+    #deck{transform:none!important;box-shadow:none;width:100%;height:auto}
+    .slide{display:flex!important;position:relative;height:720px;page-break-after:always;opacity:1!important;visibility:visible!important;transform:none!important}
+    .hud,.navhint,.notes,.help{display:none!important}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="deck">
+    <!-- 1 cover -->
+    <section class="slide cover active" data-notes="开场 30 秒：今天不讲某个工具怎么用，讲一个更底层的问题：为什么多 Agent 功能没做多少，token 却花得很快。">
+      <div class="cover-top">
+        <span class="kicker">TECH SHARE · 2026.11</span>
+        <span class="tag">COST / CONTEXT / SESSION</span>
+      </div>
+      <h1>从 token<br>到<span class="accent">会话</span></h1>
+      <p class="lede" style="margin-top:22px">AI-Native 的成本结构，<br>以及它如何倒逼上下文管理。</p>
+      <div class="cover-meta">
+        <span class="pill">成本公式</span>
+        <span class="pill">上下文工作台</span>
+        <span class="pill">会话租约</span>
+        <span class="pill">缓存锚点</span>
+      </div>
+      <div class="cover-note">← → 翻页 &nbsp;·&nbsp; N 备注 &nbsp;·&nbsp; F 全屏 &nbsp;·&nbsp; ? 帮助</div>
+    </section>
+
+    <!-- 2 poll -->
+    <section class="slide" data-notes="先让大家举手/点击。不要问“应该花在哪”，问最近一周真实发生在哪。投票结果用来导出下一句：成本不是一个数字，是一组结构。">
+      <div class="kicker">互动 · 先投票</div>
+      <h2>你的 agent 时间<br>主要花在哪？</h2>
+      <p class="lede">不要想“应该”，想最近一周真实发生的。</p>
+      <div class="poll" data-poll style="max-width:900px;margin-top:18px">
+        <button class="poll-opt" data-key="explore"><span class="k">01</span><span class="tx">读文件 / 探索项目</span><span class="cnt">0</span><i class="pbar"></i></button>
+        <button class="poll-opt" data-key="tests"><span class="k">02</span><span class="tx">写测试 / 跑测试 / 修测试</span><span class="cnt">0</span><i class="pbar"></i></button>
+        <button class="poll-opt" data-key="coord"><span class="k">03</span><span class="tx">协调 / 等消息 / 返工</span><span class="cnt">0</span><i class="pbar"></i></button>
+        <button class="poll-opt" data-key="context"><span class="k">04</span><span class="tx">上下文重复 / compaction</span><span class="cnt">0</span><i class="pbar"></i></button>
+      </div>
+      <div class="poll-foot" style="max-width:900px"><span>现场点击累加，不联网。</span><button class="linkbtn" data-poll-reset>重置</button></div>
+      <p class="note" style="margin-top:18px">结果通常不是“某一项最高”，而是“几项叠加”：探索、协调、上下文，互相喂养。</p>
+    </section>
+
+    <!-- 3 observation -->
+    <section class="slide" data-notes="这页是钩子。用真实审计数字，但不要一上来讲账单；先讲现象：功能没做多少，token 没少耗。">
+      <div class="kicker">现象 · 真实审计</div>
+      <h2>功能没做多少，<br><span class="redc">token 没少耗</span></h2>
+      <div class="grid g3" style="margin-top:16px">
+        <div class="card red"><div class="n">长会话</div><h3>62 小时 / 1,544 轮</h3><p>会话没有退出条件，每轮都背完整历史。</p></div>
+        <div class="card amber"><div class="n">大上下文</div><h3>30–44 万 prompt / 轮</h3><p>不是模型贵，是每轮带的东西太多。</p></div>
+        <div class="card"><div class="n">低产出</div><h3>45% 花在文档 / 规划</h3><p>产品代码操作远少于状态、报告和探索。</p></div>
+      </div>
+      <div class="quote amber" style="margin-top:26px">最贵的不是一次回答，是每一轮都重新带上的上下文。</div>
+    </section>
+
+    <!-- 4 formula -->
+    <section class="slide" data-notes="这一页建立共同语言：成本不是“单价”，是请求数 × 上下文 × 单价。输出通常很少，但输入/缓存是每轮都付。">
+      <div class="kicker">拆账 · 公式</div>
+      <h2>先把账单拆开</h2>
+      <div class="split" style="margin-top:8px">
+        <div>
+<pre>总成本 ≈ 请求数 × 每轮上下文 × 单价
+        + 输出成本
+        + 缓存偏差</pre>
+          <p style="margin-top:16px">输出 token 通常最少；真正的大头是<strong>每轮都重新发送的上下文</strong>。</p>
+        </div>
+        <div class="grid" style="gap:12px">
+          <div class="card"><div class="n">请求数</div><p><strong>轮数 × 子 Agent 数</strong><br>任务越大，轮数越多。</p></div>
+          <div class="card"><div class="n">每轮上下文</div><p><strong>历史 + 工具输出 + 角色规范</strong><br>会话越长，越接近线性增长。</p></div>
+          <div class="card"><div class="n">单价</div><p><strong>模型 × 缓存命中</strong><br>缓存降单价，不降上下文长度。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 audit -->
+    <section class="slide" data-notes="这里放审计结果，但重点不是总额，是结构：99% 以上是输入/缓存，文档/规划占近一半。让大家看到“忙”和“产出”不是一回事。">
+      <div class="kicker">审计 · 结构</div>
+      <h2>钱到底去了哪里</h2>
+      <div class="stats" style="margin-top:2px">
+        <div class="stat"><div class="v">4</div><div class="l">主会话</div></div>
+        <div class="stat"><div class="v">137</div><div class="l">子会话</div></div>
+        <div class="stat"><div class="v">3.1B</div><div class="l">tokens</div></div>
+        <div class="stat"><div class="v">&lt;0.2<span>%</span></div><div class="l">输出占比</div></div>
+      </div>
+      <div class="split" style="margin-top:18px">
+        <div class="bar-list">
+          <div class="bar-row"><span class="lab">prompt + cache</span><div class="track"><i class="fill" style="width:99.8%"></i></div><span class="val">99.8%</span></div>
+          <div class="bar-row"><span class="lab">output</span><div class="track"><i class="fill amber" style="width:0.2%"></i></div><span class="val">&lt;0.2%</span></div>
+          <div class="bar-row"><span class="lab">文档 / 规划</span><div class="track"><i class="fill violet" style="width:45%"></i></div><span class="val">45%</span></div>
+          <div class="bar-row"><span class="lab">产品代码</span><div class="track"><i class="fill" style="width:55%"></i></div><span class="val">55%</span></div>
+        </div>
+        <div class="card red">
+          <div class="n">反常识</div>
+          <h3>输出少，不等于成本低</h3>
+          <p>每一轮都要付“把上下文送进去”的钱；缓存只是把单价打下来。</p>
+        </div>
+      </div>
+      <p class="note" style="margin-top:14px">注：以上为一次本地日志审计的近似值，不同项目、模型、缓存策略会不同。</p>
+    </section>
+
+    <!-- 6 levers -->
+    <section class="slide" data-notes="按 ROI 排序，不要一上来换更便宜的模型。先砍轮数和上下文，再谈缓存和单价。">
+      <div class="kicker">杠杆 · 顺序</div>
+      <h2>五个杠杆，<br>按 ROI 排序</h2>
+      <div class="grid g2" style="margin-top:12px">
+        <div class="card teal"><div class="n">01 最优先</div><h3>减少轮数</h3><p>任务预检、垂直切片、一次 compaction 就停。</p></div>
+        <div class="card teal"><div class="n">02 最优先</div><h3>减少每轮上下文</h3><p>工作集、evidence、handoff；不要把全仓库塞进去。</p></div>
+        <div class="card amber"><div class="n">03 其次</div><h3>提高缓存命中</h3><p>稳定前缀、少改 base、任务卡追加在后面。</p></div>
+        <div class="card amber"><div class="n">04 再次</div><h3>降低单价</h3><p>探索/文档用低成本模型；强模型只留给关键决策。</p></div>
+        <div class="card violet"><div class="n">05 最后</div><h3>减少返工</h3><p>evidence、handoff、验收前置；返工是双倍上下文。</p></div>
+        <div class="card soft" style="display:flex;flex-direction:column;justify-content:center">
+          <div class="n">顺序错了</div>
+          <p style="font-size:20px;color:#252a33"><strong>先换便宜模型</strong>，往往只是把错误答案跑得更快。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7 calculator -->
+    <section class="slide" data-notes="现场玩一下：让观众报一个轮数和上下文。强调这是示意，不是精确账单；目的是看哪个杠杆斜率最大。">
+      <div class="kicker">互动 · 算一笔账</div>
+      <h2>哪个杠杆最大？</h2>
+      <div class="calc" style="margin-top:8px">
+        <div class="card">
+          <div class="control"><div class="top"><span>轮数</span><b id="turnsVal">60</b></div><input id="turns" type="range" min="10" max="200" value="60"></div>
+          <div class="control"><div class="top"><span>每轮上下文</span><b id="ctxVal">100k</b></div><input id="ctx" type="range" min="10" max="400" value="100"></div>
+          <div class="control"><div class="top"><span>缓存命中率</span><b id="hitVal">0%</b></div><input id="hit" type="range" min="0" max="100" value="0"></div>
+          <p class="note">缓存读按 10% 输入单价估算；真实价格以模型为准。</p>
+        </div>
+        <div class="readout">
+          <div class="big" id="relVal">100</div>
+          <div class="lab">相对基线成本</div>
+          <div class="sub" id="calcSub">有效 token：0</div>
+          <div class="sub">基线：60 轮 × 100k × 无缓存</div>
+        </div>
+      </div>
+      <div class="quote smallq" style="margin-top:16px">先问“轮数能不能减半”，再问“单价能不能减半”。</div>
+    </section>
+
+    <!-- 8 four questions -->
+    <section class="slide" data-notes="这是思维方式页：任何一次长会话，先做四问。可以让大家对最近一个任务举手。">
+      <div class="kicker">思维工具 · 四问</div>
+      <h2>开一个会话前，<br>先问四句</h2>
+      <div class="grid g2" style="margin-top:6px">
+        <div class="card"><div class="n">01 必要性</div><h3>这件事必须做吗？</h3><p>不做会怎样？能不能缩小范围？</p></div>
+        <div class="card"><div class="n">02 时机</div><h3>必须现在做吗？</h3><p>能不能等接口稳定、依赖合入？</p></div>
+        <div class="card"><div class="n">03 主体</div><h3>必须由这个会话做吗？</h3><p>能不能换短会话、子 Agent、脚本？</p></div>
+        <div class="card"><div class="n">04 上下文</div><h3>必须带这么多上下文吗？</h3><p>哪些是稳定事实，哪些是任务状态，哪些可以外置？</p></div>
+      </div>
+      <p class="note" style="margin-top:14px">四个“必须”里，只要有一个是否，成本结构就会变。</p>
+    </section>
+
+    <!-- 9 working set -->
+    <section class="slide" data-notes="核心心智模型：上下文是工作台，不是仓库。稳定事实、任务状态、工具输出要分层；不要把仓库和历史都搬上台面。">
+      <div class="kicker">上下文 · 心智模型</div>
+      <h2>上下文不是记忆，<br><span class="cyan">是工作台</span></h2>
+      <div class="grid g3" style="margin-top:14px">
+        <div class="card teal"><div class="n">稳定事实</div><h3>项目地图</h3><p>架构、命令、约定、坑。放 base / 文档，按需引用。</p></div>
+        <div class="card amber"><div class="n">任务状态</div><h3>当前切片</h3><p>目标、AC、evidence、待验证项。放任务卡 / handoff。</p></div>
+        <div class="card violet"><div class="n">工具输出</div><h3>临时材料</h3><p>只留摘要和 path:line；不要把全量日志塞回上下文。</p></div>
+      </div>
+      <div class="quote" style="margin-top:24px">工作台只放“现在要动手”的东西；仓库和历史留在磁盘上。</div>
+    </section>
+
+    <!-- 10 pollution -->
+    <section class="slide" data-notes="四种污染，每一种都能对应到日常现象。让观众对号入座。">
+      <div class="kicker">上下文 · 污染</div>
+      <h2>四种上下文污染</h2>
+      <div class="grid g2" style="margin-top:8px">
+        <div class="card red"><div class="n">01 过期</div><h3>旧文件内容</h3><p>base 里是旧版本；每轮都在读死代码。<br><strong>修复：</strong>base_sha + diff 校验。</p></div>
+        <div class="card amber"><div class="n">02 偏见</div><h3>旧结论</h3><p>探索时的错误假设，被后续所有轮继承。<br><strong>修复：</strong>evidence 标“已确认 / 待验证”。</p></div>
+        <div class="card violet"><div class="n">03 串味</div><h3>兄弟任务细节</h3><p>功能会话把任务 1 的讨论带进任务 2。<br><strong>修复：</strong>共同 checkpoint 一次性 fork。</p></div>
+        <div class="card"><div class="n">04 噪音</div><h3>全量工具日志</h3><p>真正有用的只有几行，其余都是背景。<br><strong>修复：</strong>摘要 + path:line。</p></div>
+      </div>
+      <p class="note" style="margin-top:12px">污染的代价不是“多几行”，是模型把注意力花在错误的东西上。</p>
+    </section>
+
+    <!-- 11 gauge -->
+    <section class="slide" data-notes="拖动水位，让观众看到 60/80/100 三个阈值。强调：compaction 是有损的，第一次就停。">
+      <div class="kicker">互动 · 水位</div>
+      <h2>上下文水位</h2>
+      <div class="split" style="margin-top:8px">
+        <div>
+          <div class="gauge"><i id="gaugeFill"></i></div>
+          <div class="gauge-text"><span>0%</span><span><b id="gaugeVal">42%</b> 当前水位</span><span>100%</span></div>
+          <input id="level" type="range" min="0" max="100" value="42" style="width:100%;margin-top:18px;accent-color:var(--teal)">
+          <p class="note" style="margin-top:10px">拖动看状态变化。</p>
+        </div>
+        <div class="grid" style="gap:12px">
+          <div class="card"><div class="n">60%</div><h3>准备 handoff</h3><p>写清楚完成 / 未完成 / 下一步。</p></div>
+          <div class="card amber"><div class="n">80%</div><h3>停止扩张</h3><p>不再读新文件；收尾或换会话。</p></div>
+          <div class="card red"><div class="n">100%</div><h3>compaction 已发生</h3><p>有损。第一次就停，不要连续压。</p></div>
+        </div>
+      </div>
+      <div class="quote" id="gaugeMsg" style="margin-top:18px">当前正常：继续只读任务相关文件。</div>
+    </section>
+
+    <!-- 12 session lease -->
+    <section class="slide" data-notes="agent_id 是工位，session 是租约。消息/claim/已读跟工位走；session map/wake 跟租约走。换班不是新建身份。">
+      <div class="kicker">会话 · 租约</div>
+      <h2>agent_id 是工位<br>session 是租约</h2>
+      <table class="table" style="margin-top:12px">
+        <tr><th style="width:170px">状态</th><th>按什么隔离</th><th>换 session 后</th></tr>
+        <tr><td><strong>inbox / 已读</strong></td><td>agent_id</td><td class="cyan">保留</td></tr>
+        <tr><td><strong>claim / WIP</strong></td><td>agent_id</td><td class="cyan">保留</td></tr>
+        <tr><td><strong>session 文件 / map</strong></td><td>session_id</td><td class="amberc">新会话覆盖</td></tr>
+        <tr><td><strong>wake / 通知</strong></td><td>agent_id + session</td><td class="amberc">需要清 notified / 重定路由</td></tr>
+      </table>
+      <div class="quote smallq" style="margin-top:18px">换班：旧会话 handoff → 停进程；新会话同一 agent_id → whoami → resume。</div>
+    </section>
+
+    <!-- 13 rotate -->
+    <section class="slide" data-notes="什么时候换会话？四个触发条件。不要等 compaction 才换；compaction 是失败信号。">
+      <div class="kicker">会话 · 时机</div>
+      <h2>什么时候该换会话</h2>
+      <div class="grid g2" style="margin-top:12px">
+        <div class="card teal"><div class="n">01 预算到</div><h3>轮数 / 上下文到阈值</h3><p>先 handoff，再开新会话。</p></div>
+        <div class="card amber"><div class="n">02 compaction</div><h3>第一次压缩</h3><p>停止扩张，交回 BA 重拆或换人。</p></div>
+        <div class="card violet"><div class="n">03 阶段切换</div><h3>探索 → 实现 → 验证</h3><p>一个阶段一个会话，不要一路做到底。</p></div>
+        <div class="card"><div class="n">04 任务完成</div><h3>产出已交</h3><p>立即退出；不要“挂着等消息”。</p></div>
+      </div>
+      <div class="quote" style="margin-top:20px">换会话不是重启，是交接；交接质量决定新会话的成本。</div>
+    </section>
+
+    <!-- 14 sizing -->
+    <section class="slide" data-notes="BA 做任务预检，子 Agent 只做开工自检。不要两层都做任务大小评估。第一次 compaction 就停。">
+      <div class="kicker">任务 · 分片</div>
+      <h2>BA 做预检<br>子 Agent 只做开工自检</h2>
+      <div class="split" style="margin-top:8px">
+        <div class="card">
+          <div class="n">BA 任务预检</div>
+          <ul class="clean">
+            <li>模块 / 文件 / AC / 依赖 / 预期 diff</li>
+            <li>说不出“改哪些文件、怎么验证” → 先探索</li>
+            <li>跨 3+ 模块、8+ 文件、DB+API+UI → 拆</li>
+            <li>每个切片一个任务卡，一个验证点</li>
+          </ul>
+        </div>
+        <div class="card teal">
+          <div class="n">子 Agent 开工自检</div>
+          <ul class="clean">
+            <li>evidence 对 HEAD、入口存在、测试命令可执行</li>
+            <li>不重做任务大小评估</li>
+            <li>失败返回 EVIDENCE_STALE / TASK_TOO_BIG</li>
+            <li>第一次 compaction 就停，交回 BA</li>
+          </ul>
+        </div>
+      </div>
+      <div class="quote amber" style="margin-top:18px">多次 compaction 不是任务难，是任务没拆。</div>
+    </section>
+
+    <!-- 15 exploration -->
+    <section class="slide" data-notes="探索权唯一：BA 只做业务/验收探索，代码探索由 Explore/Dev 负责。新鲜子 Agent 默认零上下文，必须消费 evidence。">
+      <div class="kicker">任务 · 探索权</div>
+      <h2>一个任务，<br>一个探索 owner</h2>
+      <div class="grid g2" style="margin-top:10px">
+        <div class="card"><div class="n">BA</div><h3>业务 / 验收 / 文档</h3><p>不深读实现，不画完整调用链；需要实现理解就交给 Dev/Explore。</p></div>
+        <div class="card teal"><div class="n">Explore / Dev</div><h3>代码探索唯一 owner</h3><p>产出 path:line、命令、假设、待验证；下一个人消费 evidence，不重新发现。</p></div>
+      </div>
+      <div class="card soft" style="margin-top:14px">
+        <div class="n">Evidence 最小字段</div>
+        <p><code>base_sha</code> · <code>confirmed</code> · <code>commands</code> · <code>unknowns</code> · <code>files_read</code> · <code>do_not_reread</code></p>
+      </div>
+      <p class="note" style="margin-top:12px">没有 fork 时，evidence 是必须的；有 fork 时，也不要让子会话重新探索。</p>
+    </section>
+
+    <!-- 16 framework -->
+    <section class="slide" data-notes="四层模型：任务、会话、请求、系统。每一层都有杠杆和指标；不要只盯单价。">
+      <div class="kicker">框架 · 四层</div>
+      <h2>成本不是一个点，<br>是四层结构</h2>
+      <div class="grid g4" style="margin-top:14px">
+        <div class="card teal"><div class="n">L1 任务</div><h3>做不做 / 多大</h3><p>切片、验收、依赖。<br><strong>指标：</strong>轮数、返工。</p></div>
+        <div class="card amber"><div class="n">L2 会话</div><h3>多长 / 多重</h3><p>生命周期、上下文水位、handoff。<br><strong>指标：</strong>prompt / 轮。</p></div>
+        <div class="card violet"><div class="n">L3 请求</div><h3>带什么 / 命中谁</h3><p>工作集、模型、缓存。<br><strong>指标：</strong>cache hit、单价。</p></div>
+        <div class="card"><div class="n">L4 系统</div><h3>怎么路由 / 怎么观测</h3><p>模型路由、账本、门禁。<br><strong>指标：</strong>每 REQ 成本。</p></div>
+      </div>
+      <div class="quote" style="margin-top:22px">先改 L1/L2，再改 L3/L4；顺序反了，容易优化一个不存在的瓶颈。</div>
+    </section>
+
+    <!-- 17 exercise -->
+    <section class="slide" data-notes="给 3 分钟，让每个人写一个最近的长会话。时间到后请 1-2 人分享。重点是让他们自己算出“最大浪费”。">
+      <div class="kicker">互动 · 3 分钟</div>
+      <h2>拆一个你最近的长会话</h2>
+      <div class="split" style="margin-top:6px">
+        <div>
+          <ul class="clean">
+            <li>它开了多久？多少轮？</li>
+            <li>每轮大概背多少上下文？</li>
+            <li>有几个子 Agent？</li>
+            <li>最终产出了什么 diff / 决策？</li>
+            <li>最大的一次浪费是什么？</li>
+          </ul>
+          <p class="note" style="margin-top:14px">不用精确；写下数量级，就能看出结构。</p>
+        </div>
+        <div class="card" style="text-align:center">
+          <div class="timer"><div class="clock" id="clock">03:00</div><div class="unit">MIN</div></div>
+          <div class="timer-btns" style="justify-content:center">
+            <button data-timer-start>开始</button>
+            <button data-timer-pause>暂停</button>
+            <button data-timer-reset>重置</button>
+          </div>
+          <p class="note" style="margin-top:12px">3 分钟，写关键词即可。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 18 metrics -->
+    <section class="slide" data-notes="账本字段不要多，先六个。没有账本，所有优化都是感觉。">
+      <div class="kicker">度量 · 账本</div>
+      <h2>每个 REQ 记六个数</h2>
+      <table class="table" style="margin-top:12px">
+        <tr><th style="width:220px">字段</th><th>用途</th></tr>
+        <tr><td><strong>会话数 / 轮数</strong></td><td>判断拆得太碎还是太长</td></tr>
+        <tr><td><strong>prompt / 轮</strong></td><td>判断上下文是否过重</td></tr>
+        <tr><td><strong>output / total</strong></td><td>过低通常是上下文过大</td></tr>
+        <tr><td><strong>子 Agent 数</strong></td><td>判断协调成本</td></tr>
+        <tr><td><strong>产品操作 / 文档操作</strong></td><td>判断是否在做元工作</td></tr>
+        <tr><td><strong>合并 REQ / 返工</strong></td><td>算真实产出，而不是忙碌感</td></tr>
+      </table>
+      <div class="quote smallq" style="margin-top:16px">不要只问“花了多少”，要问“每个合并功能花了多少”。</div>
+    </section>
+
+    <!-- 19 anchors -->
+    <section class="slide" data-notes="这一页是路线图：今天不展开，但留下锚点。点击卡片可以跳到附录；后续技术分享可以逐页展开。">
+      <div class="kicker">锚点 · 后续可展开</div>
+      <h2>今天埋下的四个锚点</h2>
+      <div class="anchor-grid" style="margin-top:10px">
+        <button class="anchor" data-goto="22"><span class="k">ANCHOR A</span><h3>Prompt Cache</h3><p>前缀复用、cache write / read、TTL、命中率。</p><span class="go">→ 跳到附录 A</span></button>
+        <button class="anchor" data-goto="23"><span class="k">ANCHOR B</span><h3>KV Cache 与推理</h3><p>prefill / decode、显存、batch、上下文长度。</p><span class="go">→ 跳到附录 B</span></button>
+        <button class="anchor" data-goto="24"><span class="k">ANCHOR C</span><h3>会话树 / Fork</h3><p>base checkpoint、身份、claim、worktree 隔离。</p><span class="go">→ 跳到附录 C</span></button>
+        <button class="anchor" data-goto="25"><span class="k">ANCHOR D</span><h3>度量与实验</h3><p>账本、对照实验、每合并 REQ 成本。</p><span class="go">→ 跳到附录 D</span></button>
+      </div>
+      <p class="note" style="margin-top:12px">右下角“返回主线”可回到本页。</p>
+    </section>
+
+    <!-- 20 takeaways -->
+    <section class="slide" data-notes="收束三句话。不要总结所有内容，只留三个可带走的判断。">
+      <div class="kicker">收束 · 三句话</div>
+      <h2>带走三句话</h2>
+      <div style="display:flex;flex-direction:column;gap:22px;margin-top:16px">
+        <div style="display:flex;gap:18px;align-items:baseline"><span class="mono cyan" style="font-size:13px">01</span><div><h3 style="font-size:27px">成本是结构，不是单价</h3><p>先砍轮数和上下文，再谈模型和缓存。</p></div></div>
+        <div style="display:flex;gap:18px;align-items:baseline"><span class="mono amberc" style="font-size:13px">02</span><div><h3 style="font-size:27px">上下文是工作台，不是仓库</h3><p>稳定事实、任务状态、工具输出分层；不要把所有东西都搬上台面。</p></div></div>
+        <div style="display:flex;gap:18px;align-items:baseline"><span class="mono violetc" style="font-size:13px">03</span><div><h3 style="font-size:27px">会话是租约，不是身份</h3><p>agent_id 稳定；session 可以换；换班靠 handoff，不靠新建身份。</p></div></div>
+      </div>
+    </section>
+
+    <!-- 21 final poll -->
+    <section class="slide" data-notes="最后再投一次：你准备先改哪一层？用结果引导 Q&A。">
+      <div class="kicker">互动 · 最后投票</div>
+      <h2>你准备先改哪一层？</h2>
+      <div class="poll" data-poll style="max-width:860px;margin-top:16px">
+        <button class="poll-opt" data-key="task"><span class="k">01</span><span class="tx">任务：预检与切片</span><span class="cnt">0</span><i class="pbar"></i></button>
+        <button class="poll-opt" data-key="session"><span class="k">02</span><span class="tx">会话：预算与 handoff</span><span class="cnt">0</span><i class="pbar"></i></button>
+        <button class="poll-opt" data-key="context"><span class="k">03</span><span class="tx">上下文：工作集与 evidence</span><span class="cnt">0</span><i class="pbar"></i></button>
+        <button class="poll-opt" data-key="cache"><span class="k">04</span><span class="tx">缓存 / 模型路由</span><span class="cnt">0</span><i class="pbar"></i></button>
+      </div>
+      <div class="poll-foot" style="max-width:860px"><span>投票后进入 Q&A。</span><button class="linkbtn" data-poll-reset>重置</button></div>
+      <div class="quote" style="margin-top:28px">先改你能改的那一层，不要等平台。</div>
+    </section>
+
+    <!-- 22 appendix A -->
+    <section class="slide appendix" data-notes="锚点 A：Prompt Cache。今天只讲“为什么能省钱但不省上下文”；后续可展开缓存 key、TTL、命中率、写入成本。">
+      <div class="kicker violet">附录 A · 锚点</div>
+      <h2>Prompt Cache：<br>省单价，不省上下文</h2>
+      <div class="split" style="margin-top:8px">
+        <div>
+          <ul class="clean violet">
+            <li>稳定前缀 + 追加任务卡 → 更容易命中</li>
+            <li>cache write 有成本；cache read 通常更便宜</li>
+            <li>TTL 过期、前缀变化、模型切换 → miss</li>
+            <li>命中率提高，仍要发送完整上下文</li>
+          </ul>
+          <p class="note" style="margin-top:12px">后续可展开：缓存 key 怎么算？多长 TTL？命中率怎么测？</p>
+        </div>
+        <div class="card violet"><div class="n">一句话</div><p style="font-size:22px;color:#252a33"><strong>缓存优化的是“重复前缀的单价”，不是“每轮带多少东西”。</strong></p></div>
+      </div>
+      <div class="return"><button data-goto="19">← 返回主线</button></div>
+    </section>
+
+    <!-- 23 appendix B -->
+    <section class="slide appendix" data-notes="锚点 B：KV Cache 与推理。prefill 计算 KV，decode 反复读；上下文越长，显存和带宽压力越大。后续可展开推理原理。">
+      <div class="kicker violet">附录 B · 锚点</div>
+      <h2>KV Cache：<br>为什么长上下文更贵</h2>
+      <div class="grid g2" style="margin-top:10px">
+        <div class="card"><div class="n">Prefill</div><h3>先把上下文算一遍</h3><p>计算量大，决定首 token 延迟；上下文越长，prefill 越久。</p></div>
+        <div class="card"><div class="n">Decode</div><h3>每 token 读 KV</h3><p>显存带宽是瓶颈；长上下文 + 大 batch 更吃显存。</p></div>
+      </div>
+      <p class="note" style="margin-top:14px">后续可展开：KV cache 内存怎么估？PagedAttention？batch 与延迟的权衡？</p>
+      <div class="return"><button data-goto="19">← 返回主线</button></div>
+    </section>
+
+    <!-- 24 appendix C -->
+    <section class="slide appendix" data-notes="锚点 C：会话树。对话树不等于所有权树；fork 不复制 claim/worktree；base 要压缩；结果不会自动合并。">
+      <div class="kicker violet">附录 C · 锚点</div>
+      <h2>会话树：<br>fork 什么，不 fork 什么</h2>
+      <div class="split" style="margin-top:8px">
+        <div>
+<pre>project
+├── feature A
+│   ├── task 1
+│   └── task 2
+└── feature B
+    ├── task 3
+    └── task 4</pre>
+        </div>
+        <div class="card violet">
+          <div class="n">边界</div>
+          <ul class="clean violet">
+            <li>对话树 ≠ 所有权树</li>
+            <li>base 压缩到 20–30k 再 fork</li>
+            <li>每个任务独立 agent_id / claim / worktree</li>
+            <li>fork 不自动合并结果</li>
+          </ul>
+        </div>
+      </div>
+      <p class="note" style="margin-top:12px">实验状态：先跑 2 个任务，验证身份、claim、worktree 不串。</p>
+      <div class="return"><button data-goto="19">← 返回主线</button></div>
+    </section>
+
+    <!-- 25 appendix D -->
+    <section class="slide appendix" data-notes="锚点 D：度量。给一个最小账本模板，后续可以直接拿去用。">
+      <div class="kicker violet">附录 D · 锚点</div>
+      <h2>最小账本：<br>每个 REQ 记什么</h2>
+      <table class="table" style="margin-top:10px">
+        <tr><th>字段</th><th>示例</th></tr>
+        <tr><td>REQ / 任务</td><td>REQ-ONT-ERR1</td></tr>
+        <tr><td>会话 / 轮数</td><td>3 / 84</td></tr>
+        <tr><td>prompt / 轮</td><td>12 万</td></tr>
+        <tr><td>子 Agent / compaction</td><td>2 / 1</td></tr>
+        <tr><td>产品 / 文档操作</td><td>42 / 18</td></tr>
+        <tr><td>合并结果 / 返工</td><td>1 / 1</td></tr>
+      </table>
+      <div class="quote smallq" style="margin-top:16px">先记六个字段，再谈优化；没有账本，只有感觉。</div>
+      <div class="return"><button data-goto="19">← 返回主线</button></div>
+    </section>
+
+    <div class="hud">
+      <span id="sectionLabel">COST / CONTEXT / SESSION</span>
+      <div class="track"><i id="progress"></i></div>
+      <span class="page" id="page">01 / 25</span>
+    </div>
+    <div class="navhint"><b>← →</b> 翻页 · <b>N</b> 备注 · <b>F</b> 全屏 · <b>?</b> 帮助</div>
+  </div>
+</div>
+<div class="notes"><div class="nt">SPEAKER NOTES · N 关闭</div><div id="notesText"></div></div>
+<div class="help" id="help"><div class="panel"><h3>操作</h3><div class="row"><span>下一页 / 上一页</span><b>→ / ← · Space</b></div><div class="row"><span>首页 / 末页</span><b>Home / End</b></div><div class="row"><span>全屏</span><b>F</b></div><div class="row"><span>演讲备注</span><b>N</b></div><div class="row"><span>帮助</span><b>?</b></div><div class="row"><span>跳转锚点</span><b>点击卡片</b></div></div></div>
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var progress = document.getElementById('progress');
+  var page = document.getElementById('page');
+  var notesText = document.getElementById('notesText');
+  var notesPanel = document.querySelector('.notes');
+  var help = document.getElementById('help');
+  var i = 0;
+
+  function pad(n){ return n < 10 ? '0' + n : '' + n; }
+  function resize(){
+    var s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+    deck.style.transform = 'scale(' + s + ')';
+  }
+  function show(n){
+    if (n < 0) n = 0;
+    if (n > slides.length - 1) n = slides.length - 1;
+    slides[i].classList.remove('active');
+    i = n;
+    slides[i].classList.add('active');
+    page.textContent = pad(i + 1) + ' / ' + pad(slides.length);
+    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+    notesText.textContent = slides[i].getAttribute('data-notes') || '';
+    if (history.replaceState) history.replaceState(null, '', '#' + (i + 1));
+  }
+  function next(){ show(i + 1); }
+  function prev(){ show(i - 1); }
+
+  document.addEventListener('keydown', function(e){
+    var t = e.target;
+    if (t && t.closest && t.closest('input,textarea,select')) return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') { e.preventDefault(); show(0); }
+    else if (e.key === 'End') { e.preventDefault(); show(slides.length - 1); }
+    else if (e.key === 'f' || e.key === 'F') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+    else if (e.key === 'n' || e.key === 'N') document.body.classList.toggle('notes-on');
+    else if (e.key === '?') help.classList.toggle('open');
+    else if (e.key === 'Escape') help.classList.remove('open');
+  });
+
+  document.addEventListener('click', function(e){
+    if (e.target.closest('button,a,input,select,textarea')) return;
+    if (e.clientX > window.innerWidth / 2) next(); else prev();
+  });
+
+  document.querySelectorAll('[data-goto]').forEach(function(el){
+    el.addEventListener('click', function(e){
+      e.preventDefault();
+      var n = parseInt(el.getAttribute('data-goto'), 10);
+      show(isNaN(n) ? 0 : n - 1);
+    });
+  });
+
+  document.querySelectorAll('[data-poll]').forEach(function(poll){
+    var counts = {};
+    var opts = Array.prototype.slice.call(poll.querySelectorAll('.poll-opt'));
+    function refresh(){
+      var total = 0;
+      opts.forEach(function(o){ total += counts[o.getAttribute('data-key')] || 0; });
+      opts.forEach(function(o){
+        var n = counts[o.getAttribute('data-key')] || 0;
+        o.querySelector('.cnt').textContent = n;
+        o.querySelector('.pbar').style.width = (total ? (n / total * 100) : 0) + '%';
+      });
+    }
+    opts.forEach(function(o){
+      o.addEventListener('click', function(){
+        var k = o.getAttribute('data-key');
+        counts[k] = (counts[k] || 0) + 1;
+        refresh();
+      });
+    });
+    var reset = poll.parentNode.querySelector('[data-poll-reset]');
+    if (reset) reset.addEventListener('click', function(){ counts = {}; refresh(); });
+    refresh();
+  });
+
+  var turns = document.getElementById('turns');
+  var ctx = document.getElementById('ctx');
+  var hit = document.getElementById('hit');
+  function fmtK(n){ return n >= 1000 ? (n / 1000) + 'M' : n + 'k'; }
+  function calc(){
+    if (!turns || !ctx || !hit) return;
+    var t = +turns.value, c = +ctx.value, h = +hit.value / 100;
+    document.getElementById('turnsVal').textContent = t;
+    document.getElementById('ctxVal').textContent = c + 'k';
+    document.getElementById('hitVal').textContent = Math.round(h * 100) + '%';
+    var prompt = t * c * 1000;
+    var effective = prompt * (1 - h * 0.9);
+    var output = t * 500;
+    var total = effective + output;
+    var base = 60 * 100 * 1000 + 60 * 500;
+    document.getElementById('relVal').textContent = Math.round(total / base * 100);
+    document.getElementById('calcSub').textContent = '有效 token：' + Math.round(total).toLocaleString('en-US');
+  }
+  [turns, ctx, hit].forEach(function(el){ if (el) el.addEventListener('input', calc); });
+  calc();
+
+  var level = document.getElementById('level');
+  var gaugeFill = document.getElementById('gaugeFill');
+  var gaugeVal = document.getElementById('gaugeVal');
+  var gaugeMsg = document.getElementById('gaugeMsg');
+  function gauge(){
+    if (!level) return;
+    var v = +level.value;
+    gaugeVal.textContent = v + '%';
+    gaugeFill.style.width = v + '%';
+    if (v >= 100) { gaugeFill.style.background = 'var(--red)'; gaugeMsg.textContent = 'compaction 已发生：有损。停止扩张，交回 BA 重拆。'; }
+    else if (v >= 80) { gaugeFill.style.background = 'var(--red)'; gaugeMsg.textContent = '80%+：停止读新文件，收尾或换会话。'; }
+    else if (v >= 60) { gaugeFill.style.background = 'var(--amber)'; gaugeMsg.textContent = '60%+：准备 handoff，写清完成 / 未完成 / 下一步。'; }
+    else { gaugeFill.style.background = 'var(--teal)'; gaugeMsg.textContent = '当前正常：继续只读任务相关文件。'; }
+  }
+  if (level) { level.addEventListener('input', gauge); gauge(); }
+
+  var seconds = 180;
+  var timerId = null;
+  var clock = document.getElementById('clock');
+  function paint(){
+    var m = Math.floor(seconds / 60), s = seconds % 60;
+    clock.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function start(){
+    if (timerId) return;
+    timerId = setInterval(function(){
+      if (seconds <= 0) { clearInterval(timerId); timerId = null; return; }
+      seconds--; paint();
+    }, 1000);
+  }
+  function pause(){ if (timerId) { clearInterval(timerId); timerId = null; } }
+  function reset(){ pause(); seconds = 180; paint(); }
+  var startBtn = document.querySelector('[data-timer-start]');
+  var pauseBtn = document.querySelector('[data-timer-pause]');
+  var resetBtn = document.querySelector('[data-timer-reset]');
+  if (startBtn) startBtn.addEventListener('click', start);
+  if (pauseBtn) pauseBtn.addEventListener('click', pause);
+  if (resetBtn) resetBtn.addEventListener('click', reset);
+  if (clock) paint();
+
+  window.addEventListener('resize', resize);
+  resize();
+
+  var start = parseInt((location.hash || '').replace('#', ''), 10);
+  show(isNaN(start) ? 0 : start - 1);
+})();
+</script>
+</body>
+</html>
