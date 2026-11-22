@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>为什么会有 agent-workspace？· 一场设计追问</title>
+<title>当一个 Agent 不够用之后 · agent-workspace 的由来</title>
 <style>
   :root{
     --bg:#070b16; --panel:#0e1526; --panel2:#121a2e;
@@ -283,88 +283,123 @@
   <!-- 1 cover -->
     <!-- 01 cover -->
     <!-- 01 cover -->
+    <!-- 01 cover -->
   <section class="slide cover active">
     <div class="wrap">
-      <div class="eyebrow">A SERIES OF WHY · 2026.11</div>
-      <h1>为什么会有<br><span class="cyan">agent-workspace</span>？</h1>
+      <div class="eyebrow">TECH SHARING · 2026.11</div>
+      <h1>当一个 Agent<br><span class="cyan">不够用之后</span></h1>
       <div class="sub">
-        不是功能清单，是一串设计追问：<br>
-        目录、分支、角色、消息、成本。
+        agent-workspace 的由来，<br>
+        以及几次被问题推着走的转向。
       </div>
       <div class="meta" style="margin-top:34px">
-        <span>11 个为什么</span><span class="dot"></span>
-        <span>若干岔路口</span><span class="dot"></span>
-        <span>1 个当前答案</span>
+        <span>一次技术分享</span><span class="dot"></span>
+        <span>约 40 分钟</span><span class="dot"></span>
+        <span>v1.53</span>
       </div>
     </div>
   </section>
 
-  <!-- 02 question chain -->
+  <!-- 02 background -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">开场 · 先别急着看答案</div>
-      <h2>今天按“为什么”讲</h2>
-      <div class="grid g3" style="margin-top:6px">
-        <div class="card"><div class="n">01 起点</div><h3>为什么要有这个项目？</h3><p>多 Agent 到底卡在哪？</p></div>
-        <div class="card"><div class="n">02 结构</div><h3>为什么目录/分支这样设计？</h3><p>按人分，还是按事实分？</p></div>
-        <div class="card"><div class="n">03 角色</div><h3>为什么需要多个 Agent？</h3><p>早期没有 Planner，后来为什么加？</p></div>
-        <div class="card"><div class="n">04 协作</div><h3>为什么需要 bus / inbox？</h3><p>消息为什么不能只在聊天里？</p></div>
-        <div class="card"><div class="n">05 并发</div><h3>为什么 claim / WIP=1？</h3><p>并行到底带来了什么？</p></div>
-        <div class="card"><div class="n">06 成本</div><h3>为什么现在谈成本？为什么不做平台？</h3><p>协作之后，下一个瓶颈是什么？</p></div>
-      </div>
-      <div class="quote" style="margin-top:20px;font-size:18px">每个节点，我们都可以停一下：如果是你，会不会选别的？</div>
-    </div>
-  </section>
-
-  <!-- 03 why project -->
-  <section class="slide">
-    <div class="wrap">
-      <div class="kicker">为什么 01 · 起点</div>
-      <h2>为什么会有<br>agent-workspace？</h2>
-      <div class="grid g2">
-        <div class="card"><div class="n">当时的现场</div><p>多个 Agent、同一个 checkout；<br>改同一批文件，互相覆盖；<br>说过的话，重启就没了。</p></div>
-        <div class="card" style="border-color:rgba(255,107,129,.3)"><div class="n">最初的误判</div><p>以为是模型不够强。<br>换更强的模型，冲突和丢消息仍然发生。</p></div>
-      </div>
-      <div class="quote" style="margin-top:18px;font-size:18px">不是想造框架，是被协作的<strong class="cyan">物理结构</strong>逼出来的。</div>
-      <div class="qline"><span>如果只做一个 Agent，这些问题都不存在</span><span class="ok">但任务量和上下文不允许</span></div>
-    </div>
-  </section>
-
-  <!-- 04 why directory -->
-  <section class="slide">
-    <div class="wrap">
-      <div class="kicker">为什么 02 · 目录</div>
-      <h2>为什么目录要这样设计？</h2>
-      <p class="lead" style="margin-bottom:10px">按人分，还是按事实分？</p>
-      <div class="grid g2">
-        <div class="card" style="border-color:rgba(255,107,129,.25)"><div class="n">方案 A · 按人/任务平铺</div><p><code>worktrees/agent-a</code><br><code>worktrees/agent-b</code><br>每个人一个目录；边界靠自觉。</p><p class="muted" style="font-size:13px;margin-top:8px">结果：目录越来越多，事实没有根。</p></div>
-        <div class="card" style="border-color:rgba(62,224,194,.3)"><div class="n">方案 B · 按事实分层</div><p><code>workspace/</code> 容器<br><code>code/</code> 产品代码<br><code>BA/</code> 需求与状态<br><code>Deploy/</code> 发布</p></div>
-      </div>
-      <div class="quote" style="margin-top:16px;font-size:18px">目录不是文件夹审美，是<strong class="cyan">事实边界</strong>。</div>
-      <div class="qline"><span>如果是你，会按人分还是按事实分？</span></div>
-    </div>
-  </section>
-
-  <!-- 05 why branches -->
-  <section class="slide">
-    <div class="wrap">
-      <div class="kicker">为什么 03 · 分支</div>
-      <h2>为什么分支要这样设计？</h2>
+      <div class="kicker">起点 · 背景</div>
+      <h2>先从一个很具体的项目说起</h2>
+      <p class="lead" style="margin-bottom:12px">多仓库、多模块、需求并行；最多的时候，8 个需求负责人（后来叫 BA）同时开工。</p>
       <div class="grid g3">
-        <div class="card" style="border-color:rgba(255,107,129,.25)"><div class="n">每个 Agent 一条</div><p>工位变成分支；<br>谁是主线？合并到哪？</p></div>
-        <div class="card" style="border-color:rgba(255,184,107,.25)"><div class="n">每个任务一条</div><p>分支数量爆炸；<br>长期分支和临时分支混在一起。</p></div>
-        <div class="card" style="border-color:rgba(62,224,194,.3)"><div class="n">现在是</div><p>code / BA / Deploy 三条长期线；<br>worktree 是它们的临时视图。</p></div>
+        <div class="card"><div class="n">工作台</div><h3>三个地方</h3><p>代码、需求、部署分散在不同仓库和分支。</p></div>
+        <div class="card"><div class="n">协作</div><h3>聊天 + 人工搬运</h3><p>任务靠说，状态靠记，交接靠复制。</p></div>
+        <div class="card"><div class="n">结果</div><h3>能跑，但一并行就乱</h3><p>冲突、丢消息、状态漂移，开始同时出现。</p></div>
       </div>
-      <div class="quote" style="margin-top:18px;font-size:18px">分支是<strong class="cyan">事实的生命周期</strong>，不是人的工位。</div>
-      <div class="qline"><span>你会用 trunk-based，还是长期线？</span><span class="ok">没有唯一答案</span></div>
+      <div class="quote" style="margin-top:18px;font-size:18px">我们不是先有架构，再找场景；是先被场景逼到墙角。</div>
     </div>
   </section>
 
-  <!-- 06 why multi-agent -->
+  <!-- 03 what is it -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">为什么 04 · 多 Agent</div>
-      <h2>为什么需要多个 Agent？</h2>
+      <div class="kicker">先对齐 · 它是什么</div>
+      <h2>agent-workspace<br>到底是什么？</h2>
+      <p class="lead" style="margin-bottom:12px">它不是平台，也不是 Agent 框架；它是一套用 Git 承载协作的 skill。</p>
+      <div class="grid g3">
+        <div class="card"><div class="n">约定</div><h3>目录、分支、角色</h3><p>把“谁在哪、做什么”变成可执行的约定。</p></div>
+        <div class="card"><div class="n">工具</div><h3>claim、bus、doctor</h3><p>把约定变成命令，而不是靠记忆。</p></div>
+        <div class="card"><div class="n">门禁</div><h3>verify、contract</h3><p>把“应该”变成“过不去”。</p></div>
+      </div>
+      <div class="quote" style="margin-top:18px;font-size:18px">它不解决模型聪不聪明，它解决多个 Agent 怎么不互相踩。</div>
+    </div>
+  </section>
+
+  <!-- 04 one agent -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">第一章 · 单 Agent</div>
+      <h2>最开始，<br>我们只有一个 Agent</h2>
+      <p class="lead" style="margin-bottom:12px">一个 checkout、一个任务、一个人盯着；慢，但不会乱。</p>
+      <div class="grid g3">
+        <div class="card"><div class="n">需求少</div><p>一次只做一件事，顺序天然正确。</p></div>
+        <div class="card"><div class="n">串行</div><p>没有并发，就没有抢占和覆盖。</p></div>
+        <div class="card"><div class="n">人工搬运</div><p>上下文、状态、结果，靠人接。</p></div>
+      </div>
+      <div class="quote" style="margin-top:18px;font-size:18px">一个 Agent 的时候，所有问题都不存在；<br>问题是需求不会停在“一个”。</div>
+    </div>
+  </section>
+
+  <!-- 05 conflict -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">第二章 · 空间</div>
+      <h2>加到第三个 Agent，<br>它们开始互相覆盖</h2>
+      <div class="grid g2">
+        <div class="card"><div class="n">现场</div><p>Agent A 在改登录，Agent B 在改支付；<br>它们共享同一个 checkout。</p></div>
+        <div class="card" style="border-color:rgba(255,107,129,.3)"><div class="n">直觉解法</div><p>“让它们小心一点”“改之前先看一眼”。<br>结果：仍然冲突，只是更晚发现。</p></div>
+      </div>
+      <div class="quote" style="margin-top:18px;font-size:18px">不是模型不听话，是它们共享了同一个“事实源”。</div>
+      <div class="qline"><span>那它们应该站在哪里？</span></div>
+    </div>
+  </section>
+
+  <!-- 06 worktree -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">第二章 · 空间</div>
+      <h2>那就先让它们<br>各站各的地方</h2>
+      <div class="grid g2">
+        <div>
+<pre>repo/
+├── main
+└── .worktrees/
+    ├── REQ-101/
+    └── REQ-102/</pre>
+        </div>
+        <div class="grid" style="gap:12px">
+          <div class="card"><div class="n">01 隔离</div><p>每个 REQ 一个工作区，互不覆盖。</p></div>
+          <div class="card"><div class="n">02 回收</div><p>合并即回收；worktree 是容器，不是永久分支。</p></div>
+        </div>
+      </div>
+      <div class="quote" style="margin-top:18px">站的地方分开了，但新的问题不是代码，<br><strong class="amber">而是：谁代表事实？</strong></div>
+    </div>
+  </section>
+
+  <!-- 07 directory/branches -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">第二章 · 空间</div>
+      <h2>工作区多了，<br>谁代表事实？</h2>
+      <div class="grid g2">
+        <div class="card" style="border-color:rgba(255,107,129,.25)"><div class="n">如果按人分</div><p>每个人一条分支、一个目录；<br>工位变成了事实，合并时没有共同根。</p></div>
+        <div class="card" style="border-color:rgba(62,224,194,.3)"><div class="n">我们最后按事实分</div><p><code>code/</code> 产品代码<br><code>BA/</code> 需求与状态<br><code>Deploy/</code> 发布与回滚</p></div>
+      </div>
+      <div class="quote" style="margin-top:16px;font-size:18px">目录是事实边界，分支是事实的生命周期；<br>worktree 只是它们的临时视图。</div>
+      <div class="qline"><span>如果是你，会按人分，还是按事实分？</span></div>
+    </div>
+  </section>
+
+  <!-- 08 multi-agent -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">第三章 · 角色</div>
+      <h2>有了地方，<br>为什么还需要多个 Agent？</h2>
       <p class="lead" style="margin-bottom:10px">不是为了“更多”，是为了三个隔离。</p>
       <div class="grid g3">
         <div class="card"><div class="n">任务并行</div><h3>独立的需求</h3><p>互不阻塞，各自推进。</p></div>
@@ -376,11 +411,11 @@
     </div>
   </section>
 
-  <!-- 07 why planner -->
+  <!-- 09 planner -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">为什么 05 · Planner</div>
-      <h2>早期没有 Planner，<br>为什么后来需要？</h2>
+      <div class="kicker">第三章 · 角色</div>
+      <h2>早期没有 Planner，<br>我们怎么活？</h2>
       <div class="grid g2">
         <div class="card"><div class="n">1–3 个 BA</div><p>本地决策就够：<br>谁先做、怎么做，BA 自己拍板。</p></div>
         <div class="card"><div class="n">8 个 BA</div><p>优先级冲突、跨 BA 契约、<br>不可逆变更开始互相踩。</p></div>
@@ -395,11 +430,11 @@
     </div>
   </section>
 
-  <!-- 08 why BA -->
+  <!-- 10 BA -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">为什么 06 · BA</div>
-      <h2>为什么需要 BA？</h2>
+      <div class="kicker">第三章 · 角色</div>
+      <h2>谁对需求负责？</h2>
       <div class="grid g3">
         <div class="card"><div class="n">Dev 兼需求</div><p>实现者定义验收；<br>容易把“能做”当成“该做”。</p></div>
         <div class="card"><div class="n">PM 兼需求</div><p>离代码太远；<br>边界和验收落不了地。</p></div>
@@ -410,11 +445,11 @@
     </div>
   </section>
 
-  <!-- 09 why bus -->
+  <!-- 11 bus -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">为什么 07 · 消息</div>
-      <h2>为什么需要 bus？</h2>
+      <div class="kicker">第四章 · 消息</div>
+      <h2>他们怎么说话？</h2>
       <p class="lead" style="margin-bottom:8px">聊天、Issue、数据库、Git：为什么最后选了 Git 空提交？</p>
       <table style="margin-top:2px">
         <tr><th style="width:170px">方案</th><th>优点</th><th>问题</th></tr>
@@ -427,11 +462,11 @@
     </div>
   </section>
 
-  <!-- 10 why inbox -->
+  <!-- 12 inbox/mqtt -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">为什么 08 · 通道</div>
-      <h2>为什么又需要<br>inbox 和 MQTT？</h2>
+      <div class="kicker">第四章 · 消息</div>
+      <h2>消息发出去了，<br>谁负责读？</h2>
       <div class="grid g3">
         <div class="card"><div class="n">bus 单独用</div><p>每次 fetch 才能看到；<br>实时性差，读状态难。</p></div>
         <div class="card"><div class="n">local inbox</div><p>先落盘；同机立即可读；<br>已读/ack 有归属。</p></div>
@@ -442,11 +477,11 @@
     </div>
   </section>
 
-  <!-- 11 why claim -->
+  <!-- 13 claim -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">为什么 09 · 并发</div>
-      <h2>为什么 claim / WIP=1？</h2>
+      <div class="kicker">第五章 · 并发</div>
+      <h2>都在忙，<br>怎么知道谁在做什么？</h2>
       <div class="grid g2">
         <div class="card" style="border-color:rgba(255,107,129,.3)"><div class="n">不做会怎样</div><p>重复做同一个需求；<br>抢同一批文件；<br>状态各说各话。</p></div>
         <div class="card" style="border-color:rgba(62,224,194,.3)"><div class="n">做了之后</div><p>queue → claim → WIP=1 → status；<br>一个需求一个容器，一个事实一个写者。</p></div>
@@ -456,12 +491,12 @@
     </div>
   </section>
 
-  <!-- 12 why cost -->
+  <!-- 14 cost -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">为什么 10 · 成本</div>
-      <h2>为什么现在开始<br>谈成本、上下文、会话？</h2>
-      <p class="lead" style="margin-bottom:8px">协作能跑之后，账单成为下一个瓶颈。</p>
+      <div class="kicker">第六章 · 成本</div>
+      <h2>协作顺了，<br>账单开始说话</h2>
+      <p class="lead" style="margin-bottom:8px">当我们终于不吵了，才发现钱花得比想象中快。</p>
       <div class="stats" style="margin-top:2px">
         <div class="stat"><div class="v">4</div><div class="l">主会话</div></div>
         <div class="stat"><div class="v">137</div><div class="l">子会话</div></div>
@@ -473,11 +508,11 @@
     </div>
   </section>
 
-  <!-- 13 calculator -->
+  <!-- 15 calculator -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">互动 · 算一笔账</div>
-      <h2>哪个杠杆最大？</h2>
+      <div class="kicker">第六章 · 成本</div>
+      <h2>那先算一笔账</h2>
       <div class="calc" style="margin-top:4px">
         <div class="card">
           <div class="control"><div class="top"><span>轮数</span><b id="calcTurnsVal">60</b></div><input id="calcTurns" type="range" min="10" max="200" value="60"></div>
@@ -496,11 +531,56 @@
     </div>
   </section>
 
-  <!-- 14 why not platform -->
+  <!-- 16 context -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">为什么 11 · 边界</div>
-      <h2>为什么不做平台，<br>做 Skill？</h2>
+      <div class="kicker">第六章 · 成本</div>
+      <h2>上下文到底该装什么？</h2>
+      <div class="grid g3">
+        <div class="card"><div class="n">稳定事实</div><h3>项目地图</h3><p>架构、命令、约定、坑；放 base / 文档，按需引用。</p></div>
+        <div class="card"><div class="n">任务状态</div><h3>当前切片</h3><p>目标、AC、evidence、待验证；放任务卡 / handoff。</p></div>
+        <div class="card"><div class="n">工具输出</div><h3>临时材料</h3><p>只留摘要和 path:line；不要把全量日志塞回去。</p></div>
+      </div>
+      <div class="quote" style="margin-top:18px;font-size:18px">上下文不是记忆，是工作台；<br>只放“现在要动手”的东西。</div>
+      <div class="qline"><span>你的会话里，哪一类东西最多？</span></div>
+    </div>
+  </section>
+
+  <!-- 17 task sizing -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">第六章 · 成本</div>
+      <h2>任务太大，<br>子 Agent 为什么停不下来？</h2>
+      <div class="grid g2">
+        <div class="card" style="border-color:rgba(255,107,129,.3)"><div class="n">症状</div><p>读很多文件、多次 compaction、始终没有 diff；<br>不是任务难，是任务没拆。</p></div>
+        <div class="card"><div class="n">我们后来怎么做</div><p>BA 做任务预检和切片；<br>子 Agent 只做开工自检，第一次 compaction 就停。</p></div>
+      </div>
+      <div class="quote" style="margin-top:18px;font-size:18px">拆分权在 BA，执行可行性判断权在子 Agent。</div>
+      <div class="qline"><span>你会让子 Agent 自己拆任务吗？</span></div>
+    </div>
+  </section>
+
+  <!-- 18 handoff -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">第六章 · 成本</div>
+      <h2>常驻 BA 换班，<br>消息和 claim 怎么办？</h2>
+      <table style="margin-top:2px">
+        <tr><th style="width:150px">状态</th><th>按什么隔离</th><th>换 session 后</th></tr>
+        <tr><td><strong>inbox / 已读</strong></td><td>agent_id</td><td class="cyan">保留</td></tr>
+        <tr><td><strong>claim / WIP</strong></td><td>agent_id</td><td class="cyan">保留</td></tr>
+        <tr><td><strong>session / wake</strong></td><td>session_id</td><td class="amber">换租约</td></tr>
+      </table>
+      <div class="quote" style="margin-top:14px;font-size:18px">agent_id 是工位，session 是租约；<br>换班不是重启，是 handoff → resume。</div>
+      <div class="qline"><span>如果会话必须换，你最怕丢什么？</span></div>
+    </div>
+  </section>
+
+  <!-- 19 platform -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">第七章 · 边界</div>
+      <h2>那要不要干脆<br>做个平台？</h2>
       <div class="grid g2">
         <div class="checklist">
           <label class="check"><input type="checkbox" data-fit><span><strong>多租户 / 跨组织</strong><small>需要权限、配额、隔离</small></span></label>
@@ -516,14 +596,30 @@
           <p class="muted" style="font-size:13px">命中两条，再谈平台；平台不是“更高级的 Skill”，是另一类产品。</p>
         </div>
       </div>
-      <div class="quote" style="margin-top:14px;font-size:17px">现阶段 90% 的收益来自“约定 + 门禁”，平台只多给 10%，却要背 100% 的运维。</div>
+      <div class="quote" style="margin-top:14px;font-size:16px">现阶段 90% 的收益来自“约定 + 门禁”，平台只多给 10%，却要背 100% 的运维。</div>
     </div>
   </section>
 
-  <!-- 15 principles -->
+  <!-- 20 current model -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">复盘 · 判断</div>
+      <div class="kicker">现在 · 闭环</div>
+      <h2>现在，它长这样</h2>
+      <ul class="steps">
+        <li><span class="k">01</span><div><strong>需求</strong>：Planner 定顺序，BA 写验收。</div></li>
+        <li><span class="k">02</span><div><strong>认领</strong>：claim next，WIP=1，生成 worktree。</div></li>
+        <li><span class="k">03</span><div><strong>执行</strong>：Dev 在 worktree 里改；Explore 只读探索。</div></li>
+        <li><span class="k">04</span><div><strong>验证</strong>：QA 按 AC 和 diff 验证；不重新探索架构。</div></li>
+        <li><span class="k">05</span><div><strong>合并 / 回收</strong>：contract check → merge → release claim。</div></li>
+      </ul>
+      <div class="quote" style="margin-top:14px;font-size:17px">不是“更聪明的 Agent”，是“更少的共享状态、更清楚的边界”。</div>
+    </div>
+  </section>
+
+  <!-- 21 principles -->
+  <section class="slide">
+    <div class="wrap">
+      <div class="kicker">复盘 · 如果重来</div>
       <h2>如果重来一次，<br>我会保留哪些判断？</h2>
       <ul class="steps">
         <li><span class="k">01</span><div><strong>先物理隔离，再谈协作</strong>：工作区/分支先分清楚。</div></li>
@@ -532,30 +628,30 @@
         <li><span class="k">04</span><div><strong>先测结构，再谈单价</strong>：成本 ≈ 轮数 × 上下文。</div></li>
         <li><span class="k">05</span><div><strong>先最小闭环，再平台</strong>：约定 + 门禁跑通，再谈产品化。</div></li>
       </ul>
-      <div class="quote" style="margin-top:14px;font-size:17px">这些不是唯一答案；它们只是我们在当时的约束下，能解释得通的选择。</div>
+      <div class="quote" style="margin-top:12px;font-size:15px">这套东西不是免费的：仪式、磁盘、消息噪音、学习曲线，都是代价。</div>
     </div>
   </section>
 
-  <!-- 16 open questions -->
+  <!-- 22 open questions -->
   <section class="slide">
     <div class="wrap">
-      <div class="kicker">抛砖引玉 · 开放问题</div>
-      <h2>哪些节点可能还有更优解？</h2>
+      <div class="kicker">开放问题 · 抛砖引玉</div>
+      <h2>哪些节点，<br>可能还有更优解？</h2>
       <div class="anchor-grid">
         <div class="anchor"><div class="k">节点 02 · 目录 / 分支</div><h3>按事实分，还是按团队分？</h3><p>长期线 + worktree 适合你，还是 trunk-based 更轻？</p><div class="q">如果团队边界一直在变，目录怎么稳？</div></div>
         <div class="anchor"><div class="k">节点 04/05 · 多 Agent / Planner</div><h3>角色固定，还是动态编排？</h3><p>Planner 是必需，还是规模到某个点才需要？</p><div class="q">3 个 BA 的团队，需要 Planner 吗？</div></div>
         <div class="anchor"><div class="k">节点 07/08 · 消息</div><h3>Git bus，还是事件总线？</h3><p>审计、实时、离线，三者怎么取舍？</p><div class="q">消息量再大 10 倍，bus 还成立吗？</div></div>
         <div class="anchor"><div class="k">节点 10 · 成本 / 缓存</div><h3>先做会话树，还是先做缓存？</h3><p>结构优化和单价优化，哪个先？</p><div class="q">Prompt Cache 能解决上下文长度吗？</div></div>
       </div>
-      <p class="muted" style="margin-top:14px;font-size:13px">今天只留问题，不展开机制；后续按专题单独分享。</p>
+      <p class="muted" style="margin-top:12px;font-size:13px">今天只留问题，不展开机制；后续按专题单独分享。</p>
     </div>
   </section>
 
-  <!-- 17 discussion -->
+  <!-- 23 discussion -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker">讨论 · 5 分钟</div>
-      <h2>四个问题，想听你的</h2>
+      <h2>如果只讨论一件事，<br>你最想聊哪个？</h2>
       <div class="grid g2">
         <div>
           <ul class="clean">
@@ -579,7 +675,7 @@
     </div>
   </section>
 
-  <!-- 18 qa -->
+  <!-- 24 qa -->
   <section class="slide">
     <div class="wrap">
       <div class="kicker">Q&amp;A · 最后</div>
@@ -597,7 +693,7 @@
   </section>
 
 <div class="hud">
-  <div class="num" id="num">01 / 18</div>
+  <div class="num" id="num">01 / 24</div>
   <div class="bar"><i id="bar"></i></div>
   <div class="num" id="pct">3%</div>
 </div>
