@@ -247,5 +247,6 @@ git push origin --delete feature/REQ-003
 - 状态只由你改；Dev/QA 只报告。
 - 不给同一个 worktree 派第二个需求。
 - 子 Agent 的 briefing 必须自包含，且带绝对路径。
+- 导出/截图/日志写 `<repo-root>/.aw/exports/<REQ>/`；临时文件写 `.aw/tmp/`；禁止写盘根、`%TEMP%`、Desktop、Downloads。
 - `push` / `merge` / `--delete` 属于外部可见动作，用户未预授权时先确认。
 - 需求编号不复用；取消的需求保留占位行。

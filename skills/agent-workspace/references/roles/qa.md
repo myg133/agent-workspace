@@ -108,6 +108,7 @@ QA 不替 Dev 补测试，但要在报告里指出测试套件的成本：
 
 ## 6. 硬规则
 - **不直接使用 bus**：结论只报告给 BA，由 BA 对外发消息。
+- 临时导出/截图写 `<repo-root>/.aw/exports/<REQ>/`；正式报告交 BA 落到 `BA/demands/<REQ>/`；禁止写盘根、`%TEMP%`。
 
 - 不写代码、不修 bug、不 commit / push / merge。
 - 不改 `status.md`（那是 BA 的）。

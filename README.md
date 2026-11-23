@@ -21,6 +21,7 @@
 | 常驻 BA 换班丢消息 | `agent handoff` / `agent resume` 复用 agent_id，保留 claim 和未处理消息 |
 | BA 和子 Agent 重复探索 | 探索权唯一：BA 只做业务探索，Explore/Dev 是代码探索 owner；任务卡带 evidence |
 | 子 Agent 跑太大、反复 compaction | BA 先做任务预检和切片；子 Agent 只做开工自检，第一次 compaction 就停 |
+| 临时/导出文件乱写盘根 | 写目录限定：`.aw/tmp` / `.aw/exports/<REQ>`；禁止 `%TEMP%`、`C:/tmp`、`D:/tmp` |
 
 ## 适用范围
 

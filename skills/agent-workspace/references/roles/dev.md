@@ -138,6 +138,7 @@ git push origin --delete feature/REQ-001
 - 不 merge、不 rebase develop 到 feature 分支上"顺手修别人的冲突"（先问 BA）。
 - 圈复杂度 ≤ 10，认知复杂度 ≤ 15。
 - 不提交 secrets / 大二进制。
+- 临时文件/导出只写当前 worktree 或 `<repo-root>/.aw/{tmp,exports}/`；禁止写 `C:/tmp`、`D:/tmp`、`%TEMP%`、Desktop、Downloads。
 - 改不动就问，不要扩大 scope。
 - **不默认跑全量测试**；fast / related 通过即停，full 交给 QA/CI。
 - **不修与本次 diff 无关的失败**；记录 `pre-existing` 后继续。

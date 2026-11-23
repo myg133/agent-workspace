@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作（workspace 模式）
-  version: 1.53.1
+  version: 1.53.2
 ---
 
 # Agent Workspace
@@ -135,6 +135,10 @@ python <skill-path>/scripts/aw.py audit
 20. **BA 做任务预检，子 Agent 只做开工自检**：BA 下派前判断模块/文件/AC/依赖/切片/预算，
     太大就拆；子 Agent 只验证 evidence 是否对得上 HEAD、入口是否存在、测试命令是否可执行，
     不重新做任务大小评估。第一次 compaction 就停，不要连续压。详见 `references/global/task-sizing.md`。
+21. **写文件目录限定**：所有写操作必须在项目根或当前 worktree 内；临时文件放 `<repo-root>/.aw/tmp/`，
+    导出/截图/日志放 `<repo-root>/.aw/exports/<REQ>/`；禁止写盘根、`C:/tmp`、`D:/tmp`、`%TEMP%`、
+    Desktop、Downloads，禁止用 `..` 逃出允许根。工具必须用系统临时目录时，改 `TMP/TEMP/TMPDIR`
+    或把结果复制回项目内并清理。详见 `references/global/paths.md`。
 
 ## 我该读什么
 

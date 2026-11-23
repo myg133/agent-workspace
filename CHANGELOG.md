@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### 新增：写入目录限定（工具无关）
+
+- 所有写文件必须落在项目根 / 当前 worktree 内；临时文件固定 `.aw/tmp/`，导出/截图/日志固定 `.aw/exports/<REQ>/`；
+- 禁止写盘根、`C:/tmp`、`D:/tmp`、`%TEMP%`、Desktop、Downloads，禁止用 `..` 逃逸；
+- 工具必须用系统临时目录时，显式改 `TMP/TEMP/TMPDIR` 或复制回项目内并清理；
+- `paths.md` 新增“写入边界与导出目录”，BA/Dev/QA 角色与 SKILL 硬规则同步；版本 `1.53.2`。
+
 ### 修复：watcher 因单次 git fetch 超时退出
 
 - `aw_single.py`：`git()` 捕获 `subprocess.TimeoutExpired`，转为 `ToolError`，不再让异常穿透；
