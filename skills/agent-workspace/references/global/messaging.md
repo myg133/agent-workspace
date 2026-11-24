@@ -27,6 +27,25 @@
 错误: bus 只允许 BA / Planner 使用；子 agent 请与你的 BA 交互，不要直接发消息。
 ```
 
+## 0.1 子 Agent 不接消息
+
+子 Agent 默认**没有消息权**。父 BA 在 spawn 时设置：
+
+~~~text
+AW_SUBAGENT=1
+AW_NO_MSG=1
+AW_ROLE=dev      # 或 qa / explore
+AW_SESSION_ID=<子会话 id>
+~~~
+
+效果：
+
+- `aw.py msg` / `watch` / `claim` / `agent` 直接拒绝，返回 `SUBAGENT_NO_*`；
+- OMP `aw-bus` extension 只接收 `data.agent == AW_AGENT_ID` 的通知，并按 role / session map 过滤；
+- 子 Agent 的结果通过任务返回值交回父 BA，不通过 bus。
+
+父 BA 只允许一个 **authoritative session** 收消息：`.aw/sessions/<agent>.map.json` 的 `session_id` 必须等于当前 `AW_SESSION_ID` / `PI_SESSION_ID`；不一致的会话不会 steer。
+
 ## 1. 为什么还需要 bus
 
 | 方案 | 冲突 | 历史噪音 | 跨机 | 结论 |

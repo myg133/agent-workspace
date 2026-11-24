@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 新增：子 Agent 消息隔离（三层）
+
+- OMP `aw-bus` / `aw-single-wake` 增加 `AW_SUBAGENT` / `AW_NO_MSG` / role / recipient / authoritative session 过滤；
+- `aw.py` 的 `msg` / `watch` / `claim` / `agent` 对子 Agent 返回 `SUBAGENT_NO_*`；
+- `aw_mcp.py` 通知增加 `repo` 字段，供 extension 校验 session map；
+- BA spawn 子 Agent 时注入 `AW_SUBAGENT=1` / `AW_NO_MSG=1` / `AW_ROLE`；
+- 新增子 Agent 消息隔离测试；版本 `1.53.3`。
+
 ### 新增：写入目录限定（工具无关）
 
 - 所有写文件必须落在项目根 / 当前 worktree 内；临时文件固定 `.aw/tmp/`，导出/截图/日志固定 `.aw/exports/<REQ>/`；

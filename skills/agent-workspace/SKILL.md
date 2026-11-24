@@ -3,7 +3,7 @@ name: agent-workspace
 description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
 metadata:
   short-description: Git worktree 多 Agent 协作（workspace 模式）
-  version: 1.53.2
+  version: 1.53.3
 ---
 
 # Agent Workspace
@@ -139,6 +139,10 @@ python <skill-path>/scripts/aw.py audit
     导出/截图/日志放 `<repo-root>/.aw/exports/<REQ>/`；禁止写盘根、`C:/tmp`、`D:/tmp`、`%TEMP%`、
     Desktop、Downloads，禁止用 `..` 逃出允许根。工具必须用系统临时目录时，改 `TMP/TEMP/TMPDIR`
     或把结果复制回项目内并清理。详见 `references/global/paths.md`。
+22. **子 Agent 不接消息**：spawn 子 Agent 时设置 `AW_SUBAGENT=1` / `AW_NO_MSG=1` /
+    `AW_ROLE=dev|qa|explore`；`aw.py msg/watch/claim/agent` 对子 Agent 直接拒绝。
+    消息只投给 `.aw/sessions/<agent>.map.json` 的 authoritative session；
+    子 Agent 结果通过任务返回值交回父 BA，不走 bus。详见 `references/global/messaging.md`。
 
 ## 我该读什么
 

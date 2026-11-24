@@ -43,6 +43,19 @@ class IdentityError(GitError):
     """没有 agent 名称——必须由人指定后才能继续。"""
 
 
+def _is_subagent() -> bool:
+    value = (os.environ.get("AW_SUBAGENT") or os.environ.get("AW_NO_MSG") or "").strip().lower()
+    return value in ("1", "true", "yes", "on")
+
+
+def _reject_subagent(action: str) -> None:
+    if _is_subagent():
+        raise GitError(
+            "SUBAGENT_NO_%s: 子 Agent 不接消息、不 watch、不 claim；"
+            "只执行任务卡，结果交回父会话" % action.upper()
+        )
+
+
 def _win_no_window() -> dict:
     """Windows 下避免每次 git/python 子进程弹控制台窗口。"""
     if os.name != "nt":
@@ -1481,6 +1494,7 @@ def _write_manifest(root: Path, req: str, ident: dict) -> None:
 
 
 def cmd_claim(args) -> int:
+    _reject_subagent("claim")
     root = repo_root()
     ident = resolve_identity(root, role=args.role)
     action = args.action
@@ -1849,6 +1863,7 @@ def _agent_resume(root: Path, ident: dict, args) -> int:
 
 
 def cmd_agent(args) -> int:
+    _reject_subagent("agent")
     root = repo_root()
     aw_init(root)
     action = args.action or "whoami"
@@ -3601,6 +3616,7 @@ def _emit_watch(ident: dict, messages: list[dict], as_json: bool) -> None:
 
 
 def cmd_msg(args) -> int:
+    _reject_subagent("msg")
     root = repo_root()
     action = args.action
     aw_init(root)
@@ -4322,6 +4338,7 @@ def _ensure_watch(root: Path, args) -> int:
 
 
 def cmd_watch(args) -> int:
+    _reject_subagent("watch")
     root = repo_root()
     aw_init(root)
     state_path = aw_path(root, "watch-state.json")

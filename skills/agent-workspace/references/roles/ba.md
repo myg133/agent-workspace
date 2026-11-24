@@ -189,6 +189,7 @@ msg_reply {"id": "<id>", "body": "..."}
 Evidence：按 assets/templates/exploration-evidence.md.tpl 附已确认/待验证/不要重读
 BA 预检：切片目标 / 预期文件 / 预期 diff / AC 子集 / 预算
 子 Agent：最多 2 个；没有 diff 预期的任务不 spawn；超过切片预算就拆
+子 Agent 环境：AW_SUBAGENT=1 / AW_NO_MSG=1 / AW_ROLE=dev|qa|explore；结果回父会话，不走 bus
 换班：agent handoff 记录未处理消息；新会话同一 AW_AGENT_ID，agent resume
 约束：只改本 worktree；不 merge；不引入新依赖；完成后回报，不改 status.md
 ```

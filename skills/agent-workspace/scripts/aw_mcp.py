@@ -42,8 +42,10 @@ AGENT = (_arg_value("--agent") or os.environ.get("AW_AGENT_ID") or "").strip()
 VERSION = "1.6.0"
 PROTOCOL = "2024-11-05"
 _NOTIFY_FLAG = (os.environ.get("AW_MCP_NOTIFY") or "").strip().lower()
-# 默认开启；AW_MCP_NOTIFY=0 / --no-notify 关闭
+_SUBAGENT = (os.environ.get("AW_SUBAGENT") or os.environ.get("AW_NO_MSG") or "").strip().lower() in ("1", "true", "yes", "on")
+# 默认开启；AW_MCP_NOTIFY=0 / --no-notify / 子 Agent 关闭
 NOTIFY = ("--no-notify" not in sys.argv
+          and not _SUBAGENT
           and _NOTIFY_FLAG not in ("0", "false", "off", "no"))
 WRITE_LOCK = threading.Lock()
 READY = threading.Event()
@@ -461,6 +463,9 @@ def notify_loop() -> None:
         log("notify: 没有身份（env AW_AGENT_ID / --agent / 首次调用 agent_id 均未提供），通知已禁用")
         return
     path = _wake_path(AGENT)
+    repo_text = ""
+    if path and path.parent.name == "wake" and path.parent.parent.name == ".aw":
+        repo_text = str(path.parent.parent.parent)
     seen: set[str] = set(_NOTIFY_SEEN)
     if not READY.wait(timeout=30):
         log("notify: 等待 initialize 超时，通知未启动")
@@ -481,6 +486,7 @@ def notify_loop() -> None:
                 seen.add(mid)
                 notify_message({
                     "agent": msg.get("agent") or AGENT,
+                    "repo": repo_text,
                     "id": mid,
                     "from": msg.get("from", ""),
                     "type": msg.get("type", ""),

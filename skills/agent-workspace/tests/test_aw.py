@@ -75,6 +75,13 @@ class WorkspaceCase(unittest.TestCase):
         self.assertIn("branch refs/heads/deploy", wt)
         self.assertTrue((self.repo / "BA" / "dispatch" / "agent-registry.md").exists())
 
+    def test_subagent_blocks_messages_watch_claim(self):
+        for args in (["msg", "watch", "--once"], ["watch", "--once"],
+                     ["claim", "next"], ["agent", "whoami"]):
+            out = run(args, self.repo, extra_env={"AW_SUBAGENT": "1"})
+            self.assertNotEqual(out.returncode, 0, args)
+            self.assertIn("SUBAGENT_NO_", out.stderr, args)
+
     def test_repo_option_selects_other_workspace(self):
         other = self.tmp / "other"
         run(["init", str(other), "--name", "Other"], self.tmp)
