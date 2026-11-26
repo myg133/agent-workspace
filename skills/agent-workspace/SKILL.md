@@ -344,7 +344,7 @@ Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输�
 | `references/global/trigger.md` | 消息触发：watcher、MQTT、阻塞等待 |
 | `references/global/contracts.md` | 契约版本、消费方 pin、检查规则 |
 | `references/global/identity.md` | agent 名称的优先级、强制人工指定 |
-| `references/roles/*.md` | 六个角色的完整工作流 |
+| `references/roles/*.md` | 8 个角色工作流：Planner/BA/Guide + Dev/QA/Deploy/Explore/Notifier |
 | `references/init/*.md` | 新建 / 迁移 |
 | `references/lifecycle/*.md` | 巡检 / 回收 / 发布 |
 | `assets/templates/*.tpl` | 根容器、需求、验收、状态、registry、feature 产物、会话任务卡 |
