@@ -188,6 +188,11 @@ TOOLS = [
           "reply_by": STR,
           "force": {**BOOL, "description": "跳过收件人注册校验"}},
          ["to", "body"]),
+    tool("msg_report", "BA 接用户任务后报备：有 active Planner 就发 Planner，否则广播",
+         {"body": STR, "subject": STR,
+          "type": {**STR, "enum": ["fyi", "question", "blocker", "handoff",
+                                    "contract-change", "contract-ack", "decision"]},
+          "ref": STR}, ["body"]),
     tool("msg_inbox", "读取发给我的未读消息", {"all": BOOL, "limit": INT, "full": BOOL,
                                               "no_advance": BOOL, "json": BOOL}),
     tool("msg_wait", "阻塞等待发给我的新消息（默认 120 秒，不消费）",
@@ -304,6 +309,15 @@ def build_argv(name: str, args: dict) -> list[str]:
             argv += ["--expect", a["expect"]]
         if a.get("force"):
             argv.append("--force")
+        return argv
+    if name == "msg_report":
+        argv = ["msg", "report", "--body", a["body"]]
+        if a.get("subject"):
+            argv += ["--subject", a["subject"]]
+        if a.get("type"):
+            argv += ["--type", a["type"]]
+        if a.get("ref"):
+            argv += ["--ref", a["ref"]]
         return argv
     if name == "msg_inbox":
         argv = ["msg", "inbox"]

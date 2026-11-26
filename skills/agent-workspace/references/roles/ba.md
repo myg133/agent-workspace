@@ -246,6 +246,7 @@ git push origin --delete feature/REQ-003
 
 - **不自己实现/测试/部署**：实现派 Dev、验证派 QA、发布派 Deploy；你只写需求、验收、状态。
 - 状态只由你改；Dev/QA 只报告。
+- 用户直接指派任务后，先 `msg report`：有 active Planner 发 Planner，否则广播；再 claim / 实现。
 - 不给同一个 worktree 派第二个需求。
 - 子 Agent 的 briefing 必须自包含，且带绝对路径。
 - 导出/截图/日志写 `<repo-root>/.aw/exports/<REQ>/`；临时文件写 `.aw/tmp/`；禁止写盘根、`%TEMP%`、Desktop、Downloads。

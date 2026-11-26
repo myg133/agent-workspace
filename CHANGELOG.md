@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### 新增：BA 接用户任务先报备
+
+- 新增 `aw.py msg report`：有 active Planner 只发 Planner，没有则广播 `all`；
+- 新增 MCP `msg_report` 工具；
+- BA 角色、messaging.md、SKILL 命令表同步；
+- 默认 `fyi` / `expect=none`，报备不是 claim 前置门禁，但必须先记录；版本 `1.53.4`。
+
 ### 新增：子 Agent 消息隔离（三层）
 
 - OMP `aw-bus` / `aw-single-wake` 增加 `AW_SUBAGENT` / `AW_NO_MSG` / role / recipient / authoritative session 过滤；

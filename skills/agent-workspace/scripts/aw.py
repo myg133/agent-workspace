@@ -3656,6 +3656,18 @@ def cmd_msg(args) -> int:
 
     ident = resolve_identity(root)
 
+    if action == "report":
+        roster = load_roster(root)
+        active = active_agents(root)
+        planners = [
+            str(a.get("id"))
+            for a in roster
+            if str(a.get("role") or "") == "planner" and str(a.get("id")) in active
+        ]
+        args.to = ",".join(planners) if planners else "all"
+        args.type = args.type or "fyi"
+        action = "send"
+
     if action == "send":
         _assert_bus_writer(root, ident)
         to = [t.strip() for t in (args.to or "").split(",") if t.strip()]
@@ -5325,7 +5337,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_transport.set_defaults(func=cmd_transport)
 
     p_msg = sub.add_parser("msg", help="BA 间消息（bus 审计 + 本地 inbox + 可选 MQTT）")
-    p_msg.add_argument("action", choices=["send", "inbox", "list", "pending", "reply",
+    p_msg.add_argument("action", choices=["send", "report", "inbox", "list", "pending", "reply",
                                           "ack", "flush", "show", "wait", "watch",
                                           "lint", "doctor", "pre-push-hook"])
     p_msg.add_argument("--json", action="store_true", help="机器可读输出")

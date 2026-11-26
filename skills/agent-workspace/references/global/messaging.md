@@ -46,6 +46,22 @@ AW_SESSION_ID=<子会话 id>
 
 父 BA 只允许一个 **authoritative session** 收消息：`.aw/sessions/<agent>.map.json` 的 `session_id` 必须等于当前 `AW_SESSION_ID` / `PI_SESSION_ID`；不一致的会话不会 steer。
 
+## 0.2 BA 接用户任务先报备
+
+用户直接把任务交给 BA 时，BA 先报备，再 claim / 实现。
+
+~~~bash
+aw.py msg report --subject "用户新任务：REQ-001" \
+  --body "来源：用户直接指派；目标：...；优先级：...；预期：..."
+~~~
+
+行为：
+
+- 有 active Planner → 只发 Planner；
+- 没有 active Planner → 广播给所有 active agent；
+- 默认 type=fyi、expect=none，不需要 ack；
+- 报备不是 claim 的前置门禁，但必须先留下记录。
+
 ## 1. 为什么还需要 bus
 
 | 方案 | 冲突 | 历史噪音 | 跨机 | 结论 |
