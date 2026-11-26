@@ -2,6 +2,16 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [2.0.0] - 2026-11-26
+
+### 合并：一套 skill、两个模式
+
+- workspace 与 single 合并到同一个 skill；`scripts/aw.py` / `scripts/aw_single.py` 两个运行时并存；
+- 根 `SKILL.md` 改为模式路由，single 文档进入 `references/single/`；
+- 新增 `references/roles/subagent-contract.md`，统一子 Agent 的收消息/claim/探索/写入边界；
+- single 文档改为引用共享的 testing / session-budget / exploration / task-sizing / handoff；
+- 版本升到 `2.0.0`。
+
 ## [Unreleased]
 
 ### 新增：BA 接用户任务先报备

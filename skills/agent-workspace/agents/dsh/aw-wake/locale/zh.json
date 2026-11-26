@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Agent Workspace 唤醒",
+    "description": "当 agent-workspace 总线上有需要处理的消息时，唤醒空闲的 agent。"
+  }
+}

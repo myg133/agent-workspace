@@ -4,6 +4,8 @@
 
 只做**部署配置**，不做构建。
 
+> 先读 [subagent-contract.md](subagent-contract.md)：子 Agent 的公共边界。
+
 ```text
 CI：checkout → build → docker build → push registry        （产出镜像 tag）
 CD：读 deploy 分支 → 渲染 manifest → apply → rollout       （消费镜像 tag）

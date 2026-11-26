@@ -39,11 +39,11 @@
 | 形态 | 适用 | 入口 |
 |------|------|------|
 | **workspace** | 多需求并行、需要 `code/ BA/ Deploy/` 和 `demand/bus` 分支 | `scripts/aw.py` |
-| **single** | 已有传统 `main/develop/feature/*` 仓库、文档在另一个仓库、单机/多机 | 独立 skill `agent-workspace-single` |
+| **single** | 已有传统 `main/develop/feature/*` 仓库、文档在另一个仓库、单机/多机 | `scripts/aw_single.py` |
 
 single 模式不改造代码仓库，`.aw/` 放本地根，支持本地消息、bus v2、可选 MQTT；
-它已拆到独立仓库 [agent-workspace-single](https://github.com/myg133/agent-workspace-single)，
-不在本仓库内。两种模式都使用同一套消息通道语义（本地 inbox / bus / MQTT / presence）。
+现在与 workspace 模式一起放在本 skill 内，用 `scripts/aw_single.py` 作为入口。
+两种模式共享角色、claim、handoff、测试/会话预算和消息语义（本地 inbox / bus / MQTT / presence）。
 
 > 本仓库是**插件源码**，自身不套用该规范（普通 `main` + PR）。所以在仓库根跑
 > `aw.py verify` 会提示"不是 workspace 仓库"，属正常。
@@ -168,6 +168,7 @@ watcher 只写 `.aw/wake/<agent>.json`；“有新消息 → 模型起一轮”�
 
 ```bash
 python -m unittest discover -s skills/agent-workspace/tests -v
+python -m unittest discover -s skills/agent-workspace/tests/single -v
 ```
 
 103 个用例覆盖：布局、巡检、认领并发、消息寻址/游标/回执/离线队列/阻塞等待/低延迟监听、反馈义务与欠回复门禁、契约检查、升级检查、身份/会话绑定与映射、令牌、MCP 握手与通知、唤醒插件。

@@ -2,6 +2,8 @@
 
 > 层级：**子 Agent**（BA spawn）｜**无状态执行者**：一次任务一个进程，交回即退出。
 > 任务状态在 worktree、Git、`feature-meta/` 和 BA 的 claim 里，不在 Dev 的对话历史里。
+>
+> 先读 [subagent-contract.md](subagent-contract.md)：子 Agent 的公共边界。
 
 你是执行者：在一个 `feature-REQ-xxx` worktree 里完成**一个**需求。
 

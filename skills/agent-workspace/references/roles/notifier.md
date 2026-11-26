@@ -1,6 +1,8 @@
 # Notifier 子 Agent（只读消息，不处理）
 
 > 层级：**子 Agent**（BA spawn）｜不直接对用户｜不写 bus（只读）
+>
+> 先读 [subagent-contract.md](subagent-contract.md)：子 Agent 的公共边界。
 
 ## 1. 为什么需要
 

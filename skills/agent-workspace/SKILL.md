@@ -1,351 +1,145 @@
 ---
 name: agent-workspace
-description: 基于 Git worktree 的多 Agent 协作工作区规范，面向中大型、多需求并行、需要可追溯交付的项目（小型脚本或一次性任务不适用）。用于初始化或迁移项目为 workspace 布局（workspace 根容器 + code/BA/Deploy 平铺 worktree）、按 Planner/BA/Dev/QA/Deploy/Explore 角色分工开发、管理需求状态机与 REQ 编号、巡检与回收 worktree、发布与回滚。当用户要建立项目工作区、搭多 agent 开发流水线、规范分支/worktree/提交、迁移已有仓库到 worktree 结构、或排查 worktree 拓扑与 workspace 分支污染时使用。
+description: 一套 skill、两种模式的多 Agent 协作规范。workspace 模式面向 code/BA/Deploy 平铺 worktree、demand/bus 分支、多 BA 并行；single 模式面向传统 main/develop/feature 仓库 + 独立 docs 仓库 + 本地 .aw。两者共享角色、claim、handoff、测试/会话预算、消息与写目录规则；按 .aw/config.json 或仓库布局选择模式。
 metadata:
-  short-description: Git worktree 多 Agent 协作（workspace 模式）
-  version: 1.53.4
+  short-description: 多 Agent 协作（workspace / single 双模式）
+  version: 2.0.0
 ---
 
 # Agent Workspace
 
-一套"用 Git 当状态层"的多 Agent 开发工作流：**一个需求 = 一个 worktree = 一个容器**，
-Planner 定方向、BA 写需求、Dev 写代码、QA 只验证、Deploy 只管部署，所有状态落在 Git 里。
+一套 skill，两个模式：
 
-## 两种项目形态
-
-### 1. workspace 模式（本目录主流程）
-
-适合大型、多需求并行项目：workspace 根 + `code/ BA/ Deploy/` 平铺 worktree，
-需求/状态在 `demand` 分支；消息走本地 inbox + `bus` 审计，可选 MQTT 实时。
-
-入口：`scripts/aw.py`，文档在 `references/`。
-
-### 2. single 模式（独立 skill，不在本目录）
-
-适合已有传统 `main/develop/feature/*` 仓库、文档在另一个仓库、单机/多机协作：
-
-- 不改造代码仓库；
-- `.aw/` 放本地根；
-- 本地消息 + Git bus v2 + 可选 MQTT；
-- 入口在独立仓库 `agent-workspace-single`（`scripts/aw_single.py`），
-  不要在本 skill 里找 single 脚本。
-
-> 先判断项目形态，再选 skill；两种模式的 claim/worktree 语义不同，不要混用。
-> **消息通道（本地 inbox / bus / MQTT / presence）两种模式都有**；本目录是 workspace 模式。
-
-## 30 秒上手
-
-```bash
-# 第一次：先看缺什么，再决定 init / migrate、local / remote、solo / team
-python <skill-path>/scripts/aw.py onboard
-
-# 新项目
-python <skill-path>/scripts/aw.py init my-project --name "My Project" --remote <url>
-
-# 已有仓库迁移（先读 references/init/migrate-project.md 的前置条件）
-python <skill-path>/scripts/aw.py migrate --main develop
-
-# 任何 workspace 仓库里自检
-python <skill-path>/scripts/aw.py verify
-python <skill-path>/scripts/aw.py audit
-```
-
-## 目录布局
-
-```text
-<repo-root>/              workspace 分支：只跟踪 README.md + .gitignore
-├── code/                 develop   业务源码、CI 源
-├── BA/                   demand    需求、迭代、调度表
-├── Deploy/               deploy    部署配置（不做构建）
-├── feature-REQ-001/      feature/REQ-001   按需，合并即回收
-└── hotfix-xxx/           hotfix/xxx        按需，合并即回收
-```
-
-所有 worktree **直接位于仓库根下一层**，无中间层、无嵌套。
-
-## 分支
-
-| 分支 | 类型 | worktree | 写入者 | 基分支 |
-|------|------|----------|--------|--------|
-| `workspace` | orphan | `<repo-root>/` | BA（极少） | — |
-| `main` | orphan | — | 发布管理员 | — |
-| `develop` | 普通 | `code/` | 仅 PR 合并 | `main` |
-| `demand` | orphan | `BA/` | BA（`demands/`）、Planner（`plan/` `decisions/`） | — |
-| `deploy` | orphan | `Deploy/` | Deploy / CD | — |
-| `feature/REQ-xxx` | 普通 | `feature-REQ-xxx/` | Dev | `develop` |
-| `release/vX.Y.Z` | 普通 | — | 发布管理员 | `develop` |
-| `hotfix/xxx` | 普通 | `hotfix-xxx/` | Dev | `main` |
-
-`workspace` / `main` / `demand` / `deploy` 互无父节点，各自管理自己的 `.gitignore`。
-
-## 适用范围
-
-| 适合 | 不适合 |
-|------|--------|
-| 中大型项目（多个模块、多需求并行） | 单文件脚本、一次性工具 |
-| 多人 / 多 Agent 协作 | 个人短周期验证性开发 |
-| 需要"需求 → 开发 → 验证 → 发布"可追溯 | 只求快速出原型、不留审计 |
-| 长期维护、有 CI/CD 与环境区分 | 无部署环节的纯库 |
-
-判断标准：**维护 worktree 的成本 < 上下文隔离带来的收益** 时才用。小于这个阈值时，
-普通分支 + PR 更划算——本规范会把三个空容器的维护成本强加给一个本不需要的项目。
-
-> 本仓库（`agent-workspace` 插件源码）**自身不遵循**本规范：它是单仓库的文档 + 脚本项目，
-> 用普通 `main` + PR 即可。因此在本仓库跑 `aw.py verify` 会报"不是 workspace 仓库"，这是预期行为。
-
-## 硬约束
-
-1. `workspace` 分支的 `git ls-files` **必须恰好** `.gitignore` + `README.md`。
-2. 根 `.gitignore` 用双层防御：`*` → `!*/` → `!.gitignore` `!README.md` → `/*/`。
-3. 禁止中间层（`workspaces/code/`）与二级嵌套（`feature-x/code/`）。
-4. `status.md` 只有 BA 能改；QA 不 commit；Dev 不改状态。
-5. 跨 worktree 引用一律写 `<repo-root>/...` 绝对路径。
-6. 一个 worktree 只服务一个需求，合并即回收。
-7. 多 BA 同机协作：每个会话必须带稳定的 `AW_AGENT_ID`；**一个 agent 同时只能持有 1 个认领**，
-   由 `aw.py claim` 强制（先进 `ALREADY_HOLDING`，不是靠提醒）。
-8. 认领是创建 worktree 的唯一入口：禁止手工 `git worktree add` 绕过认领。
-9. BA 间消息：本地 inbox 先落盘，`bus` 分支空 commit 做审计与跨机兜底，MQTT 只做实时（可选）；
-   **契约/决策才进 `demand`**，不要把对话提交到 demand。
-   **只有 BA / Planner 能写消息**；Dev/QA/Deploy/Explore 等子 agent 一律通过自己的 BA 转达。
-   发消息必须声明 `expect`（none/ack/reply）；需要反馈的用 `msg_pending` 跟踪，禁止原地干等。
-   **欠回复会挡住新认领**（exit 4）和 `agent exit`（exit 3），先 `msg_reply` / `msg_ack` 结清。
-   消息里的路径一律用**仓库相对路径**（`BA/contracts/...`），禁止本机绝对路径。
-10. **Planner 不领 feature、不改状态、不派单**：只写 `BA/plan/` 与 `BA/decisions/`；
-    决策必须落 ADR，优先级一次只改一个。
-11. **身份必须由人指定**：`--agent <name>` 或 `AW_AGENT_ID`，都没有时工具 `exit 2`（`MISSING_AGENT_ID`），
-    不自动生成、不猜。名称在同一仓库内唯一且跨会话稳定。
-12. 未读消息存在时 `claim next` 拒绝（`UNREAD_MESSAGES`，exit 4）——先读消息（或让 Notifier 读）再认领。
-13. 契约有版本：已 ratified 的 `vN.md` 不可改；消费方在 `feature-meta/manifest.json` 里 pin 版本；
-    合并前 `aw.py contract check` 必须通过。
-14. `develop` 只通过 PR 合并；`main` 只从 `release` 合并。
-15. 命令铁律：`git checkout --orphan` 之后用 `git reset`，**绝不用 `git rm -rf .`**（会删工作区文件）。
-16. **测试按风险测，不按覆盖率测**：每个任务新增测试 ≤3；Bug 修复 1 条回归；重构 0 条；
-    Dev 默认只跑 fast / related，full 交给 QA / CI；停止条件与预算见
-    `references/global/testing.md`。
-17. **会话和子 Agent 有预算**：主会话默认 ≤60 轮 / 8 万上下文，硬上限 100 轮 / 10 万；
-    到阈值先压缩上下文，再不行就 handoff 换新会话。一个 REQ 最多 2–3 个子 Agent；
-    **没有 diff 预期的任务不 spawn 子 Agent**。探索/文档/status 用低成本模型，
-    复杂实现/关键 review 才用强模型。详见 `references/global/session-budget.md`。
-18. **换班不换 agent_id**：用 `agent handoff` 记录未处理消息、claim 和下一步；
-    新会话用同一个 `AW_AGENT_ID` 启动后 `agent resume`。不要新建 agent_id，
-    不要用 `agent exit --force` 处理未结束的 claim。详见 `references/global/handoff.md`。
-19. **探索权唯一**：BA 只做业务/文档/接口探索；代码探索由 Explore/Dev 唯一 owner。
-    Fresh 子 Agent 默认零上下文，任务卡必须带 evidence 和“不要重读”清单；
-    不允许 BA 深读一遍、子 Agent 再重读一遍。详见 `references/global/exploration.md`。
-20. **BA 做任务预检，子 Agent 只做开工自检**：BA 下派前判断模块/文件/AC/依赖/切片/预算，
-    太大就拆；子 Agent 只验证 evidence 是否对得上 HEAD、入口是否存在、测试命令是否可执行，
-    不重新做任务大小评估。第一次 compaction 就停，不要连续压。详见 `references/global/task-sizing.md`。
-21. **写文件目录限定**：所有写操作必须在项目根或当前 worktree 内；临时文件放 `<repo-root>/.aw/tmp/`，
-    导出/截图/日志放 `<repo-root>/.aw/exports/<REQ>/`；禁止写盘根、`C:/tmp`、`D:/tmp`、`%TEMP%`、
-    Desktop、Downloads，禁止用 `..` 逃出允许根。工具必须用系统临时目录时，改 `TMP/TEMP/TMPDIR`
-    或把结果复制回项目内并清理。详见 `references/global/paths.md`。
-22. **子 Agent 不接消息**：spawn 子 Agent 时设置 `AW_SUBAGENT=1` / `AW_NO_MSG=1` /
-    `AW_ROLE=dev|qa|explore`；`aw.py msg/watch/claim/agent` 对子 Agent 直接拒绝。
-    消息只投给 `.aw/sessions/<agent>.map.json` 的 authoritative session；
-    子 Agent 结果通过任务返回值交回父 BA，不走 bus。详见 `references/global/messaging.md`。
-
-## 我该读什么
-
-| 你是 | 层级 | 先读 | 再读 |
-|------|------|------|------|
-| **Planner** | 主 | `references/roles/planner.md` | `global/state-machine.md`、`global/messaging.md`、`global/session-budget.md`、`global/handoff.md` |
-| **单人 / 单 BA** | 主 | `references/roles/planner.md` §0.2 | 无需 Planner，BA 可代行规划 |
-| **BA** | 主 | `references/roles/ba.md` | `global/concurrency.md`、`global/state-machine.md`、`global/testing.md`、`global/session-budget.md`、`global/handoff.md`、`global/exploration.md`、`global/task-sizing.md` |
-| **Guide** | 主 | `references/roles/guide.md` | `global/messaging.md`（只读） |
-| **Dev** | 子 | `references/roles/dev.md` | `global/paths.md`、`global/testing.md`、`global/session-budget.md`、`global/exploration.md`、`global/task-sizing.md` |
-| **QA** | 子 | `references/roles/qa.md` | `global/testing.md`、`global/session-budget.md`、`global/exploration.md`、`global/state-machine.md`（写入权） |
-| **Deploy** | 子 | `references/roles/deploy.md` | `lifecycle/release.md` |
-| **Explore** | 子 | `references/roles/explore.md` | `global/paths.md`、`global/exploration.md` |
-| 第一次接入 / 初始化 | `references/init/onboarding.md` | `aw.py onboard` |
-| 初始化项目 | `references/init/new-project.md` | `global/layout.md` |
-| 迁移仓库 | `references/init/migrate-project.md` | — |
-| 巡检 / 回收 | `references/lifecycle/audit.md` | `lifecycle/cleanup.md` |
-| 发布 | `references/lifecycle/release.md` | `roles/deploy.md` |
-| 升级已运行的项目 | `references/lifecycle/upgrade.md` | `aw.py upgrade` |
-| BA 之间沟通 | `references/global/messaging.md` | `aw.py msg` |
-| 通过 MCP 调用 | `references/global/mcp.md` | 工具名见上表 |
-| 消息触发 / 替代轮询 | `references/global/trigger.md` | `aw.py watch` / `aw.py msg watch` |
-| 安装唤醒插件（omp/pi/DSH） | `references/global/agent-plugins.md` | `agents/` |
-| 该不该问 Planner | `references/global/decision-rights.md` | 决策权矩阵 + 升级协议 |
-
-| 接口/契约对齐 | `references/global/contracts.md` | `aw.py contract check` |
-| 我是谁 / 没名字 | `references/global/identity.md` | `aw.py agent whoami` |
-| 代读消息 | `references/roles/notifier.md` | 只读子 agent |
-
-子 Agent 的 prompt 里应当**直接给出角色文件路径**，不要让它自己猜该读哪一节。
-
-## 角色层级（硬规则）
-
-| 角色 | 层级 | 谁启动 | 直接对用户 | 写 bus |
-|------|------|--------|-----------|--------|
-| Planner | **主** | 人 | ✅ | ✅ |
-| BA | **主** | 人 | ✅ | ✅ |
-| Guide | **主** | 人 | ✅ | ❌（不写） |
-| Dev | 子 | BA | ❌ | ❌ |
-| QA | 子 | BA | ❌ | ❌ |
-| Deploy | 子 | BA | ❌ | ❌ |
-| Explore | 子 | BA | ❌ | ❌ |
-| Notifier | 子 | BA | ❌ | ❌（只读） |
-
-1. **只有 Planner / BA / Guide 是主 Agent**，由人启动；其余必须由 BA spawn。
-2. **子 Agent 不直接对用户**：结论交回父 Agent，由父 Agent 决定是否上报。
-3. **子 Agent 不写 bus**：需要外发由父 Agent 转达。
-4. **BA 不自己实现/测试/部署**：那是 Dev / QA / Deploy 的活；BA 只做需求、验收、派单、状态。
-   单 BA 模式可以兼规划，**但不能兼实现**——否则 WIP=1 和可追溯都失效。
-5. **Guide 不进 team**：不注册、不写 bus、不编辑任何文件；只回答用户"现在是什么"，
-   不回答"要不要做/先做哪个"。
-
-## 路径基准
-
-`<repo-root>` 是 workspace 主 worktree 的绝对路径，任意 worktree 里这样取：
-
-```bash
-ROOT="$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)"
-```
-
-- 自己的文件：相对路径即可。
-- 别人的文件：`<repo-root>/BA/demands/REQ-xxx/...`（**不是** `BA/...`）。
-- 兄弟 worktree 物理可见，但**只可读、不可写**。
-
-## 如果客户端支持 MCP
-
-`scripts/aw_mcp.py` 是 stdio 适配层：**一个 agent 一个进程**，`AW_AGENT_ID` 由启动环境注入，
-不需要 `--agent`，也不依赖 session_id。配置见 `references/global/mcp.md`。
-
-主动通知**默认开启**：只要同仓库有 `aw.py watch --ensure` 在写 `.aw/wake/`，
-MCP 就会发 `notifications/message`；关闭用 `AW_MCP_NOTIFY=0` 或 `--no-notify`。
-宿主是否把它变成一轮对话由客户端决定，不支持时仍用 `msg_inbox` / `msg_wait`。
-
-> 不同客户端会给工具名加前缀：DSH 是 `mcp__aw__claim_next`，Claude/Cursor 是原名。
-> 判断"MCP 是否可用"时按**后缀**匹配，不要精确等于。
-
-**没有 `AW_AGENT_ID` 时**（桌面端常见）：每个工具都可以带上 `agent_id` 参数自报身份，
-例如 `{"name":"msg_send","arguments":{"agent_id":"pcA-ba-1","to":"all","body":"..."}}`。
-带参数优先于环境变量。
-
-如果 roster 里该 agent 有 `token_hash`，还必须带 `token`（注册时打印的一次性令牌），
-否则返回 `BAD_TOKEN`。令牌用于防止跨会话冒名，轮换用 `aw.py agent token <name>`。
-
-| 组 | 工具 |
-|----|------|
-| 身份 / 名册 | `agent_whoami` `agent_roster` `agent_register` `agent_activate` `agent_deactivate` `agent_publish` `agent_exit` |
-| 认领 | `claim_next` `claim_take` `claim_release` `claim_list` `claim_doctor` |
-| 消息 | `msg_send` `msg_inbox` `msg_wait` `msg_show` `msg_ack` |
-| 门禁 | `contract_check` `verify` `audit` |
-| 队列 | `queue_add` `queue_list` `queue_sync` |
-
-返回统一为：
-
-```json
-{"ok": true, "exit_code": 0, "stdout": "...", "stderr": "", "agent": "pcA-ba-1"}
-```
-
-`0 / 3 / 4` 都是业务正常（成功 / 拒绝 / 未读门禁），只有真正失败才 `isError`。
-
-**能阻塞就不要轮询**：等消息用 `msg_wait`（≤120 秒），不要每 5 秒调一次 `msg_inbox`。
-
-**不要读 `aw.py` 源码。** 先看机器可读清单：
-
-```bash
-aw.py schema          # JSON：MCP 工具 + 仅 CLI 命令 + 规则
-```
-
-MCP 侧对应 `schema {}`。需要自己写 watchdog / 轮询前，先确认 `aw.py watch`（每台机器一个唤醒器）
-或 `aw.py msg watch`（单 agent 收件箱监听）是否已满足；不要读 3000 行源码再重造一个。
-
-**agent 运行时一律走 MCP**。CLI 只用于人类/CI 的运维命令：
-`init` / `migrate` / `upgrade` / `agent bootstrap` / `agent token` / `mcp install`。
-
-文档里的 `aw.py xxx` 是等价形式；MCP 工具名与参数映射见
-`references/global/mcp.md` 的「CLI → MCP 对照」。
-
-### 使用策略（硬规则）
-
-1. **工具列表里出现以 `agent_whoami` 结尾的工具** → 本会话必须用 MCP，禁止 shell 调 `aw.py`（诊断、安装除外）。
-2. **没有** → 先执行安装检查，再退回 CLI，并告诉用户重启客户端：
-   ```bash
-   aw.py mcp ensure                 # 自动检测已存在的客户端配置
-   aw.py mcp install --client claude|cursor|vscode|claude-code [--path ...]
-   ```
-3. **同一个会话不要混用** MCP 与 CLI 做同一类操作：两者的身份/pid 不同，会让 liveness 和认领记录对不上。安装与诊断是唯一例外。
-4. 安装会**备份原配置**，但 MCP 工具**不能热加载**——必须重启客户端才生效。
-
-> “强制”指的是流程强制：没有 MCP 就跑安装；不是指能在当前会话里凭空变出工具。
-
-## 脚本
-
-| 命令 | 作用 | 退出码 |
+| 模式 | 适用 | 运行时 |
 |------|------|--------|
-| `aw.py init <dir>` | 建 workspace 项目（幂等） | 0 / 非 0 |
-| `aw.py migrate --main <branch>` | 原地迁移已有仓库 | 0 / 非 0 |
-| `aw.py verify` | 校验硬约束（可挂 CI / pre-commit） | 0 通过，1 违规 |
-| `aw.py audit` | 只读巡检，输出四段报告 | 0 干净，1 有问题 |
-| `aw.py upgrade` | 旧项目升级检查（只读）：补什么/清什么/改什么 | 0 无需动作，1 有待处理 |
-| `aw.py doctor` | 一页巡检：workspace/拓扑/认领/队列/契约/模式 | 0 正常，1 有 FAIL |
-| `aw.py stats [--json]` | 运营指标：WIP、队列年龄、ack 中位数、每 REQ 提问数 | 0 |
-| `aw.py watch [--ensure] [--status] [--stop] [--wake-dir]` | 消息监听（MQTT 实时 + bus 兜底）；`--ensure` 首个 agent 后台起；`--status` 查心跳 | 0 / 3 |
-| `aw.py msg watch` | 单 agent 收件箱监听；`--once` 有消息 0、无消息 3 | 0 / 3 |
-| `aw.py transport status/set/test` | 消息通道：mode / bus / MQTT / project_id | 0 / 1 / 3 |
-| `aw.py agent presence` | 本地 session + MQTT presence 缓存 | 0 |
-| `aw.py schema` | 机器可读工具清单（MCP + CLI），避免读源码 | 0 |
-| `aw.py hook install` | 安装 pre-push 校验（每个 clone 一次） | 0 |
-| `aw.py msg doctor` | 扫描 bus 历史：无头 / 缺 expect / 超长 / 绝对路径 | 0 干净，1 有问题 |
-| `aw.py msg send/inbox/ack/wait` | BA 间消息（空 commit 走 `bus` 分支；wait 阻塞 ≤120s） | 0 成功，3 排队/超时 |
-| `aw.py msg report` | BA 接用户任务报备；有 active Planner 发 Planner，否则广播 | 0 成功 |
-| `aw.py contract check` | 契约一致性：pin 版本、consumer 缺失、未 ack | 0 通过，1 有问题 |
-| `aw.py agent bind/roster/exit` | 绑定终端、维护名册、退出会话（防漂移） | 0 成功，2/3 失败 |
-| `aw.py next-req [--reserve]` | 计算编号；`--reserve` 在 demand 上占位并 push（跨机安全） | 0 |
-| `aw.py queue add/list/sync` | 维护待认领队列 | 0 |
-| `aw.py claim whoami/next/take/release/list/doctor` | 任务认领（**WIP=1，工具强制**） | 0 成功，3 拒绝 |
+| **workspace** | 多仓库/多需求并行，`code/ BA/ Deploy/` 平铺 worktree，需要 demand/bus 分支 | `scripts/aw.py` |
+| **single** | 已有传统仓库 + 独立 docs 仓库，本地 `.aw/`，不想改代码仓库布局 | `scripts/aw_single.py` |
 
-Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输出、`/c/...` 路径、跨盘符、长路径等细节见
-`references/global/platform-notes.md`。
+**不要混用两种模式。** 先判断模式，再读对应文档和执行命令。
 
-依赖：Python 3.8+，git 2.20+。脚本只调用 git 命令，不写 .git 内部结构。
+## 0. 先判断模式
 
-## 提交格式
+按顺序：
 
-```text
-[{区域}] {描述} (关联: {REQ}) [session: {id}]
-```
+1. 读当前目录向上最近的 `.aw/config.json`；
+2. `profile: single` → **single**；
+3. 存在 `code/ BA/ Deploy/` 布局，或 config 声明 workspace → **workspace**；
+4. 两者都不匹配 → 不猜，运行 `onboard` 或问用户。
 
-只有 `demand` 分支强制带 `[session: ...]`，用于多 BA 追溯。
+模式判断失败时不要自动 init，也不要把 workspace 的 demand/bus/deploy 规则套到 single 项目上。
 
-## 常见错误
+## 1. 共享硬规则
 
-| 症状 | 原因 | 修复 |
-|------|------|------|
-| `git ls-files` 出现 `code/` 或业务文件 | workspace 分支被污染 | `git rm -r --cached <path>` + `[Workspace] cleanup` |
-| `git add .` 在根加进东西 | `/*/` 被删或 `.gitignore` 被改 | 恢复模板，跑 `aw.py verify` |
-| 子 Agent 找不到需求文档 | 用了 `BA/...` 相对路径 | 改用 `<repo-root>/BA/...` |
-| `worktree add` 报 `already exists` | 目标目录非空 | 先腾空目录（见 migrate 第 4 步） |
-| `git rm -rf .` 后文件全没了 | 该命令会删工作区 | `git checkout <branch> -- .` 找回；以后用 `git reset` |
-| QA 和 BA 同时改状态 | 写入权没守住 | 只允许 BA 写 `status.md` |
+1. **一个需求，一个容器**：一个 REQ 一个 worktree；合并/关闭即回收。
+2. **一个事实，一个写者**：状态只有 BA 改；claim 只有本人持；契约只有 owner 批。
+3. **WIP=1**：一个 agent 同时只持一个 REQ；先 claim，再实现。
+4. **子 Agent 不接消息**：不接 inbox / 不 watch / 不 claim / 不写 bus；只读任务卡和 evidence，结果交回父 BA。
+5. **探索权唯一**：BA 只做业务/文档探索；Explore/Dev 是代码探索 owner；fresh 子 Agent 默认零上下文。
+6. **任务预检 + 开工自检**：BA 切片；子 Agent 只验 evidence/HEAD/入口/测试命令；第一次 compaction 就停。
+7. **写入目录限定**：只写项目根/当前 worktree；临时 `.aw/tmp/`，导出 `.aw/exports/<REQ>/`；禁止盘根、`%TEMP%`、Desktop、Downloads、`..` 逃逸。
+8. **BA 接用户任务先报备**：`msg report`；有 active Planner 发 Planner，否则广播。
+9. **换班不换 agent_id**：handoff → 停进程；同一 `AW_AGENT_ID` 新会话 resume。
 
-## 文件索引
+共享细节：
 
-| 路径 | 内容 |
+- [测试预算](references/global/testing.md)
+- [会话预算](references/global/session-budget.md)
+- [探索权唯一](references/global/exploration.md)
+- [任务预检](references/global/task-sizing.md)
+- [换班 handoff](references/global/handoff.md)
+- [写入边界](references/global/paths.md)（workspace 路径；single 用 [layout](references/single/layout.md)）
+- [消息机制](references/global/messaging.md)、[通道](references/global/transport.md)
+- [子 Agent 契约](references/roles/subagent-contract.md)
+
+## 2. 角色
+
+workspace 共 8 个角色：
+
+| 类型 | 角色 |
 |------|------|
-| `references/global/layout.md` | 目录、分支、命名、worktree 生命周期 |
-| `references/global/paths.md` | 路径基准与兄弟目录可见性 |
-| `references/global/gitignore.md` | 双层防御原理与验证 |
-| `references/global/state-machine.md` | 状态机、单一写入者、门禁 |
-| `references/global/concurrency.md` | 多 BA：身份、WIP=1 认领、锁、doctor |
-| `references/global/platform-notes.md` | Windows / macOS / Linux / WSL 差异 |
-| `references/global/testing.md` | 测试克制：预算、选层、停止条件、三档执行、测试审计 |
-| `references/global/session-budget.md` | 会话与子 Agent 预算：轮数、上下文、模型路由、子 Agent 门槛 |
-| `references/global/exploration.md` | 探索权唯一：BA/Explore/Dev 分工、evidence 包、fresh 子 Agent 契约 |
-| `references/global/task-sizing.md` | 任务预检 vs 开工自检：切片、预算、compaction 停止条件 |
-| `references/global/handoff.md` | 换班协议：`agent handoff` / `agent resume`、状态边界、常见错误 |
-| `references/global/messaging.md` | BA 间消息：本地 inbox + bus + MQTT、格式、寻址、ack |
-| `references/global/transport.md` | 消息通道配置：auto/mqtt/bus/local、project_id、presence |
-| `references/global/mcp.md` | MCP stdio 适配层：配置、工具、返回格式 |
-| `references/global/agent-plugins.md` | omp / pi / DSH 唤醒插件安装与验证 |
-| `references/global/trigger.md` | 消息触发：watcher、MQTT、阻塞等待 |
-| `references/global/contracts.md` | 契约版本、消费方 pin、检查规则 |
-| `references/global/identity.md` | agent 名称的优先级、强制人工指定 |
-| `references/roles/*.md` | 8 个角色工作流：Planner/BA/Guide + Dev/QA/Deploy/Explore/Notifier |
-| `references/init/*.md` | 新建 / 迁移 |
-| `references/lifecycle/*.md` | 巡检 / 回收 / 发布 |
-| `assets/templates/*.tpl` | 根容器、需求、验收、状态、registry、feature 产物、会话任务卡 |
-| `scripts/aw.py` | init / migrate / verify / audit / next-req |
+| 主 Agent | Planner / BA / Guide |
+| 子 Agent | Dev / QA / Deploy / Explore / Notifier |
+
+single 使用其中 4 个：
+
+~~~text
+Planner（可选） / BA / Dev / QA
+~~~
+
+角色是权限契约，不是岗位名称。子 Agent 先读 [subagent-contract](references/roles/subagent-contract.md)，再读具体角色：
+
+- [Planner](references/roles/planner.md)
+- [BA](references/roles/ba.md)
+- [Guide](references/roles/guide.md)
+- [Dev](references/roles/dev.md)
+- [QA](references/roles/qa.md)
+- [Deploy](references/roles/deploy.md)
+- [Explore](references/roles/explore.md)
+- [Notifier](references/roles/notifier.md)
+
+single 的模式差异命令见 `references/single/roles/`。
+
+## 3. Workspace 模式
+
+入口：`scripts/aw.py`；MCP：`scripts/aw_mcp.py`（仅 workspace）。
+
+~~~bash
+python <skill>/scripts/aw.py onboard
+python <skill>/scripts/aw.py init my-project --name "My Project" --remote <url>
+python <skill>/scripts/aw.py claim next
+python <skill>/scripts/aw.py msg report --subject "用户新任务" --body "..."
+~~~
+
+文档：
+
+- [布局与分支](references/global/layout.md)
+- [路径基准](references/global/paths.md)
+- [MCP](references/global/mcp.md)
+- [唤醒插件](references/global/agent-plugins.md)
+- [init / migrate](references/init/)
+- [生命周期](references/lifecycle/)
+
+## 4. Single 模式
+
+入口：`scripts/aw_single.py`；**没有 MCP**。
+
+~~~bash
+python <skill>/scripts/aw_single.py init --root . \
+  --code-root <code-root> --docs-root <docs-root> --base-branch develop
+python <skill>/scripts/aw_single.py whoami
+python <skill>/scripts/aw_single.py claim next
+python <skill>/scripts/aw_single.py claim adopt REQ-001 --branch feature/REQ-001
+python <skill>/scripts/aw_single.py msg report --subject "用户新任务" --body "..."
+~~~
+
+文档：
+
+- [single 布局](references/single/layout.md)
+- [single 工作流](references/single/workflow.md)
+- [setup](references/single/setup.md)
+- [single profile](references/single/single-profile.md)
+- [MQTT + bus](references/single/mqtt-bus-protocol.md)
+- [OMP 唤醒](references/single/omp.md)
+- [DSH 唤醒](references/single/dsh.md)
+
+## 5. 读什么
+
+| 你在 | 先读 |
+|------|------|
+| 不确定模式 | 本页 + `aw.py onboard` / 配置检查 |
+| workspace BA / Planner | 角色文档 + `global/state-machine` + `global/concurrency` + `global/messaging` |
+| workspace Dev / QA / Explore | 对应角色 + `global/exploration` + `global/task-sizing` |
+| single BA / Planner | `references/single/workflow.md` + 角色 + 共享预算 |
+| single Dev / QA | `references/single/workflow.md` + 角色 + 共享预算 |
+| 发布/巡检 | `references/lifecycle/` |
+
+## 6. 测试
+
+~~~bash
+python -m unittest discover -s tests -v
+python -m unittest discover -s tests/single -v
+~~~
+
+测试按风险分层：fast / related / full；不要每次全量。
+
+依赖：Python 3.8+、git 2.20+；只用标准库（single 的 paho 已 vendor）。

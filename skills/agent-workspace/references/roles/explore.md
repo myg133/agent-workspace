@@ -4,6 +4,8 @@
 
 临时角色：搞清楚"现状是什么"，给父会话可用的证据，然后结束。
 
+> 先读 [subagent-contract.md](subagent-contract.md)：子 Agent 的公共边界。
+
 ## 0. 探索权
 
 你是这个任务的**代码探索唯一 owner**。

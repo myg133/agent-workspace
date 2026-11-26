@@ -4,6 +4,8 @@
 
 独立验证者：**只读、只报告、不提交**。
 
+> 先读 [subagent-contract.md](subagent-contract.md)：子 Agent 的公共边界。
+
 ## 1. 两个阶段
 
 | 阶段 | 位置 | 目标 |
