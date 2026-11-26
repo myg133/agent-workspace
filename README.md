@@ -39,10 +39,10 @@
 | 形态 | 适用 | 入口 |
 |------|------|------|
 | **workspace** | 多需求并行、需要 `code/ BA/ Deploy/` 和 `demand/bus` 分支 | `scripts/aw.py` |
-| **single** | 已有传统 `main/develop/feature/*` 仓库、文档在另一个仓库、单机/多机 | `scripts/aw_single.py` |
+| **single** | 已有传统 `main/develop/feature/*` 仓库、文档在另一个仓库、单机/多机 | `scripts/aw.py` → `aw_single.py` |
 
 single 模式不改造代码仓库，`.aw/` 放本地根，支持本地消息、bus v2、可选 MQTT；
-现在与 workspace 模式一起放在本 skill 内，用 `scripts/aw_single.py` 作为入口。
+现在与 workspace 模式一起放在本 skill 内；统一入口 `scripts/aw.py` 自动路由到 `aw_single.py`。
 两种模式共享角色、claim、handoff、测试/会话预算和消息语义（本地 inbox / bus / MQTT / presence）。
 
 > 本仓库是**插件源码**，自身不套用该规范（普通 `main` + PR）。所以在仓库根跑

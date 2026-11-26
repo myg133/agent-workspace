@@ -40,9 +40,9 @@ id     = p-<sha256(alias)[:12]>
 - MQTT 启动前跑 `project check`，config 与 remote 不一致就拒绝连接。
 
 ```bash
-aw_single.py project id
-aw_single.py project alias
-aw_single.py project check
+aw.py project id
+aw.py project alias
+aw.py project check
 ```
 
 ## 1.2 Broker 配置
@@ -66,10 +66,10 @@ aw_single.py project check
 }
 ```
 
-也可以用 `aw_single.py init` 参数写入：
+也可以用 `aw.py init` 参数写入：
 
 ```bash
-aw_single.py init --root . \
+aw.py init --root . \
   --code-root D:/proj/app --docs-root D:/proj/docs \
   --base-branch develop \
   --mqtt-host broker.example.com --mqtt-port 8883 \

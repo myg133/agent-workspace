@@ -5,7 +5,7 @@
 ## 1. 一次性初始化
 
 ```bash
-python scripts/aw_single.py init \
+python scripts/aw.py init \
   --root D:/proj \
   --code-root D:/proj/app \
   --docs-root D:/proj/docs \
@@ -15,7 +15,7 @@ python scripts/aw_single.py init \
 如果客户提供 MQTT：
 
 ```bash
-python scripts/aw_single.py init \
+python scripts/aw.py init \
   --root D:/proj \
   --code-root D:/proj/app \
   --docs-root D:/proj/docs \
@@ -100,14 +100,14 @@ omp
 ## 6. 启动 watcher
 
 ```bash
-python scripts/aw_single.py watch --ensure --interval 5
-python scripts/aw_single.py watch --status
+python scripts/aw.py watch --ensure --interval 5
+python scripts/aw.py watch --status
 ```
 
 查看本地在线状态：
 
 ```bash
-python scripts/aw_single.py presence --json
+python scripts/aw.py presence --json
 ```
 
 ## 7. MQTT 配置
@@ -134,22 +134,22 @@ MQTT 默认关闭。需要时在 `.aw/config.json` 配置：
 连接前检查：
 
 ```bash
-python scripts/aw_single.py project check
+python scripts/aw.py project check
 ```
 
 ## 8. 验证
 
 ```bash
-python scripts/aw_single.py whoami
-python scripts/aw_single.py project id
-python scripts/aw_single.py project check
-python scripts/aw_single.py presence
+python scripts/aw.py whoami
+python scripts/aw.py project id
+python scripts/aw.py project check
+python scripts/aw.py presence
 ```
 
 omp 插件：
 
 ```bash
-python scripts/aw_single.py msg send --to ba-1 --type question --body "ping"
+python scripts/aw.py msg send --to ba-1 --type question --body "ping"
 ```
 
 应看到 omp 收到 `[local] 收到 ...`。
@@ -159,5 +159,5 @@ python scripts/aw_single.py msg send --to ba-1 --type question --body "ping"
 - 不要把 `AW_AGENT_ID` 写进共享 MCP 配置；
 - 不要把 MQTT 密码提交到仓库；
 - 不要用目录名代替 `AW_AGENT_ID`；
-- 不要同时跑旧 `aw.py watch` 和新 `aw_single.py watch`；
+- 不要同时跑旧版和新版 `aw.py watch`；
 - 不要给 `watch` 配 `--exec` 的同时又装 omp wake 插件，二选一。

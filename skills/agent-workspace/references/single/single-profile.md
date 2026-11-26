@@ -200,30 +200,30 @@ feature worktree 的 `feature-meta/manifest.json` 增加：
 ## 9. 命令契约
 
 ```bash
-aw_single.py init --config <path>
-aw_single.py whoami
-aw_single.py queue add REQ-001 --title "登录"
-aw_single.py queue list
-aw_single.py claim next
-aw_single.py claim take REQ-001
-aw_single.py claim list
-aw_single.py claim release REQ-001 [--remove-worktree]
-aw_single.py claim doctor
+aw.py init --config <path>
+aw.py whoami
+aw.py queue add REQ-001 --title "登录"
+aw.py queue list
+aw.py claim next
+aw.py claim take REQ-001
+aw.py claim list
+aw.py claim release REQ-001 [--remove-worktree]
+aw.py claim doctor
 
-aw_single.py msg send --to ba-1 --type question --body "..."
-aw_single.py msg inbox [--all] [--peek] [--json]
-aw_single.py msg ack <id>
-aw_single.py msg wait [--timeout 120] [--consume]
+aw.py msg send --to ba-1 --type question --body "..."
+aw.py msg inbox [--all] [--peek] [--json]
+aw.py msg ack <id>
+aw.py msg wait [--timeout 120] [--consume]
 
-aw_single.py watch [--once] [--ensure] [--status] [--stop] \
+aw.py watch [--once] [--ensure] [--status] [--stop] \
   [--interval 5] [--exec "<command>"] [--json]
 
-aw_single.py presence [--json]
-aw_single.py project id
-aw_single.py project alias
-aw_single.py project check
-aw_single.py bus log
-aw_single.py bus show <id>
+aw.py presence [--json]
+aw.py project id
+aw.py project alias
+aw.py project check
+aw.py bus log
+aw.py bus show <id>
 ```
 
 ### 9.1 本地消息
@@ -237,7 +237,7 @@ aw_single.py bus show <id>
 ### 9.2 无人值守
 
 ```bash
-aw_single.py watch --ensure --exec "bash start-agent.sh"
+aw.py watch --ensure --exec "bash start-agent.sh"
 ```
 
 `--exec` 会带：

@@ -69,7 +69,7 @@ DSH 插件用 `.aw/sessions/<agent>.map.json` 判断 agent 对应哪个 DSH 会�
 每个 DSH 会话需要跑一次：
 
 ```bash
-aw_single.py whoami
+aw.py whoami
 ```
 
 如果该会话有 `DSH_SESSION_ID`，会写：
@@ -101,13 +101,13 @@ DSH 插件按 `session_id` 找 live session；找不到就 `map-offline`，不�
 ## 4. 启动 watcher
 
 ```bash
-aw_single.py watch --ensure --interval 5
+aw.py watch --ensure --interval 5
 ```
 
 消息：
 
 ```bash
-aw_single.py msg send --to ba-1 --type question --body "ping"
+aw.py msg send --to ba-1 --type question --body "ping"
 ```
 
 watcher 写 `.aw/wake/ba-1.json`，DSH 插件唤醒对应会话。
@@ -134,7 +134,7 @@ aw-wake: woke <session> for N message(s) of <agent>
 ## 6. 注意
 
 - DSH 桌面版如果拿不到 shell 环境变量，仍需要在 DSH 会话里运行
-  `aw_single.py whoami` 来写 map；插件本身不写 map；
+  `aw.py whoami` 来写 map；插件本身不写 map；
 - `repoRoot` 是本地根，不是 `app/`；
 - 不要把 `agentId` 写死给多个 BA；
 - 一个 DSH 会话对应一个 agent；不要两个 agent 共用一个 session；

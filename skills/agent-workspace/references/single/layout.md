@@ -91,7 +91,7 @@ Dev/QA 只读；BA 写。
 
 ~~~bash
 python <skill>/scripts/aw.py path check <path>          # workspace
-python <skill>/scripts/aw_single.py path check <path>   # single
+python <skill>/scripts/aw.py path check <path>   # single
 ~~~
 
 返回 `ALLOWED <rel>` 才写；`DENIED` 就停。

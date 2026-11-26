@@ -23,6 +23,14 @@ def run(args, cwd, env=None):
                           encoding="utf-8", errors="replace", env=full)
 
 
+def run_unified(args, cwd, env):
+    full = {"PYTHONPATH": str(ROOT / "scripts")}
+    full.update(env or {})
+    return subprocess.run([sys.executable, str(ROOT / "scripts" / "aw.py"), *args],
+                          cwd=str(cwd), capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", env=full)
+
+
 def git(args, cwd):
     return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
                           text=True, encoding="utf-8", errors="replace")
@@ -179,6 +187,11 @@ class SingleCase(unittest.TestCase):
         self.assertEqual(claim["branch"], branch)
         self.assertEqual(claim["worktree"], str(worktree))
         self.assertTrue(claim.get("adopted"))
+
+    def test_unified_entry_routes_to_single(self):
+        out = run_unified(["claim", "list"], self.tmp, self.env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("（无认领）", out.stdout)
 
     def test_path_check_boundaries(self):
         inside = run(["path", "check", str(self.tmp / "tmp.txt")], self.tmp, self.env)

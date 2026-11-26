@@ -43,13 +43,13 @@ BA 只做**业务探索**：需求、验收、文档、接口、依赖、风险�
 ~~~powershell
 $env:AW_AGENT_ID = "ba-1"
 $env:AW_ROLE = "ba"
-python scripts/aw_single.py whoami
+python scripts/aw.py whoami
 ~~~
 
 
 1. 确认 `.aw/config.json` 指向正确的 `code_root` / `docs_root`；
-2. `aw_single.py whoami`；
-3. `aw_single.py claim list`；
+2. `aw.py whoami`；
+3. `aw.py claim list`；
 4. 读 docs 的 `plan/` 与相关 `demands/`。
 
 ## 3. 接需求
@@ -60,8 +60,8 @@ python scripts/aw_single.py whoami
    - 每个 AC 最多 1 条主路径 + 必要边界；
    - 低风险 AC 标“手工验证 / 暂不自动化”，写清理由；
    - 预算见 [testing.md](../../global/testing.md)。
-4. `aw_single.py queue add REQ-xxx`；
-5. `aw_single.py claim next`；
+4. `aw.py queue add REQ-xxx`；
+5. `aw.py claim next`；
 6. 把 worktree 路径、docs 路径、base sha 交给 Dev。
 
 ## 3.1 子 agent 环境

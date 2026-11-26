@@ -15,9 +15,9 @@ Planner 最容易变成"开一整天"的会话：读 roadmap、刷 backlog、等
 换班时：
 
 ~~~bash
-aw_single.py handoff --note "Planner 换班" --next-step "..."
+aw.py handoff --note "Planner 换班" --next-step "..."
 # 新会话同一个 AW_AGENT_ID
-aw_single.py resume
+aw.py resume
 ~~~
 
 不要新建 agent_id；handoff 会保留未处理消息和 claim。
@@ -29,7 +29,7 @@ aw_single.py resume
 ~~~powershell
 $env:AW_AGENT_ID = "planner-1"
 $env:AW_ROLE = "planner"
-python scripts/aw_single.py whoami
+python scripts/aw.py whoami
 ~~~
 
 `AW_ROLE=planner` 会写入 session / presence，`msg report` 才能识别 Planner；

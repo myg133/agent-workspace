@@ -3,7 +3,7 @@ name: agent-workspace
 description: 一套 skill、两种模式的多 Agent 协作规范。workspace 模式面向 code/BA/Deploy 平铺 worktree、demand/bus 分支、多 BA 并行；single 模式面向传统 main/develop/feature 仓库 + 独立 docs 仓库 + 本地 .aw。两者共享角色、claim、handoff、测试/会话预算、消息与写目录规则；按 .aw/config.json 或仓库布局选择模式。
 metadata:
   short-description: 多 Agent 协作（workspace / single 双模式）
-  version: 2.1.0
+  version: 2.2.0
 ---
 
 # Agent Workspace
@@ -12,8 +12,8 @@ metadata:
 
 | 模式 | 适用 | 运行时 |
 |------|------|--------|
-| **workspace** | 多仓库/多需求并行，`code/ BA/ Deploy/` 平铺 worktree，需要 demand/bus 分支 | `scripts/aw.py` |
-| **single** | 已有传统仓库 + 独立 docs 仓库，本地 `.aw/`，不想改代码仓库布局 | `scripts/aw_single.py` |
+| **workspace** | 多仓库/多需求并行，`code/ BA/ Deploy/` 平铺 worktree，需要 demand/bus 分支 | `scripts/aw.py` → `aw_workspace.py` |
+| **single** | 已有传统仓库 + 独立 docs 仓库，本地 `.aw/`，不想改代码仓库布局 | `scripts/aw.py` → `aw_single.py` |
 
 **不要混用两种模式。** 先判断模式，再读对应文档和执行命令。
 
@@ -104,16 +104,16 @@ python <skill>/scripts/aw.py msg report --subject "用户新任务" --body "..."
 
 ## 4. Single 模式
 
-入口：`scripts/aw_single.py`；**没有 MCP**。
+统一入口：`scripts/aw.py`（自动路由到 `aw_single.py`）；**没有 MCP**。
 
 ~~~bash
-python <skill>/scripts/aw_single.py init --root . \
+python <skill>/scripts/aw.py init --root . \
   --code-root <code-root> --docs-root <docs-root> --base-branch develop
-python <skill>/scripts/aw_single.py whoami
-python <skill>/scripts/aw_single.py claim next
-python <skill>/scripts/aw_single.py claim adopt REQ-001 --branch feature/REQ-001
-python <skill>/scripts/aw_single.py path check .aw/tmp/x.txt
-python <skill>/scripts/aw_single.py msg report --subject "用户新任务" --body "..."
+python <skill>/scripts/aw.py whoami
+python <skill>/scripts/aw.py claim next
+python <skill>/scripts/aw.py claim adopt REQ-001 --branch feature/REQ-001
+python <skill>/scripts/aw.py path check .aw/tmp/x.txt
+python <skill>/scripts/aw.py msg report --subject "用户新任务" --body "..."
 ~~~
 
 文档：

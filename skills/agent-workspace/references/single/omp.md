@@ -7,7 +7,7 @@
 ```
 
 插件把新消息转成一次 omp 用户消息（`deliverAs: "steer"`），agent 下一轮用
-`aw_single.py msg inbox` 取正文。
+`aw.py msg inbox` 取正文。
 
 ## 1. 安装
 
@@ -46,13 +46,13 @@ omp
 插件只读 wake 文件，不负责扫描 inbox。需要先跑：
 
 ```bash
-aw_single.py watch --ensure --interval 5
+aw.py watch --ensure --interval 5
 ```
 
 然后：
 
 ```bash
-aw_single.py msg send --to ba-1 --type question --body "ping"
+aw.py msg send --to ba-1 --type question --body "ping"
 ```
 
 watcher 写 `.aw/wake/ba-1.json`，插件读取后 steer。
@@ -61,7 +61,7 @@ Windows 下 watcher 使用 `CREATE_NO_WINDOW` + `STARTF_USESHOWWINDOW`，
 git 子进程不会反复弹控制台窗口。
 
 插件加载时写 `.aw/sessions/<agent>.json`（pid / pid_started_at / session），
-并每 30 秒刷新 `last_seen`；`aw_single.py whoami` 也会刷新。watcher 用这个文件判断本机 agent 是否在线。
+并每 30 秒刷新 `last_seen`；`aw.py whoami` 也会刷新。watcher 用这个文件判断本机 agent 是否在线。
 
 ## 4. Presence
 
@@ -75,7 +75,7 @@ git 子进程不会反复弹控制台窗口。
 查看：
 
 ```bash
-aw_single.py presence --json
+aw.py presence --json
 ```
 
 `status` 为 `online` / `offline`。MQTT presence 发布由 watcher 负责，后续接入。
@@ -135,9 +135,9 @@ steer <n>
 ## 7. 验证
 
 ```bash
-aw_single.py msg send --to ba-1 --type question --body "wake test"
+aw.py msg send --to ba-1 --type question --body "wake test"
 Get-Content "$env:USERPROFILE\.omp\logs\aw-single-wake.log" -Tail 20
-aw_single.py presence
+aw.py presence
 ```
 
 omp 会话应出现一条 `[local] 收到 ...` 用户消息。

@@ -18,14 +18,14 @@
 - 单机小项目可以由同一个人/同一个 agent 切换角色；
 - 但 QA 的独立性会下降，**建议至少 QA 使用独立会话**；
 - 技术约束仍然是：BA 写 status、Dev 只写 worktree、QA 只读不提交；
-- `aw_single.py` 不检查父子进程关系，只看 `agent_id` / 可选 `AW_ROLE`。
+- `aw.py` 不检查父子进程关系，只看 `agent_id` / 可选 `AW_ROLE`。
 
 ## 2. BA
 
 1. 在 docs 仓库创建 `demands/REQ-xxx/`；
 2. 写 `demand.md` / `acceptance.md` / `status.md`；
-3. `aw_single.py queue add REQ-xxx`；
-4. `aw_single.py claim next`；
+3. `aw.py queue add REQ-xxx`；
+4. `aw.py claim next`；
 5. 把 worktree 路径、docs 路径、base sha 交给 Dev。
 
 ## 2.0 接用户任务先报备
@@ -33,7 +33,7 @@
 用户直接把任务交给 BA 时，BA 先报备，再 claim / 实现。
 
 ~~~bash
-python scripts/aw_single.py msg report \
+python scripts/aw.py msg report \
   --subject "用户新任务：REQ-001" \
   --body "来源：用户直接指派；目标：...；优先级：...；预期：..."
 ~~~
@@ -52,17 +52,17 @@ python scripts/aw_single.py msg report \
 ~~~bash
 # 优先让子 Agent 自己释放
 $env:AW_AGENT_ID='<子 agent id>'
-python scripts/aw_single.py claim release REQ-001
+python scripts/aw.py claim release REQ-001
 
 # 或者 BA 强制释放（只释放 claim，不删 worktree）
 $env:AW_AGENT_ID='ba-1'
-python scripts/aw_single.py claim release REQ-001 --force
+python scripts/aw.py claim release REQ-001 --force
 ~~~
 
 如果 claim 已经不在了，但分支/worktree 还在（孤儿 worktree），不要先删：
 
 ~~~bash
-python scripts/aw_single.py claim adopt REQ-001 --branch feature/REQ-001
+python scripts/aw.py claim adopt REQ-001 --branch feature/REQ-001
 ~~~
 
 `claim adopt` 会：
@@ -112,10 +112,10 @@ python scripts/aw_single.py claim adopt REQ-001 --branch feature/REQ-001
 - 常驻 BA / Planner 换班用：
 
   ~~~bash
-  aw_single.py handoff --note "换班" --next-step "..."
+  aw.py handoff --note "换班" --next-step "..."
   # 新会话：同一个 AW_AGENT_ID + 显式 AW_SESSION_ID
-  aw_single.py whoami
-  aw_single.py resume
+  aw.py whoami
+  aw.py resume
   ~~~
 
 - 完整规则、会话任务卡、度量与反模式见 [session-budget.md](../global/session-budget.md)，换班协议见 [handoff.md](../global/handoff.md)。
@@ -155,11 +155,11 @@ python scripts/aw_single.py claim adopt REQ-001 --branch feature/REQ-001
 ```
 
 ```bash
-aw_single.py msg send --to ba-1 --type question --body "这个接口用 v2 吗？"
-aw_single.py msg inbox
-aw_single.py msg ack <id>
-aw_single.py msg wait --timeout 120
-aw_single.py watch --ensure --exec "bash start-agent.sh"
+aw.py msg send --to ba-1 --type question --body "这个接口用 v2 吗？"
+aw.py msg inbox
+aw.py msg ack <id>
+aw.py msg wait --timeout 120
+aw.py watch --ensure --exec "bash start-agent.sh"
 ```
 
 - `msg send/inbox/ack/wait`：同机通信，原子文件，无网络；
@@ -177,4 +177,4 @@ docs 的 `status.md` 仍是唯一事实：
 草稿 → 已就绪 → 进行中 → 待验证 → 已验证 → 已完成
 ```
 
-`aw_single.py` 不写 status，只负责 claim/worktree。
+`aw.py` 不写 status，只负责 claim/worktree。

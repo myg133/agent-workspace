@@ -2,6 +2,15 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [2.2.0] - 2026-11-26
+
+### 统一入口：只记 aw.py
+
+- 新增 `scripts/aw.py` 自动路由，按 `.aw/config.json` / 布局选择 `aw_workspace.py` 或 `aw_single.py`；
+- 原 workspace 入口移动到 `scripts/aw_workspace.py`，single 入口保留 `aw_single.py`；
+- single 文档和 README 统一改用 `aw.py`，降低 agent 用错脚本的概率；
+- 新增 dispatcher 测试；版本 2.2.0。
+
 ## [2.1.0] - 2026-11-26
 
 ### 新增：workspace claim adopt、写入路径检查、通信层索引
