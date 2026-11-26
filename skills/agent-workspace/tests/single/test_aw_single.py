@@ -180,6 +180,14 @@ class SingleCase(unittest.TestCase):
         self.assertEqual(claim["worktree"], str(worktree))
         self.assertTrue(claim.get("adopted"))
 
+    def test_path_check_boundaries(self):
+        inside = run(["path", "check", str(self.tmp / "tmp.txt")], self.tmp, self.env)
+        self.assertEqual(inside.returncode, 0, inside.stderr)
+        self.assertIn("ALLOWED", inside.stdout)
+        outside = run(["path", "check", str(Path.home() / "escape.txt")], self.tmp, self.env)
+        self.assertNotEqual(outside.returncode, 0)
+        self.assertIn("DENIED", outside.stderr)
+
     def test_subagent_blocks_messages_watch_claim(self):
         env = dict(self.env)
         env["AW_SUBAGENT"] = "1"

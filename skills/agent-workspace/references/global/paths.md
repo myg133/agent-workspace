@@ -74,6 +74,15 @@ REQ_DIR="$(git rev-parse --path-format=absolute --git-common-dir)/../BA"  # 脚�
 3. 外部临时文件用完删除，不要留在 C:/ 或 D:/。
 ~~~
 
+写前可用工具检查：
+
+~~~bash
+python <skill>/scripts/aw.py path check <path>          # workspace
+python <skill>/scripts/aw_single.py path check <path>   # single
+~~~
+
+返回 `ALLOWED <rel>` 才写；`DENIED` 就停。
+
 写前自检：
 
 ~~~text

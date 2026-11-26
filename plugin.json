@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "agent-workspace",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "One multi-agent collaboration skill with two modes: workspace (flat worktree layout, demand/bus branches, MCP) and single (traditional repo + docs repo, local .aw). Shared roles, claim, handoff, budgets, message channel, and write boundaries; two runtimes.",
   "author": {
     "name": "myg133"

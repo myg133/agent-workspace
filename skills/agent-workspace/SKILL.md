@@ -3,7 +3,7 @@ name: agent-workspace
 description: 一套 skill、两种模式的多 Agent 协作规范。workspace 模式面向 code/BA/Deploy 平铺 worktree、demand/bus 分支、多 BA 并行；single 模式面向传统 main/develop/feature 仓库 + 独立 docs 仓库 + 本地 .aw。两者共享角色、claim、handoff、测试/会话预算、消息与写目录规则；按 .aw/config.json 或仓库布局选择模式。
 metadata:
   short-description: 多 Agent 协作（workspace / single 双模式）
-  version: 2.0.0
+  version: 2.1.0
 ---
 
 # Agent Workspace
@@ -48,6 +48,7 @@ metadata:
 - [任务预检](references/global/task-sizing.md)
 - [换班 handoff](references/global/handoff.md)
 - [写入边界](references/global/paths.md)（workspace 路径；single 用 [layout](references/single/layout.md)）
+- [通信层 Port/Adapter](references/comm/README.md)
 - [消息机制](references/global/messaging.md)、[通道](references/global/transport.md)
 - [子 Agent 契约](references/roles/subagent-contract.md)
 
@@ -87,6 +88,8 @@ single 的模式差异命令见 `references/single/roles/`。
 python <skill>/scripts/aw.py onboard
 python <skill>/scripts/aw.py init my-project --name "My Project" --remote <url>
 python <skill>/scripts/aw.py claim next
+python <skill>/scripts/aw.py claim adopt REQ-001 --branch feature/REQ-001
+python <skill>/scripts/aw.py path check .aw/tmp/x.txt
 python <skill>/scripts/aw.py msg report --subject "用户新任务" --body "..."
 ~~~
 
@@ -109,6 +112,7 @@ python <skill>/scripts/aw_single.py init --root . \
 python <skill>/scripts/aw_single.py whoami
 python <skill>/scripts/aw_single.py claim next
 python <skill>/scripts/aw_single.py claim adopt REQ-001 --branch feature/REQ-001
+python <skill>/scripts/aw_single.py path check .aw/tmp/x.txt
 python <skill>/scripts/aw_single.py msg report --subject "用户新任务" --body "..."
 ~~~
 

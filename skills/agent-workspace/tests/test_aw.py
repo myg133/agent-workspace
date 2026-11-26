@@ -75,6 +75,14 @@ class WorkspaceCase(unittest.TestCase):
         self.assertIn("branch refs/heads/deploy", wt)
         self.assertTrue((self.repo / "BA" / "dispatch" / "agent-registry.md").exists())
 
+    def test_path_check_boundaries(self):
+        inside = run(["path", "check", str(self.repo / "tmp.txt")], self.repo, agent=None)
+        self.assertEqual(inside.returncode, 0, inside.stderr)
+        self.assertIn("ALLOWED", inside.stdout)
+        outside = run(["path", "check", str(self.tmp / "escape.txt")], self.repo, agent=None)
+        self.assertNotEqual(outside.returncode, 0)
+        self.assertIn("DENIED", outside.stderr)
+
     def test_subagent_blocks_messages_watch_claim(self):
         for args in (["msg", "watch", "--once"], ["watch", "--once"],
                      ["claim", "next"], ["agent", "whoami"]):
@@ -473,6 +481,22 @@ class WorkspaceCase(unittest.TestCase):
         self.assertIn("FAIL", out.stdout)
 
     # ---- 认领 ----
+    def test_claim_adopt_existing_branch_worktree(self):
+        run(["queue", "add", "REQ-001"], self.repo, agent="ba-1")
+        branch = "feature/REQ-001"
+        git(["branch", branch], self.repo)
+        worktree = self.repo / "feature-REQ-001"
+        out = git(["worktree", "add", str(worktree), branch], self.repo)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        (worktree / "wip.txt").write_text("wip\n", encoding="utf-8")
+        adopted = run(["claim", "adopt", "REQ-001"], self.repo, agent="ba-1")
+        self.assertEqual(adopted.returncode, 0, adopted.stderr)
+        self.assertIn("ADOPTED REQ-001", adopted.stdout)
+        claim = json.loads((self.repo / ".aw" / "claims" / "REQ-001.json").read_text(encoding="utf-8"))
+        self.assertEqual(claim["agent_id"], "ba-1")
+        self.assertEqual(claim["worktree"], "feature-REQ-001")
+        self.assertTrue(claim.get("adopted"))
+
     def test_claim_wip_is_one(self):
         run(["queue", "add", "REQ-001"], self.repo)
         run(["queue", "add", "REQ-002"], self.repo)

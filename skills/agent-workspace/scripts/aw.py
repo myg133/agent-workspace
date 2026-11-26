@@ -1597,6 +1597,10 @@ def cmd_claim(args) -> int:
             save_queue(root, [q for q in queue if q["req"] != req])
         return _finish_claim(root, req, ident)
 
+    if action == "adopt":
+        if not args.req:
+            raise GitError("用法: claim adopt REQ-001 [--branch feature/REQ-001]")
+        return _claim_adopt(root, ident, args.req, branch=getattr(args, "branch", ""))
     if action == "release":
         req = args.req.upper()
         with FileLock(aw_path(root, "locks", "claims.lock")):
@@ -1698,6 +1702,56 @@ def cmd_claim(args) -> int:
         return 0
 
     raise GitError("未知 claim 动作: %s" % action)
+
+
+def _claim_adopt(root: Path, ident: dict, req: str, branch: str = "") -> int:
+    req = req.strip().upper()
+    if not re.match(r"^REQ-[A-Z0-9]+(?:-[A-Z0-9]+)*$", req):
+        raise GitError("REQ 格式不合法: %s" % req)
+    branch = (branch or ("feature/%s" % req)).strip()
+    worktree = root / ("feature-%s" % req)
+    with FileLock(aw_path(root, "locks", "claims.lock")):
+        claims = load_claims(root)
+        queue = load_queue(root)
+        mine = holding_claim(claims, ident["agent_id"])
+        if mine:
+            print("ALREADY_HOLDING %s" % mine["req"])
+            return 3
+        existing = next((c for c in claims if c["req"] == req and c.get("state") in CLAIM_STATES), None)
+        if existing:
+            print("TAKEN_BY %s" % existing.get("agent_id", "?"))
+            return 3
+        if git("show-ref", "--verify", "--quiet", "refs/heads/%s" % branch,
+               cwd=root, check=False).returncode != 0:
+            print("BRANCH_NOT_FOUND %s" % branch)
+            return 3
+        if worktree.exists():
+            actual = git("rev-parse", "--abbrev-ref", "HEAD", cwd=worktree, check=False).stdout.strip()
+            if actual != branch:
+                print("WORKTREE_BRANCH_MISMATCH %s: claim=%s actual=%s" % (req, branch, actual))
+                return 3
+        else:
+            proc = git("worktree", "add", str(worktree), branch, cwd=root, check=False, timeout=120)
+            if proc.returncode != 0:
+                detail = (proc.stderr or proc.stdout or "").strip()
+                raise GitError("ADOPT_FAILED 创建 worktree 失败: %s" % detail)
+        claim = {
+            "req": req,
+            "title": next((q.get("title", "") for q in queue if q["req"] == req), ""),
+            "agent_id": ident["agent_id"],
+            "session_id": ident["session_id"],
+            "worktree": worktree.name,
+            "state": "active",
+            "adopted": True,
+            "claimed_at": _now(),
+        }
+        write_json(claim_path(root, req), claim)
+        save_queue(root, [q for q in queue if q["req"] != req])
+    print("ADOPTED %s" % req)
+    print("  agent   : %s" % ident["agent_id"])
+    print("  worktree: %s" % worktree)
+    print("  branch  : %s" % branch)
+    return 0
 
 
 def _finish_claim(root: Path, req: str, ident: dict) -> int:
@@ -4349,6 +4403,24 @@ def _ensure_watch(root: Path, args) -> int:
     return 3
 
 
+def cmd_path(args) -> int:
+    root = repo_root()
+    target = Path(args.path).expanduser()
+    if not target.is_absolute():
+        target = (Path.cwd() / target)
+    target = target.resolve()
+    try:
+        rel = target.relative_to(root.resolve())
+    except ValueError:
+        print("DENIED outside repo: %s" % target, file=sys.stderr)
+        return 1
+    if ".git" in rel.parts:
+        print("DENIED .git path: %s" % rel, file=sys.stderr)
+        return 1
+    print("ALLOWED %s" % (rel.as_posix() if str(rel) != "." else "."))
+    return 0
+
+
 def cmd_watch(args) -> int:
     _reject_subagent("watch")
     root = repo_root()
@@ -5238,8 +5310,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_req.set_defaults(func=cmd_next_req)
 
     p_claim = sub.add_parser("claim", help="任务认领（每个 agent 同时只允许 1 个）")
-    p_claim.add_argument("action", choices=["whoami", "next", "take", "release", "list", "doctor"])
+    p_claim.add_argument("action", choices=["whoami", "next", "take", "release", "adopt", "list", "doctor"])
     p_claim.add_argument("req", nargs="?", default="")
+    p_claim.add_argument("--branch", default="")
     p_claim.add_argument("--role", default="ba")
     p_claim.add_argument("--force", action="store_true")
     p_claim.add_argument("--remove-worktree", action="store_true")
@@ -5282,6 +5355,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_hook.add_argument("action", choices=["install", "status"])
     p_hook.add_argument("--force", action="store_true")
     p_hook.set_defaults(func=cmd_hook)
+
+    p_path = sub.add_parser("path", help="写入路径边界检查")
+    p_path.add_argument("action", choices=["check"])
+    p_path.add_argument("path")
+    p_path.set_defaults(func=cmd_path)
 
     p_watch = sub.add_parser("watch", help="消息监听：MQTT 实时 + bus 兜底，有新消息时唤醒 agent")
     p_watch.add_argument("--interval", type=int, default=5, help="fetch 间隔秒数")

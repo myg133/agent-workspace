@@ -1718,6 +1718,24 @@ def _run_watch_once(root: Path, args, seed_read: bool = False) -> int:
     return 0 if events else 3
 
 
+def cmd_path(args) -> int:
+    root, _cfg = load_config(args)
+    target = Path(args.path).expanduser()
+    if not target.is_absolute():
+        target = Path.cwd() / target
+    target = target.resolve()
+    try:
+        rel = target.relative_to(root.resolve())
+    except ValueError:
+        print("DENIED outside local-root: %s" % target, file=sys.stderr)
+        return 1
+    if ".git" in rel.parts:
+        print("DENIED .git path: %s" % rel, file=sys.stderr)
+        return 1
+    print("ALLOWED %s" % (rel.as_posix() if str(rel) != "." else "."))
+    return 0
+
+
 def cmd_watch(args) -> int:
     _reject_subagent("watch")
     root, cfg = load_config(args)
@@ -1944,6 +1962,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_presence = sub.add_parser("presence", help="查看本地 agent 在线状态")
     p_presence.add_argument("--json", action="store_true")
     p_presence.set_defaults(func=cmd_presence)
+
+    p_path = sub.add_parser("path", help="写入路径边界检查")
+    p_path.add_argument("action", choices=["check"])
+    p_path.add_argument("path")
+    p_path.set_defaults(func=cmd_path)
 
     p_w = sub.add_parser("watch", help="本地消息唤醒")
     p_w.add_argument("--once", action="store_true")

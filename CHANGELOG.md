@@ -2,6 +2,15 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [2.1.0] - 2026-11-26
+
+### 新增：workspace claim adopt、写入路径检查、通信层索引
+
+- workspace 新增 `claim adopt REQ --branch feature/REQ`，保留孤儿 worktree 的未提交改动；
+- workspace / single 新增 `path check <path>`，写入前可校验是否越出项目根；
+- 新增 `references/comm/README.md`，明确 Communication Port 与 Transport Adapter 边界；
+- 补充 adopt / path 测试；single 全量测试保持通过。
+
 ## [2.0.0] - 2026-11-26
 
 ### 合并：一套 skill、两个模式

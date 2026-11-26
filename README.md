@@ -106,6 +106,8 @@ python skills/agent-workspace/scripts/aw.py migrate --main develop
 | `aw.py next-req [--reserve]` | 计算编号；`--reserve` 在 demand 占位并 push |
 | `aw.py queue add/list/sync` | 维护待认领队列 |
 | `aw.py claim next` | 原子认领（**一个 agent 同时只能持 1 个**） |
+| `aw.py claim adopt REQ` | 接管已存在的分支/worktree，保留未提交改动 |
+| `aw.py path check <path>` | 写入前检查是否越出项目根 |
 | `aw.py claim doctor` | 查一人多单 / 死会话 / 孤儿 worktree |
 | `aw.py upgrade` | 旧项目升级检查：补什么、清什么、改什么（只读） |
 | `aw.py msg` | BA 间消息：空 commit 走 `bus` 分支，带收件人与 ack |

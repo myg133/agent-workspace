@@ -118,6 +118,21 @@ claim next:
 | `QUEUE_EMPTY` | 3 | 等待 |
 | `CLAIM_FAILED ...` | 1 | 看错误 |
 
+### 4.1 孤儿分支 / worktree：claim adopt
+
+如果 claim 已经不在了，但分支和 worktree 还在（常见于子 Agent 退出或手工释放）：
+
+~~~bash
+aw.py claim adopt REQ-001 --branch feature/REQ-001
+~~~
+
+- 保留 worktree 未提交改动；
+- 把 claim 转给当前 BA；
+- 不重建分支、不删现场；
+- 从队列移除该 REQ。
+
+不要先 `git worktree remove --force` 或 `git branch -D`，否则会丢现场。
+
 ## 5. 存活判定
 
 优先看**长驻进程 pid**（`AW_AGENT_PID`，可选），其次看**心跳新鲜度**（默认 120 分钟）：
