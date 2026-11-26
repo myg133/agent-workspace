@@ -284,7 +284,7 @@ MCP `agent_whoami` 返回的是**进程/配置身份**，不是会话身份：
 | `agent_register` / `agent_activate` / `agent_deactivate` | 注册与启停 |
 | `agent_publish` | 把名册提交并推送到 demand，其他机器可见 |
 | `next_req` / `claim_next` / `claim_take` / `claim_release` / `claim_list` / `claim_doctor` | 认领 |
-| `msg_send` / `msg_inbox` / `msg_show` / `msg_ack` / `msg_list` / `msg_flush` | 消息 |
+| `msg_send` / `msg_report` / `msg_inbox` / `msg_show` / `msg_ack` / `msg_list` / `msg_flush` | 消息；`msg_report` 自动选 Planner / 广播 |
 | `msg_wait` | 阻塞等新消息（≤120 秒，默认不消费） |
 | `contract_check` | 契约门禁 |
 | `verify` / `audit` / `doctor` / `stats` | 自检与指标 |
@@ -311,6 +311,7 @@ agent 运行时不要 shell 调 `aw.py`；用同名工具。参数名基本一�
 | `aw.py claim list` | `claim_list` | |
 | `aw.py claim doctor` | `claim_doctor` | `repair` |
 | `aw.py msg send` | `msg_send` | 字段同名 |
+| `aw.py msg report` | `msg_report` | 自动选 Planner，否则 all |
 | `aw.py msg inbox` | `msg_inbox` | `all` / `limit` / `full` |
 | `aw.py msg list` | `msg_list` | 含已读，审计用 |
 | `aw.py msg show ID` | `msg_show` | |

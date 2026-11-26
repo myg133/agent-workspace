@@ -340,6 +340,8 @@ Windows 用 `aw.cmd` / `.\aw.ps1`（自动选 `py` 或 `python`）；中文输�
 | `references/global/messaging.md` | BA 间消息：本地 inbox + bus + MQTT、格式、寻址、ack |
 | `references/global/transport.md` | 消息通道配置：auto/mqtt/bus/local、project_id、presence |
 | `references/global/mcp.md` | MCP stdio 适配层：配置、工具、返回格式 |
+| `references/global/agent-plugins.md` | omp / pi / DSH 唤醒插件安装与验证 |
+| `references/global/trigger.md` | 消息触发：watcher、MQTT、阻塞等待 |
 | `references/global/contracts.md` | 契约版本、消费方 pin、检查规则 |
 | `references/global/identity.md` | agent 名称的优先级、强制人工指定 |
 | `references/roles/*.md` | 六个角色的完整工作流 |
